@@ -254,7 +254,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         </div>
       </div>
 
-      <section className="mx-3 mt-1.5 rounded-[28px] bg-primary px-5 py-3.5 text-white shadow-[0_10px_30px_rgba(31,75,255,0.25)]">
+      <section className="mx-3 mt-1.5 rounded-[28px] bg-primary px-5 py-[18px] text-white shadow-[0_10px_30px_rgba(31,75,255,0.25)]">
         {extra ? (
           <CardioPanel
             name={cardioLabel(extra.type)}
@@ -328,10 +328,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         ) : current && ex ? (
           <>
             <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-1 block text-left">
-              <h1 className="display text-[30px] leading-[0.95] font-extrabold">{ex.name}</h1>
+              <h1 className="display text-[34px] leading-[0.95] font-extrabold">{ex.name}</h1>
             </button>
-            <p className="mt-1 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
-              <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 pr-2.5 pl-3 after:absolute after:-inset-2 after:content-[''] active:bg-white/25" aria-label="Change set type: working, warm-up or drop">
+            <p className="mt-1.5 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
+              <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-9 items-center gap-1.5 rounded-full bg-white/15 pr-2.5 pl-3 after:absolute after:-inset-2 after:content-[''] active:bg-white/25" aria-label="Change set type: working, warm-up or drop">
                 {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
               </button>
@@ -342,8 +342,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
             )}
 
-            {upHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-[13px] font-bold tracking-[0.08em] text-[#C9F7DA]">{upHint}</p>}
-            <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+            {upHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] text-[#C9F7DA]">{upHint}</p>}
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
               <Stepper
                 label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}
                 value={draft.weight === null ? (isBodyweight ? "BW" : "—") : formatWeight(draft.weight, units)}
@@ -355,7 +355,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             </div>
 
             <div className="mt-2.5">
-              <div className="mb-1 text-[11px] leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
+              <div className="mb-1.5 text-xs leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
               <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
             </div>
 
@@ -366,7 +366,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <button
               type="button"
               onClick={log}
-              className="display mt-3 flex h-13 w-full items-center justify-center rounded-2xl bg-white text-xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-4px_0_#C9D3FF] active:translate-y-px"
+              className="display mt-3.5 flex h-15 w-full items-center justify-center rounded-2xl bg-white text-xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-4px_0_#C9D3FF] active:translate-y-px"
             >
               Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
             </button>
@@ -686,12 +686,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 function Stepper({ label: l, value, onMinus, onPlus, onTap }: { label: string; value: string; onMinus: () => void; onPlus: () => void; onTap: () => void }) {
   return (
     <div className="flex items-center gap-1 rounded-2xl bg-white/10 p-1">
-      <button type="button" onClick={onMinus} aria-label={`Less ${l}`} className="flex h-11 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white/60 text-xl font-bold">−</button>
-      <button type="button" onClick={onTap} className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center" aria-label={`${l} ${value}. Tap to type`}>
-        <span className="display num text-[34px] leading-none font-extrabold">{value}</span>
-        <span className="display mt-0.5 truncate text-[10px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{l}</span>
+      <button type="button" onClick={onMinus} aria-label={`Less ${l}`} className="flex h-[52px] w-11 shrink-0 items-center justify-center rounded-full border-2 border-white/60 text-xl font-bold">−</button>
+      <button type="button" onClick={onTap} className="flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center" aria-label={`${l} ${value}. Tap to type`}>
+        <span className="display num text-[40px] leading-none font-extrabold">{value}</span>
+        <span className="display mt-0.5 truncate text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{l}</span>
       </button>
-      <button type="button" onClick={onPlus} aria-label={`More ${l}`} className="flex h-11 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl font-bold text-primary">+</button>
+      <button type="button" onClick={onPlus} aria-label={`More ${l}`} className="flex h-[52px] w-11 shrink-0 items-center justify-center rounded-full bg-white text-xl font-bold text-primary">+</button>
     </div>
   );
 }

@@ -48,7 +48,7 @@ export function RpeSlider({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : r)}
-            className={`display num relative shrink-0 font-extrabold ${blue ? "h-9 w-11 rounded-[10px] text-base after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']" : "h-12 w-[3.25rem] rounded-xl text-lg"} ${cls}`}
+            className={`display num relative shrink-0 font-extrabold ${blue ? "h-[42px] w-12 rounded-[11px] text-[17px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']" : "h-12 w-[3.25rem] rounded-xl text-lg"} ${cls}`}
           >
             {r}
           </button>
