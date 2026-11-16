@@ -25,6 +25,7 @@ import { Sheet, btn, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
+import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
 import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
@@ -74,6 +75,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const filled = (w: WorkoutExercise) => filledSets(setsBy.get(w.id) ?? [], w.target_sets ?? 3, w.skipped_sets);
   const done = (w: WorkoutExercise) => (isCardioWex(w) ? cardioByWex.has(w.id) : filled(w) >= (w.target_sets ?? 3));
   const remaining = (w: WorkoutExercise) => !done(w);
+  const equipmentIdsOf = (exerciseId: string) => (catalog?.needs.get(exerciseId) ?? []).map((n) => n.equipment_id);
+  // The one lift (at most) that gets a planned warm-up row; see src/lib/warmup.ts for when it's worth it.
+  const warmupId = wexs && catalog ? plannedWarmupId(wexs, (id) => catalog.byId.get(id), equipmentIdsOf) : null;
+  /** pending = warm-up row is next; skipped = you tapped Skip on it; null = none planned, or it's logged. */
+  const warmupState = (w: WorkoutExercise): "pending" | "skipped" | null => {
+    if (w.id !== warmupId) return null;
+    const logged = setsBy.get(w.id) ?? [];
+    if (logged.some((s) => s.type === "warmup")) return null;
+    if ((w.skipped_sets ?? []).includes(WARMUP_SLOT)) return "skipped";
+    return logged.length ? null : "pending"; // started working sets without it: no nagging
+  };
 
   const [currentId, setCurrentId] = useState<string | null>(null);
   const timerWexId = timer && timer.workoutId === workout.id ? timer.wexId : null;
@@ -99,10 +111,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     // Wait until this exercise's history has loaded, or the first set would prefill blank and never update.
     if (!current || !history || !history.has(current.exercise_id) || isCardioWex(current)) return;
     // `who` is in the key so the starting-weight estimate fills in if your bodyweight finishes loading after the screen opens.
-    const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}:${who ? "w" : "n"}`;
+    const warm = warmupState(current);
+    const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}:${who ? "w" : "n"}:${warm ?? ""}`;
     if (draftFor === key) return;
     const done = setsBy.get(current.id) ?? [];
-    const lastToday = [...done].reverse().find((s) => s.type !== "warmup") ?? done[done.length - 1];
+    // Warm-ups never set the weight for a working set.
+    const lastToday = [...done].reverse().find((s) => s.type !== "warmup");
     const prev = history.get(current.exercise_id)?.last.filter((s) => s.type !== "warmup") ?? [];
     const sameSetLastTime = prev[nextSlot(done, current.target_sets ?? 3, current.skipped_sets) - 1] ?? prev[prev.length - 1];
     // First set of an exercise: double progression from last time (more weight once you hit the top of the range).
@@ -110,13 +124,14 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     // A lift you've never logged: start from an estimate based on your bodyweight, height, sex and experience.
     const estimate = catalog && !lastToday && !prev.length ? startingWeightFor(catalog, current.exercise_id, who, current.rep_min, current.rep_max, gym ? equipmentRows : null) : null;
     const src = lastToday ?? sameSetLastTime;
+    const working = suggestion && suggestion.weight !== null ? suggestion.weight : (src?.weight ?? estimate ?? null);
+    const warmup = warm === "pending" ? warmupDose(working, current.rep_max, equipmentIdsOf(current.exercise_id)) : null;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill when the current exercise or set changes
-    setDraft({
-      weight: suggestion && suggestion.weight !== null ? suggestion.weight : (src?.weight ?? estimate ?? null),
-      reps: suggestion?.reps ?? src?.reps ?? current.rep_max ?? null,
-      rpe: null,
-      type: "working",
-    });
+    setDraft(
+      warmup
+        ? { weight: warmup.weight, reps: warmup.reps, rpe: null, type: "warmup" }
+        : { weight: working, reps: suggestion?.reps ?? src?.reps ?? current.rep_max ?? null, rpe: null, type: "working" },
+    );
     setDraftFor(key);
   }, [current, history, setsBy, draftFor, catalog, who]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -276,7 +291,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     : "";
   // "Up 5 lb" when double progression added weight for today; "Down 5 lb" when last time was too heavy.
   const upHint = (() => {
-    if (!current || isCardio || doneSets.length || !history) return null;
+    if (!current || isCardio || doneSets.some((s) => s.type !== "warmup") || draft.type === "warmup" || !history) return null;
     const prev = history.get(current.exercise_id)?.last.filter((s) => s.type !== "warmup") ?? [];
     if (!prev.length) return null;
     const sug = suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null));
@@ -286,9 +301,16 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   // Never logged this lift: the weight above is an estimate from your bodyweight, so say so.
   const estHint = (() => {
-    if (!current || isCardio || doneSets.length || !history) return null;
+    if (!current || isCardio || doneSets.some((s) => s.type !== "warmup") || draft.type === "warmup" || !history) return null;
     if ((history.get(current.exercise_id)?.last ?? []).some((s) => s.type !== "warmup")) return null;
     return startingWeightFor(catalog, current.exercise_id, who, current.rep_min, current.rep_max, gym ? equipmentRows : null) !== null ? "EST. START" : null;
+  })();
+
+  // The planned warm-up: say how light it is.
+  const warmHint = (() => {
+    if (!current || isCardio || draft.type !== "warmup" || warmupState(current) !== "pending") return null;
+    const d = warmupDose(1, current.rep_max, []);
+    return draft.weight === null ? "LIGHT · AN EASY WEIGHT" : `LIGHT · ABOUT ${d.pct}% OF WORKING`;
   })();
 
   const listItems: ReorderItem[] = wexs.map((w, i) => {
@@ -297,7 +319,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const cardioDone = cardioByWex.get(w.id);
     const running = timer && timer.wexId === w.id ? timer : null;
     const linkedAbove = i > 0 && w.superset_group !== null && wexs[i - 1].superset_group === w.superset_group;
-    const skippedN = (w.skipped_sets ?? []).filter((n) => n <= (w.target_sets ?? 3)).length;
+    const skippedN = (w.skipped_sets ?? []).filter((n) => n >= 1 && n <= (w.target_sets ?? 3)).length;
     const isCur = !extra && w.id === current?.id;
     return {
       id: w.id,
@@ -330,7 +352,11 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
                   {filled(w)}/{w.target_sets ?? 3} sets{skippedN ? ` (${skippedN} skipped)` : ""} · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
                 </>
               )}
-              {w.notes ? <span className="text-accent-soft"> · {w.notes}</span> : null}
+              {w.notes?.startsWith("Warm up") ? (
+                w.id === warmupId ? <span className="text-accent-soft"> · 1 warm-up set</span> : null
+              ) : w.notes ? (
+                <span className="text-accent-soft"> · {w.notes}</span>
+              ) : null}
             </span>
           </span>
           <svg className="shrink-0 text-[#454d6e]" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -490,8 +516,9 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
             )}
 
-            {upHint && <p className={`mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] ${upHint.startsWith("▼") ? "text-[#FFD2B3]" : "text-[#C9F7DA]"}`}>{upHint}</p>}
-            {!upHint && estHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">{estHint}</p>}
+            {warmHint && <p className="mt-2 -mb-1.5 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">{warmHint}</p>}
+            {!warmHint && upHint && <p className={`mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] ${upHint.startsWith("▼") ? "text-[#FFD2B3]" : "text-[#C9F7DA]"}`}>{upHint}</p>}
+            {!warmHint && !upHint && estHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">{estHint}</p>}
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <Stepper
                 label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}
@@ -503,10 +530,13 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <Stepper label="REPS" value={draft.reps === null ? "—" : String(draft.reps)} onMinus={() => bumpReps(-1)} onPlus={() => bumpReps(1)} onTap={() => setTyping("reps")} />
             </div>
 
-            <div className="mt-2.5">
-              <div className="mb-1.5 text-xs leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
-              <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
-            </div>
+            {/* Warm-ups are easy by design, so no RPE for them. */}
+            {draft.type !== "warmup" && (
+              <div className="mt-2.5">
+                <div className="mb-1.5 text-xs leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
+                <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
+              </div>
+            )}
 
             {rest && restLeft > 0 && (
               <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
@@ -539,6 +569,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               nextType={draft.type}
               target={current.target_sets ?? 3}
               skipped={current.skipped_sets ?? []}
+              warmup={warmupState(current)}
               hideNext={upNextWex !== null}
               onEdit={setEditSet}
               onSkip={(slot) => void skipSet(current, slot)}
@@ -834,7 +865,7 @@ function lastTimeLabel(iso: string) {
  * (Skip). Warm-ups are "W" and drop sets are "D"; drop sets still use up a planned set. Last time is paired by set number.
  */
 function SetTable({
-  done, history, units, defaultRpe, nextType, target, skipped, hideNext, onEdit, onSkip, onUnskip,
+  done, history, units, defaultRpe, nextType, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip,
 }: {
   done: WorkoutSet[];
   history?: { last: WorkoutSet[]; lastDate: string | null };
@@ -843,6 +874,8 @@ function SetTable({
   nextType: SetType;
   target: number;
   skipped: number[];
+  /** The planned warm-up row (slot 0): pending shows it as next with Skip, skipped shows it struck through. */
+  warmup: "pending" | "skipped" | null;
   hideNext: boolean;
   onEdit: (s: WorkoutSet) => void;
   onSkip: (slot: number) => void;
@@ -873,6 +906,25 @@ function SetTable({
         <span>LAST{history?.lastDate && last.length ? ` · ${lastTimeLabel(history.lastDate).toUpperCase()}` : ""}</span>
         <span />
       </div>
+      {warmup === "pending" && !hideNext && (
+        <div className={`${cols} min-h-14 border-t border-line py-2`} aria-current="step">
+          <span className={`${badge} bg-primary/20 text-accent-soft`}>W</span>
+          <span className="flex flex-col items-start gap-0.5">
+            <span className="display text-[22px] leading-none font-extrabold text-accent-soft">NEXT</span>
+            <span className="display text-[11px] font-semibold tracking-[0.08em] text-muted">WARM-UP · DOESN&apos;T COUNT</span>
+          </span>
+          <span />
+          <button type="button" onClick={() => onSkip(WARMUP_SLOT)} className={skipBtn} aria-label="Skip the warm-up set">SKIP</button>
+        </div>
+      )}
+      {warmup === "skipped" && (
+        <div className={`${cols} min-h-14 border-t border-line py-2`}>
+          <span className={`${badge} text-muted`}>W</span>
+          <span className="display text-[22px] font-extrabold text-muted line-through decoration-2">SKIPPED</span>
+          <span />
+          {done.length ? <span /> : <button type="button" onClick={() => onUnskip(WARMUP_SLOT)} className={skipBtn} aria-label="Undo skipping the warm-up">UNDO</button>}
+        </div>
+      )}
       {slotRows(done, target, skipped).map((r) => {
         if (r.kind === "logged") {
           const s = r.set;
@@ -883,7 +935,7 @@ function SetTable({
               <span className="flex flex-col items-start gap-0.5">
                 <span className={`display num text-[22px] leading-none font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>{amount(s)}</span>
                 <span className="display flex gap-1 text-[11px] font-semibold tracking-[0.08em]">
-                  <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>
+                  {s.type !== "warmup" && <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>}
                   {s.type === "drop" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">DROP</span>}
                   {s.type === "warmup" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">WARM-UP</span>}
                 </span>
@@ -903,7 +955,7 @@ function SetTable({
             </div>
           );
         }
-        if (r.kind === "next") {
+        if (r.kind === "next" && warmup !== "pending") {
           if (hideNext) return null;
           const tag = nextType === "warmup" ? "W" : nextType === "drop" ? "D" : String(r.slot);
           return (
@@ -1010,12 +1062,16 @@ function EditSetForm({ set, units, defaultRpe, onSave, onDelete }: { set: Workou
         <label className="flex flex-col gap-2"><span className={label}>WEIGHT ({weightUnit(units).toUpperCase()})</span><input className={field} inputMode="decimal" value={w} onChange={(e) => setW(e.target.value)} placeholder="Bodyweight" /></label>
         <label className="flex flex-col gap-2"><span className={label}>REPS</span><input className={field} inputMode="numeric" value={r} onChange={(e) => setR(e.target.value)} /></label>
       </div>
-      <span className={label}>RPE (BLANK = {defaultRpe})</span>
-      <div className="grid grid-cols-7 gap-1.5">
-        {RPE_SCALE.map((v) => (
-          <button key={v} type="button" onClick={() => setRpe(rpe === v ? null : v)} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === v ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{v}</button>
-        ))}
-      </div>
+      {type !== "warmup" && (
+        <>
+          <span className={label}>RPE (BLANK = {defaultRpe})</span>
+          <div className="grid grid-cols-7 gap-1.5">
+            {RPE_SCALE.map((v) => (
+              <button key={v} type="button" onClick={() => setRpe(rpe === v ? null : v)} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === v ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{v}</button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         {(["warmup", "working", "drop"] as SetType[]).map((t) => (
           <button key={t} type="button" onClick={() => setType(t)} className={`display h-11 rounded-xl text-sm font-extrabold ${type === t ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{TYPE_LABEL[t]}</button>

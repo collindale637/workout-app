@@ -79,11 +79,12 @@ describe("training rules (Batch 5 audit)", () => {
     }
   });
 
-  it("the first lift leads with a warm-up note; heavy days ask for more warm-up", () => {
-    const hyp = lifts(gen({ targets: UPPER }, 0));
-    expect(hyp[0].notes).toMatch(/warm up: 1–2/i);
-    const str = lifts(gen({ targets: UPPER, goal: "strength" }, 0));
-    expect(str[0].notes).toMatch(/warm up: 2–3/i);
+  it("only the first lift can carry the warm-up note, and it's one set (tests/warmup.test.ts has the rules)", () => {
+    for (const goal of ["hypertrophy", "strength"] as const) {
+      const ls = lifts(gen({ targets: UPPER, goal }, 0));
+      expect(ls.slice(1).every((it) => !it.notes?.startsWith("Warm up"))).toBe(true);
+      if (ls[0].notes?.startsWith("Warm up")) expect(ls[0].notes).toBe("Warm up: 1 lighter set first");
+    }
   });
 
   it("isolation moves get isolation reps and rest, even when the data calls them compound", () => {

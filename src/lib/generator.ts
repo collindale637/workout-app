@@ -1,4 +1,5 @@
 import { isAvailable } from "./availability";
+import { WARMUP_NOTE, warmupWorthy } from "./warmup";
 import type { CardioPref, Exercise, ExerciseEquipment, ExerciseMuscle, ExercisePref, Experience, Goal } from "./db/types";
 
 /*
@@ -444,6 +445,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   chosen.sort((a, b) => rank(a) - rank(b) || (rank(a) <= 1 ? legOrder(a) - legOrder(b) || uni(a) - uni(b) || freeFirst(a) - freeFirst(b) : 0) || weight(b) - weight(a));
 
   let mainLeft = mains;
+  const mainItems = new Set<GenItem>();
   const items: GenItem[] = chosen.map((c) => {
     // Heavy 3–5 rep work belongs on free weights; a machine or cable lift gets the "compound" dose instead.
     const role = isCore(c) ? "core" : c.iso ? "isolation" : canMain(c) && mainLeft-- > 0 ? "main" : "compound";
@@ -461,7 +463,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     }
     // Low-rep rows turn into heaving: heavy rows stay at 5–8.
     if (role === "main" && heavy && c.ex.movement_pattern === "horizontal_pull") { item.rep_min = 5; item.rep_max = 8; }
-    if (role === "main") item.notes = heavy ? "Warm up: 2–3 lighter sets first" : "Warm up: 1–2 lighter sets first";
+    if (role === "main") mainItems.add(item);
     return item;
   });
 
@@ -491,7 +493,13 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     items.sort((x, y) => anchor(x) - anchor(y) || order.get(x)! - order.get(y)!);
   }
 
-  if (mode !== "main") fitToTime(items, chosen, liftMinutes, opts.experience, setCap, heavy);
+  if (mode !== "main") fitToTime(items, chosen, liftMinutes, opts.experience, setCap, heavy, mainItems);
+
+  // One warm-up set at most, and only when the first heavy lift really needs it (src/lib/warmup.ts).
+  const firstMain = items.find((it) => mainItems.has(it));
+  if (firstMain && warmupWorthy(cat.exercises.find((e) => e.id === firstMain.exercise_id), (cat.needs.get(firstMain.exercise_id) ?? []).map((n) => n.equipment_id), firstMain.rep_max)) {
+    firstMain.notes = WARMUP_NOTE;
+  }
 
   if (cMin > 0) {
     const cardio = pickCardio(cat, { ...opts, minutes: cMin }, random);
@@ -513,11 +521,11 @@ export function itemMinutes(it: GenItem, name: string, items: GenItem[]) {
  * Sets are adjusted to fill the session: too long and the biggest set counts come down (heavy lifts last);
  * time to spare and non-beginners get a 4th set on their exercises, as long as no muscle passes its cap.
  */
-function fitToTime(items: GenItem[], chosen: Candidate[], minutes: number, experience: Experience, setCap: number, heavy: boolean) {
+function fitToTime(items: GenItem[], chosen: Candidate[], minutes: number, experience: Experience, setCap: number, heavy: boolean, mainItems: Set<GenItem>) {
   const cand = new Map(chosen.map((c) => [c.ex.id, c]));
   const total = () => items.reduce((a, it) => a + itemMinutes(it, cand.get(it.exercise_id)!.ex.name, items), 0);
   const group = (it: GenItem) => (it.superset_group == null ? [it] : items.filter((x) => x.superset_group === it.superset_group));
-  const isMain = (it: GenItem) => !!it.notes?.startsWith("Warm up");
+  const isMain = (it: GenItem) => mainItems.has(it);
   for (let guard = 0; guard < 30 && total() > minutes * 1.08; guard++) {
     // Most sets first; among equals, trim from the end of the workout (isolation and core before compounds).
     const it = [...items].filter((x) => x.sets > (isMain(x) ? 3 : 2)).sort((a, b) => b.sets - a.sets || items.indexOf(b) - items.indexOf(a))[0];

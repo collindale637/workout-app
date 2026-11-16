@@ -40,7 +40,7 @@ Exercise choice
 - Conventional and sumo deadlifts: 5–8 reps at most outside strength days, never in a superset.
 - Supersets pair exercises that don't share a main muscle (a press with a row, a curl with a triceps move); never two heavy leg lifts.
 - Timed holds (planks, side planks, hollow holds): seconds, 30–45 (20–30 for beginners).
-- Put "Warm up: 2–3 lighter sets first" (strength) or "Warm up: 1–2 lighter sets first" in notes on the first heavy lift of the day.
+- Put "Warm up: 1 lighter set first" in notes on the first heavy lift of the day ONLY when it is a barbell-style compound (barbell, trap bar, Smith machine) at 12 reps or fewer, or another loaded compound at 6 reps or fewer. At most one exercise per day gets it; machines, cables, bodyweight, isolation and core never do.
 - Plans longer than 5 weeks: describe an easier deload week every 4–6 weeks in "progression".
 
 Day names are short and plain ("Upper", "Lower Power", "Push", "Full Body + Cardio"). The app treats "Power" in a name as a heavy day and "+ Cardio" as a day with a cardio block.`;
