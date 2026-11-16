@@ -192,10 +192,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             </div>
 
             <div className="mt-4">
-              <div className="mb-2 flex items-baseline justify-between text-xs font-bold tracking-[0.1em] text-[#DCE4FF]">
-                <span>RPE · HOW HARD?</span>
-                <span>SKIP IT = {defaultRpe}</span>
-              </div>
+              <div className="mb-2 text-xs font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
               <div className="grid grid-cols-7 gap-1.5" role="group" aria-label="RPE">
                 {RPE_CHOICES.map((r) => {
                   const on = draft.rpe === r;
@@ -242,31 +239,22 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       <div className="flex flex-col gap-3 px-5 pt-4">
         {current && (
           <>
-            {doneSets.length > 0 && (
-              <div className="flex flex-wrap gap-2" aria-label="Logged sets">
-                {doneSets.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setEditSet(s)}
-                    className={`num flex h-11 items-center gap-1.5 rounded-xl border px-3 text-sm font-bold ${s.type === "warmup" ? "border-line text-muted" : "border-line bg-card text-ink"}`}
-                  >
-                    <span className="text-muted">{s.type === "warmup" ? "W" : s.type === "drop" ? "D" : s.set_no}</span>
-                    {s.weight === null && !isBodyweight ? "—" : formatWeight(s.weight, units)}×{s.reps ?? "—"}
-                    <span className="text-accent">@{s.rpe ?? defaultRpe}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <SetTable
+              done={doneSets}
+              history={history?.get(current.exercise_id)}
+              units={units}
+              defaultRpe={defaultRpe}
+              nextLabel={draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop" : "next"}
+              onEdit={setEditSet}
+            />
 
             {rest && restLeft > 0 && (
-              <RestCard left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
+              <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
             )}
 
             <button type="button" onClick={log} className={`${btn.primary} h-16 text-2xl`}>
               Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
             </button>
-            <LastTime history={history?.get(current.exercise_id)} units={units} nextSet={working(current.id)} />
           </>
         )}
 
@@ -485,25 +473,21 @@ function Stepper({ label: l, value, onMinus, onPlus, onTap }: { label: string; v
   );
 }
 
-function RestCard({ left, total, onAdd, onSkip }: { left: number; total: number; onAdd: () => void; onSkip: () => void }) {
-  const r = 26;
-  const c = 2 * Math.PI * r;
+/** Slim rest countdown that sits just above the Log button. */
+function RestBar({ left, total, onAdd, onSkip }: { left: number; total: number; onAdd: () => void; onSkip: () => void }) {
   const pct = Math.min(1, left / Math.max(1, total));
   useEffect(() => {
     if (left === 1 && "vibrate" in navigator) navigator.vibrate?.([200, 100, 200]);
   }, [left]);
   return (
-    <div className="flex items-center gap-4 rounded-3xl border border-line bg-card p-3" role="timer" aria-label={`Rest ${formatDuration(left)} left`}>
-      <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="32" cy="32" r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
-        <circle cx="32" cy="32" r={r} fill="none" stroke="var(--accent-strong)" strokeWidth="6" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 32 32)" />
-      </svg>
-      <div className="flex-1">
-        <div className="text-xs font-bold tracking-[0.1em] text-muted">REST</div>
-        <div className="display num text-4xl font-extrabold">{formatDuration(left)}</div>
+    <div className="flex h-11 items-center gap-3" role="timer" aria-label={`Rest ${formatDuration(left)} left`}>
+      <span className="display w-10 shrink-0 text-sm font-extrabold tracking-[0.1em] text-muted">REST</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+        <div className="h-full rounded-full bg-accent-strong transition-[width] duration-1000 ease-linear" style={{ width: `${pct * 100}%` }} />
       </div>
-      <button type="button" onClick={onAdd} className="display h-11 rounded-xl bg-card-2 px-3 text-base font-extrabold">+15s</button>
-      <button type="button" onClick={onSkip} className="display h-11 rounded-xl px-3 text-base font-extrabold text-accent">Skip</button>
+      <span className="display num w-12 shrink-0 text-right text-2xl font-extrabold">{formatDuration(left)}</span>
+      <button type="button" onClick={onAdd} className="display -mr-1 h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-muted">+15</button>
+      <button type="button" onClick={onSkip} className="display h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-accent">Skip</button>
     </div>
   );
 }
@@ -517,33 +501,64 @@ function lastTimeLabel(iso: string) {
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-/** Last session's working sets as one compact row of chips; the set you're about to do is outlined. */
-function LastTime({ history, units, nextSet }: { history?: { last: WorkoutSet[]; lastDate: string | null }; units: Units; nextSet: number }) {
-  const sets = history?.last.filter((s) => s.type !== "warmup") ?? [];
-  if (!history?.lastDate || !sets.length) return <p className="text-center text-sm font-medium text-muted">First time logging this one.</p>;
+/**
+ * Today vs last time, one row per set. Tap a row you've logged to edit it.
+ * Warm-ups get their own rows (W) and aren't compared; working and drop sets line up with last time's in order.
+ */
+function SetTable({
+  done, history, units, defaultRpe, nextLabel, onEdit,
+}: {
+  done: WorkoutSet[];
+  history?: { last: WorkoutSet[]; lastDate: string | null };
+  units: Units;
+  defaultRpe: number;
+  nextLabel: string;
+  onEdit: (s: WorkoutSet) => void;
+}) {
+  const last = history?.last.filter((s) => s.type !== "warmup") ?? [];
+  const fmt = (s: WorkoutSet) => `${formatWeight(s.weight, units)}×${s.reps ?? "—"}`;
+  const lastCell = (i: number) => (last[i] ? fmt(last[i]) : "—");
+  const cols = "grid grid-cols-[2.75rem_1fr_1fr] items-center";
+  // Every set number sits in the same fixed box, so the highlighted "next" number lines up with the rest.
+  const badge = "display flex h-8 w-8 items-center justify-center rounded-lg text-base font-extrabold";
+
+  let n = 0; // working + drop sets so far
+  const rows = done.map((s) => {
+    const isWarm = s.type === "warmup";
+    const i = isWarm ? -1 : n++;
+    return { s, i, tag: isWarm ? "W" : s.type === "drop" ? "D" : String(i + 1) };
+  });
+  const later = last.slice(n + 1).map((_, k) => n + 1 + k); // last time had more sets than you've reached
+
   return (
-    <section className="flex items-center gap-3" aria-label="Last time">
-      <div className="w-[4.5rem] shrink-0 leading-tight">
-        <div className="text-xs font-bold tracking-[0.12em] text-muted">LAST</div>
-        <div className="text-sm font-medium text-muted">{lastTimeLabel(history.lastDate)}</div>
+    <section aria-label="Sets" className="flex flex-col">
+      <div className={`${cols} pb-1 text-xs font-bold tracking-[0.12em] text-muted`}>
+        <span>SET</span>
+        <span>TODAY</span>
+        <span>LAST{history?.lastDate && last.length ? ` · ${lastTimeLabel(history.lastDate).toUpperCase()}` : ""}</span>
       </div>
-      <ol className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {sets.map((s, i) => {
-          const isNext = i === Math.min(nextSet, sets.length - 1);
-          return (
-            <li
-              key={s.id}
-              aria-current={isNext ? "step" : undefined}
-              className={`num flex h-9 shrink-0 items-center rounded-xl px-3 text-sm font-bold whitespace-nowrap ${
-                isNext ? "bg-primary/20 text-accent-soft ring-2 ring-accent-strong ring-inset" : "bg-card-2 text-ink"
-              }`}
-            >
-              {s.type === "drop" && <span className="mr-1 text-muted">D</span>}
-              {s.weight === null ? "BW" : formatWeight(s.weight, units)}×{s.reps ?? "—"}
-            </li>
-          );
-        })}
-      </ol>
+      {rows.map(({ s, i, tag }) => (
+        <button key={s.id} type="button" onClick={() => onEdit(s)} className={`${cols} min-h-11 rounded-xl text-left active:bg-card`} aria-label={`Edit set ${tag}`}>
+          <span className={`${badge} text-muted`}>{tag}</span>
+          <span className={`display num text-lg font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>
+            {fmt(s)} <span className="text-sm text-accent">@{s.rpe ?? defaultRpe}</span>
+          </span>
+          <span className="display num text-lg font-extrabold text-muted">{i >= 0 ? lastCell(i) : ""}</span>
+        </button>
+      ))}
+      <div className={`${cols} min-h-11`} aria-current="step">
+        <span className={`${badge} bg-primary/20 text-accent-soft`}>{nextLabel === "warm-up" ? "W" : nextLabel === "drop" ? "D" : n + 1}</span>
+        <span className="display text-lg font-extrabold text-accent-soft">{nextLabel}</span>
+        <span className="display num text-lg font-extrabold text-muted">{lastCell(n)}</span>
+      </div>
+      {later.map((i) => (
+        <div key={i} className={`${cols} min-h-11 opacity-60`}>
+          <span className={`${badge} text-muted`}>{i + 1}</span>
+          <span className="display text-lg font-extrabold text-muted">—</span>
+          <span className="display num text-lg font-extrabold text-muted">{lastCell(i)}</span>
+        </div>
+      ))}
+      {!last.length && <p className="pt-1 text-sm font-medium text-muted">First time logging this one.</p>}
     </section>
   );
 }
