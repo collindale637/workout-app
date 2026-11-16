@@ -149,6 +149,8 @@ export type CardioSession = {
   distance: number | null;
   avg_hr: number | null;
   rpe: number | null;
+  /** Treadmill incline as a percent grade (walk and run only); null when not used. */
+  incline?: number | null;
   intervals: unknown | null;
   notes: string | null;
   updated_at?: string;

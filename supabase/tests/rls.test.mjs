@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -32,6 +32,7 @@ await db.exec(readFileSync(root + "20261119000100_outdoor_cardio_gear.sql", "utf
 await db.exec(readFileSync(root + "20261119000200_skipped_sets.sql", "utf8"));
 await db.exec(readFileSync(root + "20261120000100_ai_pick_kinds.sql", "utf8"));
 await db.exec(readFileSync(root + "20261120000200_recovery_times.sql", "utf8"));
+await db.exec(readFileSync(root + "20261121000100_cardio_incline.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -106,6 +107,9 @@ r.push(["cardio pref defaults to auto", await as(A, `select cardio_pref from pro
 r.push(["A sets cardio pref", await as(A, `update profiles set cardio_pref = 'more' returning cardio_pref`)]);
 r.push(["bad cardio pref rejected", await as(A, `update profiles set cardio_pref = 'lots' returning id`)]);
 r.push(["no-equipment exercises", await as(A, `select e.id, count(m.*)::int muscles, (select count(*) from exercise_equipment q where q.exercise_id = e.id)::int equipment from exercises e join exercise_muscles m on m.exercise_id = e.id where e.id in ('Doorframe_Row','Pike_Push_Up','Prone_Y_T_W_Raise') group by e.id order by e.id`)]);
+r.push(["A saves a treadmill incline", await as(A, `insert into cardio_sessions (type, duration_sec, incline) values ('walk',1800,7.5) returning incline::text`)]);
+r.push(["incline over 40 rejected", await as(A, `insert into cardio_sessions (type, duration_sec, incline) values ('walk',600,41)`)]);
+r.push(["negative incline rejected", await as(A, `insert into cardio_sessions (type, duration_sec, incline) values ('run',600,-1)`)]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
 

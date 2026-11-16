@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cardioHasDistance } from "@/lib/cardio";
+import { INCLINE_MAX, cardioHasDistance, cardioHasIncline } from "@/lib/cardio";
 import { distanceUnit, fromDisplayDistance, toDisplayDistance } from "@/lib/units";
 import { btn, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "./rpe-slider";
@@ -11,6 +11,8 @@ export type CardioResults = {
   durationSec: number;
   /** Miles. */
   distance: number | null;
+  /** Treadmill incline, percent grade. */
+  incline: number | null;
   avgHr: number | null;
   rpe: number | null;
   notes: string | null;
@@ -21,6 +23,7 @@ export type CardioResults = {
 export type CardioResultsInitial = {
   durationSec?: number;
   distance?: number | null;
+  incline?: number | null;
   avgHr?: number | null;
   rpe?: number | null;
   notes?: string | null;
@@ -30,6 +33,7 @@ export type CardioResultsInitial = {
 export const resultsFromSession = (c: CardioSession): CardioResultsInitial => ({
   durationSec: c.duration_sec,
   distance: c.distance,
+  incline: c.incline ?? null,
   avgHr: c.avg_hr,
   rpe: c.rpe,
   notes: c.notes,
@@ -65,6 +69,7 @@ export function CardioResultsForm({
   const [minutes, setMinutes] = useState(start ? String(Math.floor(start / 60)) : "");
   const [seconds, setSeconds] = useState(start ? String(start % 60 || "") : "");
   const [distance, setDistance] = useState(initial?.distance ? String(toDisplayDistance(initial.distance, units)) : "");
+  const [incline, setIncline] = useState(initial?.incline ? String(initial.incline) : "");
   const [hr, setHr] = useState(initial?.avgHr ? String(initial.avgHr) : "");
   const [rpe, setRpe] = useState<number | null>(initial?.rpe ?? null);
   const [when, setWhen] = useState(() => localInputValue(initial?.startedAt ?? new Date()));
@@ -78,7 +83,10 @@ export function CardioResultsForm({
   const hrBad = hrNum !== null && (Number.isNaN(hrNum) || hrNum < HR_MIN || hrNum > HR_MAX);
   const distNum = distance.trim() ? Number(distance.replace(",", ".")) : null;
   const distBad = distNum !== null && (Number.isNaN(distNum) || distNum < 0);
-  const invalid = durationSec <= 0 || hrBad || (showDistance && distBad);
+  const showIncline = cardioHasIncline(type);
+  const inclineNum = incline.trim() ? Number(incline.replace(",", ".")) : null;
+  const inclineBad = showIncline && inclineNum !== null && (Number.isNaN(inclineNum) || inclineNum < 0 || inclineNum > INCLINE_MAX);
+  const invalid = durationSec <= 0 || hrBad || (showDistance && distBad) || inclineBad;
 
   return (
     <form
@@ -91,6 +99,7 @@ export function CardioResultsForm({
           await onSubmit({
             durationSec,
             distance: showDistance && distNum ? fromDisplayDistance(distNum, units) : null,
+            incline: showIncline && inclineNum ? Math.round(inclineNum * 10) / 10 : null,
             avgHr: hrNum,
             rpe,
             notes: notes.trim() || null,
@@ -121,6 +130,13 @@ export function CardioResultsForm({
           {distBad && <span className="text-sm font-semibold text-warn">Enter a distance like 3.1</span>}
         </label>
       )}
+      {showIncline && (
+        <label className="flex flex-col gap-2">
+          <span className={label}>TREADMILL INCLINE (%, OPTIONAL)</span>
+          <input className={field} inputMode="decimal" value={incline} onChange={(e) => setIncline(e.target.value)} placeholder="e.g. 5" />
+          {inclineBad && <span className="text-sm font-semibold text-warn">Incline should be between 0 and {INCLINE_MAX} %</span>}
+        </label>
+      )}
       <label className="flex flex-col gap-2">
         <span className={label}>AVERAGE HEART RATE (OPTIONAL)</span>
         <input className={field} inputMode="numeric" value={hr} onChange={(e) => setHr(e.target.value)} placeholder="bpm" />
@@ -138,7 +154,7 @@ export function CardioResultsForm({
       )}
       <label className="flex flex-col gap-2">
         <span className={label}>NOTES</span>
-        <input className={field} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Intervals, route, incline…" />
+        <input className={field} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Intervals, route…" />
       </label>
       <button type="submit" disabled={invalid || saving} className={btn.primary}>{submitLabel}</button>
       {children}

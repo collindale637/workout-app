@@ -62,6 +62,7 @@ export function CardioTimerFlow({ workoutId }: { workoutId: string | null }) {
               started_at: r.startedAt,
               duration_sec: r.durationSec,
               distance: r.distance,
+              incline: r.incline,
               avg_hr: r.avgHr,
               rpe: r.rpe,
               intervals: null,

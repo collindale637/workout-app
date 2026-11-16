@@ -137,6 +137,7 @@ function CardioDetail({ id }: { id: string }) {
     ["Time", formatDuration(c.duration_sec)],
     ...(c.distance ? [["Distance", `${toDisplayDistance(c.distance, units)} ${distanceUnit(units)}`] as [string, string]] : []),
     ...(pace ? [["Pace", `${formatDuration(pace)} / ${distanceUnit(units)}`] as [string, string]] : []),
+    ...(c.incline ? [["Incline", `${c.incline}%`] as [string, string]] : []),
     ...(c.avg_hr ? [["Avg heart rate", `${c.avg_hr} bpm`] as [string, string]] : []),
     ...(c.rpe ? [["Effort", `RPE ${c.rpe}`] as [string, string]] : []),
   ];

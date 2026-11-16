@@ -17,6 +17,12 @@ export const cardioLabel = (t: CardioType) => CARDIO_TYPES.find((c) => c.id === 
 
 export const cardioHasDistance = (t: CardioType) => CARDIO_TYPES.find((c) => c.id === t)?.distance ?? false;
 
+/** Walks and runs can be done on a treadmill, so they get an optional incline (% grade). */
+export const cardioHasIncline = (t: CardioType) => t === "walk" || t === "run";
+
+/** Treadmills top out around 15 %, a few go to 40 %; the database check matches. */
+export const INCLINE_MAX = 40;
+
 /** Library exercises in the "cardio" category get Start / Done instead of sets and reps. */
 export const isCardioExercise = (ex: { category: string } | undefined | null) => ex?.category === "cardio";
 
@@ -53,7 +59,7 @@ export type CardioTimer = {
 export const cardioElapsedSec = (t: Pick<CardioTimer, "startedAt" | "stoppedAt">, now: number) =>
   Math.max(0, Math.floor(((t.stoppedAt ?? now) - t.startedAt) / 1000));
 
-/** "30:00 · 2.1 mi" */
-export function cardioSummary(c: Pick<CardioSession, "duration_sec" | "distance">, units: Units) {
-  return `${formatDuration(c.duration_sec)}${c.distance ? ` · ${toDisplayDistance(c.distance, units)} ${distanceUnit(units)}` : ""}`;
+/** "30:00 · 2.1 mi · 5% incline" */
+export function cardioSummary(c: Pick<CardioSession, "duration_sec" | "distance" | "incline">, units: Units) {
+  return `${formatDuration(c.duration_sec)}${c.distance ? ` · ${toDisplayDistance(c.distance, units)} ${distanceUnit(units)}` : ""}${c.incline ? ` · ${c.incline}% incline` : ""}`;
 }
