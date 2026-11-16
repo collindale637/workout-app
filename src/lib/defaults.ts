@@ -1,7 +1,9 @@
 import type { Equipment, EquipmentDetails, Goal, GymTemplate } from "./db/types";
 
 /** Starting sets, reps and rest for a newly added exercise, by goal. */
-export function defaultTargets(goal: Goal, mechanic: "compound" | "isolation" | null) {
+export function defaultTargets(goal: Goal, mechanic: "compound" | "isolation" | null, opts: { hold?: boolean } = {}) {
+  // Timed holds (planks): the "reps" are seconds.
+  if (opts.hold) return { sets: 3, repMin: 30, repMax: 45, rest: 45 };
   const compound = mechanic !== "isolation";
   switch (goal) {
     case "strength":

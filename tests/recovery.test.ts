@@ -17,12 +17,12 @@ describe("recovery", () => {
     expect(setFatigue("primary", "warmup", 9, 8)).toBe(0.3);
   });
 
-  it("4 hard chest sets: fatigued right after, recovering a day later, fresh after two days", () => {
+  it("4 hard chest sets: recovering right after, fresh within two days", () => {
     const sets = [1, 2, 3, 4].map((i) => bench(`s${i}`, 0, 9));
     const at = (h: number) => computeRecovery({ muscles, sets: sets.map((s) => ({ ...s, at: hoursAgo(h) })), cardio: [], now: NOW, defaultRpe: 8 }).get("chest")!;
-    expect(at(0).score).toBe(60); // 4 × 0.9 = 3.6 of 9
+    expect(at(0).score).toBe(70); // 4 × 0.9 = 3.6 of 12
     expect(at(0).state).toBe("recovering");
-    expect(at(24).score).toBeGreaterThan(70);
+    expect(at(24).score).toBeGreaterThan(80);
     expect(at(48).state).toBe("fresh");
     expect(at(0).primarySets).toBe(4);
   });
@@ -82,5 +82,24 @@ describe("target fresh muscles", () => {
     const r = pickFreshTargets(rec({ chest: 30, lats: 30, upper_back: 30, front_delts: 50, rear_delts: 55 }), muscles);
     expect(r.targets.length).toBeGreaterThanOrEqual(3);
     expect(r.targets).not.toContain("chest");
+  });
+});
+
+describe("recovery timing (Batch 5 calibration)", () => {
+  const session = (muscle: string, n: number, h: number): FatigueSet[] =>
+    Array.from({ length: n }, (_, i) => ({ id: `${muscle}${i}`, exerciseId: "x", at: hoursAgo(h), type: "working", rpe: 9, muscles: [{ muscle_id: muscle, role: "primary" }] }));
+  const score = (muscle: string, n: number, h: number) => computeRecovery({ muscles, sets: session(muscle, n, h), cardio: [], now: NOW, defaultRpe: 8 }).get(muscle)!;
+
+  it("a hard leg session (10 sets near failure) is fatigued for a day and fresh after about 3 days", () => {
+    expect(score("quads", 10, 0).state).toBe("fatigued");
+    expect(score("quads", 10, 24).state).toBe("fatigued");
+    expect(score("quads", 10, 48).state).toBe("recovering");
+    expect(score("quads", 10, 72).state).toBe("fresh");
+  });
+
+  it("chest is fresh by about 2.5 days, arms by 2", () => {
+    expect(score("chest", 10, 48).state).toBe("recovering");
+    expect(score("chest", 10, 60).state).toBe("fresh");
+    expect(score("biceps", 9, 48).state).toBe("fresh");
   });
 });

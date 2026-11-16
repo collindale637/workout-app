@@ -20,7 +20,7 @@ export function suggestionLabel(s: Suggestion | undefined, units: Units) {
   if (!s) return null;
   if (s.change === "new") return "New";
   if (s.weight === null) return s.reps ? `Aim for ${s.reps} reps` : null;
-  return `${formatWeight(s.weight, units)} ${weightUnit(units)}${s.change === "up" ? " ↑" : ""}`;
+  return `${formatWeight(s.weight, units)} ${weightUnit(units)}${s.change === "up" ? " ↑" : s.change === "down" ? " ↓" : ""}`;
 }
 
 /** Muscle names as small pills. */
