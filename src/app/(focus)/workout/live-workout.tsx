@@ -530,10 +530,13 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <Stepper label="REPS" value={draft.reps === null ? "—" : String(draft.reps)} onMinus={() => bumpReps(-1)} onPlus={() => bumpReps(1)} onTap={() => setTyping("reps")} />
             </div>
 
-            <div className="mt-2.5">
-              <div className="mb-1.5 text-xs leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
-              <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
-            </div>
+            {/* Warm-ups are easy by design, so no RPE for them. */}
+            {draft.type !== "warmup" && (
+              <div className="mt-2.5">
+                <div className="mb-1.5 text-xs leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
+                <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
+              </div>
+            )}
 
             {rest && restLeft > 0 && (
               <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
@@ -932,7 +935,7 @@ function SetTable({
               <span className="flex flex-col items-start gap-0.5">
                 <span className={`display num text-[22px] leading-none font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>{amount(s)}</span>
                 <span className="display flex gap-1 text-[11px] font-semibold tracking-[0.08em]">
-                  <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>
+                  {s.type !== "warmup" && <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>}
                   {s.type === "drop" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">DROP</span>}
                   {s.type === "warmup" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">WARM-UP</span>}
                 </span>
@@ -1059,12 +1062,16 @@ function EditSetForm({ set, units, defaultRpe, onSave, onDelete }: { set: Workou
         <label className="flex flex-col gap-2"><span className={label}>WEIGHT ({weightUnit(units).toUpperCase()})</span><input className={field} inputMode="decimal" value={w} onChange={(e) => setW(e.target.value)} placeholder="Bodyweight" /></label>
         <label className="flex flex-col gap-2"><span className={label}>REPS</span><input className={field} inputMode="numeric" value={r} onChange={(e) => setR(e.target.value)} /></label>
       </div>
-      <span className={label}>RPE (BLANK = {defaultRpe})</span>
-      <div className="grid grid-cols-7 gap-1.5">
-        {RPE_SCALE.map((v) => (
-          <button key={v} type="button" onClick={() => setRpe(rpe === v ? null : v)} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === v ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{v}</button>
-        ))}
-      </div>
+      {type !== "warmup" && (
+        <>
+          <span className={label}>RPE (BLANK = {defaultRpe})</span>
+          <div className="grid grid-cols-7 gap-1.5">
+            {RPE_SCALE.map((v) => (
+              <button key={v} type="button" onClick={() => setRpe(rpe === v ? null : v)} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === v ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{v}</button>
+            ))}
+          </div>
+        </>
+      )}
       <div className="grid grid-cols-3 gap-1.5">
         {(["warmup", "working", "drop"] as SetType[]).map((t) => (
           <button key={t} type="button" onClick={() => setType(t)} className={`display h-11 rounded-xl text-sm font-extrabold ${type === t ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{TYPE_LABEL[t]}</button>
