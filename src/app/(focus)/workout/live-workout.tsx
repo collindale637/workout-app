@@ -17,6 +17,8 @@ import { RPE_SCALE } from "@/lib/defaults";
 import { formatDuration, formatMax, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
 import { bestE1rm } from "@/lib/progress";
 import { ExercisePicker } from "@/components/exercise-picker";
+import { useSmartPicks } from "@/lib/ai/picks";
+import type { SwapWhy } from "@/lib/generator";
 import { ExerciseInfo } from "@/components/exercise-info";
 import { Sheet, btn, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
@@ -574,11 +576,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       {/* Sheets */}
       <Sheet open={picker !== null} onClose={() => setPicker(null)} title={picker?.mode === "swap" ? "Swap for…" : "Add exercises"}>
         {picker && (
-          <ExercisePicker
-            mode={picker.mode === "swap" ? "single" : "multi"}
+          <SmartExercisePicker
+            mode={picker.mode}
+            swapFrom={picker.mode === "swap" ? picker.wex.exercise_id : undefined}
+            fromIsCardio={picker.mode === "swap" && isCardioWex(picker.wex)}
             gymEquipment={gym ? equipment : null}
             gymName={gym?.name}
             excludeIds={wexs.map((w) => w.exercise_id)}
+            today={{
+              name: workout.name ?? "Workout",
+              items: wexs.map((w) => ({ exercise_id: w.exercise_id, sets_done: isCardioWex(w) ? (cardioByWex.has(w.id) ? 1 : 0) : filled(w), sets_planned: w.target_sets ?? 3 })),
+            }}
             initialMuscles={
               picker.mode === "swap"
                 ? (catalog.musclesOf.get(picker.wex.exercise_id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id)
@@ -1147,6 +1155,62 @@ function AddCardio({ busy, pastHref, onStart }: { busy: string | null; pastHref:
         {type ? `Start ${cardioLabel(type).toLowerCase()}` : "Pick one to start"}
       </button>
       <Link href={pastHref} className={btn.ghost}>Log a past session instead</Link>
+    </div>
+  );
+}
+
+const LIFT_REASONS: { key: Exclude<SwapWhy, null>; label: string }[] = [
+  { key: "busy", label: "Equipment taken" },
+  { key: "hurts", label: "Hurts" },
+  { key: "hard", label: "Too hard" },
+  { key: "different", label: "Something different" },
+];
+const CARDIO_REASONS: { key: Exclude<SwapWhy, null>; label: string }[] = [
+  { key: "busy", label: "Machine taken" },
+  { key: "impact", label: "Lower impact" },
+  { key: "outdoors", label: "Outdoors" },
+  { key: "different", label: "Something different" },
+];
+
+/** The exercise picker with "Best swaps" / "Suggested for today" (rules first, then AI) on top. */
+function SmartExercisePicker({
+  mode,
+  swapFrom,
+  fromIsCardio,
+  today,
+  onPick,
+  ...picker
+}: {
+  mode: "swap" | "add";
+  swapFrom?: string;
+  fromIsCardio: boolean;
+  today: { name: string; items: { exercise_id: string; sets_done: number; sets_planned: number }[] };
+  onPick: (ids: string[]) => void;
+  gymEquipment: Set<string> | null;
+  gymName?: string;
+  excludeIds: string[];
+  initialMuscles?: string[];
+}) {
+  const [why, setWhy] = useState<SwapWhy>(null);
+  const picks = useSmartPicks({ kind: mode === "swap" ? "swap" : "suggest", active: true, fromId: swapFrom, why, today });
+  const name = useCatalog()?.byId.get(swapFrom ?? "")?.name;
+  return (
+    <div className="flex flex-col gap-3">
+      {mode === "swap" && name && (
+        <p className="text-sm font-semibold text-muted">
+          Replacing <b className="text-ink">{name}</b>
+        </p>
+      )}
+      <ExercisePicker
+        {...picker}
+        mode={mode === "swap" ? "single" : "multi"}
+        onPick={onPick}
+        initialFilter={fromIsCardio ? "cardio" : undefined}
+        smart={{ title: mode === "swap" ? "Best swaps" : "Suggested for today", picks }}
+        reasons={mode === "swap" ? (fromIsCardio ? CARDIO_REASONS : LIFT_REASONS) : undefined}
+        reason={why}
+        onReason={(k) => setWhy(k as SwapWhy)}
+      />
     </div>
   );
 }

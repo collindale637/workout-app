@@ -1,5 +1,5 @@
 import type { Goal } from "@/lib/db/types";
-import type { AiDay, AiImport, AiItem, AiPlan, AiWorkout, AllowedExercise, ImportLine, ImportMatch } from "./types";
+import type { AiDay, AiImport, AiItem, AiPick, AiPlan, AiWorkout, AllowedExercise, ImportLine, ImportMatch } from "./types";
 
 /*
   Checks what Claude sends back before anyone sees it. Every exercise must come from the list it was given
@@ -224,4 +224,23 @@ export function checkImport(raw: unknown, allow: Map<string, AllowedExercise>): 
     },
     errors,
   };
+}
+
+/** Swap / suggest picks: ids from the candidate list only, no repeats, nothing already in the workout. */
+export function checkPicks(raw: unknown, allow: Map<string, AllowedExercise>, opts: { exclude: Set<string>; max: number }): { picks: AiPick[]; errors: string[] } {
+  const errors: string[] = [];
+  const list = isObj(raw) && Array.isArray(raw.picks) ? raw.picks : null;
+  if (!list) return { picks: [], errors: ['Return {"picks": [...]} by calling the tool.'] };
+  const picks: AiPick[] = [];
+  list.forEach((r, i) => {
+    if (!isObj(r)) return errors.push(`Pick ${i + 1}: not an object.`);
+    const id = str(r.exercise_id, 120);
+    if (!allow.has(id)) return errors.push(`Pick ${i + 1}: "${id}" isn't in the CANDIDATES list. Use ids from that list only.`);
+    if (opts.exclude.has(id)) return errors.push(`Pick ${i + 1}: "${id}" is already in today's workout (or is the exercise being replaced).`);
+    if (picks.some((p) => p.exercise_id === id)) return errors.push(`Pick ${i + 1}: "${id}" is listed twice.`);
+    picks.push({ exercise_id: id, reason: str(r.reason, 110) });
+  });
+  if (picks.length > opts.max) picks.length = opts.max;
+  if (!picks.length && !errors.length) errors.push("Return at least one pick.");
+  return { picks, errors };
 }

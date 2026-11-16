@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkImport, checkItems, checkPlan, checkWorkout, normalizeSupersets } from "@/lib/ai/validate";
+import { checkImport, checkItems, checkPicks, checkPlan, checkWorkout, normalizeSupersets } from "@/lib/ai/validate";
 import { buildMatchIndex, matchLine, normalize } from "@/lib/ai/match";
 import { contextBlock, taskBlock } from "@/lib/ai/prompts";
 import { draftSnapshot, planNotes, targetsFor } from "@/lib/ai/apply";
@@ -247,5 +247,59 @@ describe("the AI request pipeline", () => {
     const blocks = first!.content as Record<string, unknown>[];
     expect(blocks[0]).toMatchObject({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "abc" } });
     expect(String(blocks.at(-1)!.text)).toContain("No pasted text");
+  });
+});
+
+describe("AI swap and add suggestions", () => {
+  const today = {
+    name: "Push",
+    items: [
+      { id: "Barbell_Bench_Press_-_Medium_Grip", name: "Bench Press", muscles: ["chest"], type: "compound" as const, sets_done: 3, sets_planned: 3 },
+      { id: "Side_Lateral_Raise", name: "Lateral Raise", muscles: ["side_delts"], type: "isolation" as const, sets_done: 1, sets_planned: 3 },
+    ],
+  };
+  const req: AiRequest = {
+    kind: "swap", prompt: "", exercises: allowList, gym: { name: "Home", equipment: [] },
+    profile: { goal: "hypertrophy", experience: "intermediate", days_per_week: 4, session_minutes: 45, units: "lb", default_rpe: 8 },
+    today, swap: { exercise_id: "Side_Lateral_Raise", why: "busy" },
+  };
+  const pickReply = (input: unknown): Call => ({ input, toolUseId: "tu_1", content: [{ type: "tool_use", id: "tu_1", name: "save_picks", input }], usage: { input_tokens: 900, output_tokens: 120 }, truncated: false });
+
+  it("only accepts candidates, never the exercise being swapped or one already in the workout", () => {
+    const exclude = new Set(today.items.map((t) => t.id));
+    const r = checkPicks({ picks: [
+      { exercise_id: "Plank", reason: "Core, nothing today yet" },
+      { exercise_id: "Side_Lateral_Raise", reason: "same" },
+      { exercise_id: "Made_Up", reason: "x" },
+      { exercise_id: "Plank", reason: "twice" },
+      { exercise_id: "Triceps_Pushdown", reason: "a".repeat(200) },
+    ] }, allow, { exclude, max: 3 });
+    expect(r.picks.map((p) => p.exercise_id)).toEqual(["Plank", "Triceps_Pushdown"]);
+    expect(r.picks[1].reason.length).toBeLessThanOrEqual(110);
+    expect(r.errors).toHaveLength(3);
+    expect(checkPicks({ nope: 1 }, allow, { exclude, max: 3 }).errors.length).toBe(1);
+  });
+
+  it("describes the workout, the exercise being replaced and why, and uses the quick-pick tool and model", async () => {
+    let sent: { model?: string; system: string; tool: { name: string }; messages: Msg[] } | null = null;
+    const r = await runAi(req, async (opts) => {
+      sent = opts;
+      return pickReply({ picks: [{ exercise_id: "Triceps_Pushdown", reason: "Different station" }] });
+    }, "claude-haiku-5-5");
+    expect(r.kind).toBe("swap");
+    expect(r.value).toEqual([{ exercise_id: "Triceps_Pushdown", reason: "Different station" }]);
+    expect(sent!.model).toBe("claude-haiku-5-5");
+    expect(sent!.tool.name).toBe("save_picks");
+    const text = JSON.stringify(sent!.messages);
+    expect(text).toContain("Lateral Raise");
+    expect(text).toContain("1/3 sets done");
+    expect(text).toContain("equipment is taken");
+    expect(text).toContain("CANDIDATES");
+  });
+
+  it("asks for additions to the workout, and reports an empty answer", async () => {
+    const r = await runAi({ ...req, kind: "suggest", swap: undefined }, async () => pickReply({ picks: [] }));
+    expect(r.empty).toBe(true);
+    expect(r.calls).toBe(2); // the empty answer goes back once
   });
 });

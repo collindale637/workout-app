@@ -221,3 +221,74 @@ export const IMPORT_TOOL = {
     required: ["name", "goal", "weeks", "summary", "progression", "problems", "days"],
   },
 };
+
+/* Quick picks during a workout ("swap" and "suggest"): short, fast, cheap. */
+
+export const PICK_SYSTEM = `You are the coach inside Rep, a workout app. The person is in the middle of a workout and wants a quick, sensible choice, like a good personal trainer standing next to them.
+
+Rules
+- Choose only from the CANDIDATES list (ids copied exactly). Every candidate is available at their gym. The list is pre-sorted by a simple rules-based match; use judgment to reorder it.
+- Never pick something already in today's workout.
+- Give each pick a reason under 90 characters, in plain words, about THIS workout: what it adds or why it fits ("Your back is fresh, and today has no pulling"). No filler like "great choice".
+- Consider: the muscles and movement being replaced (for a swap), what today's workout already covers, recovery scores (avoid muscles under 50 that aren't today's focus), their goal and experience, favorites, and the reason they gave.
+- If they say it hurts: prefer guided, joint-friendly options (machines, cables, lighter isolation), and keep the reason short and practical.
+- Swaps of cardio must be cardio. Swaps of a lift should usually train the same main muscles.`;
+
+const WHY_WORDS: Record<string, string> = {
+  busy: "the equipment is taken (pick something on different equipment)",
+  hurts: "it hurts or feels uncomfortable",
+  hard: "it's too hard or too technical right now",
+  different: "they want something different (a new angle, not a near-copy)",
+  impact: "they want lower impact",
+  outdoors: "they want to do it outdoors",
+};
+
+export function pickBlock(req: AiRequest) {
+  const p = req.profile;
+  const lines = [
+    `PROFILE: goal ${GOAL_WORDS[p.goal] ?? p.goal} · ${p.experience}`,
+    req.gym ? `GYM: ${req.gym.name}` : "GYM: not set up",
+  ];
+  if (req.recovery && Object.keys(req.recovery).length) lines.push(`RECOVERY (0–100; unlisted = fresh): ${Object.entries(req.recovery).map(([m, s]) => `${m} ${s}`).join(", ")}`);
+  const today = req.today?.items ?? [];
+  lines.push(
+    "",
+    `TODAY'S WORKOUT "${req.today?.name ?? "Workout"}":`,
+    ...(today.length ? today.map((t) => `- ${t.name} (${t.muscles.join(", ") || t.type}) · ${t.type === "cardio" ? (t.sets_done ? "done" : "not started") : `${t.sets_done}/${t.sets_planned} sets done`}`) : ["- (nothing yet)"]),
+    "",
+    "CANDIDATES (id | name | main muscles | type):",
+    ...req.exercises.map((e) => `${e.id} | ${e.name} | ${e.muscles.join(", ")} | ${e.type}${e.favorite ? " | favorite" : ""}`),
+    "",
+  );
+  if (req.kind === "swap") {
+    const from = today.find((t) => t.id === req.swap?.exercise_id);
+    const why = req.swap?.why ? WHY_WORDS[req.swap.why] ?? req.swap.why : null;
+    lines.push(`TASK: pick the 3 best replacements for "${from?.name ?? req.swap?.exercise_id}"${from ? ` (${from.muscles.join(", ") || from.type})` : ""}, best first.${why ? ` Why they're swapping: ${why}.` : ""}`);
+  } else {
+    lines.push(`TASK: suggest up to 4 exercises worth adding to today's workout, best first. Fill real gaps (muscles today should cover but doesn't yet, missing core, balance for lots of pressing or pulling); vary them across muscles; don't pile on muscles that are already well covered.`);
+  }
+  if (req.prompt.trim()) lines.push(`They said: """${req.prompt.trim()}"""`);
+  return lines.join("\n");
+}
+
+export const PICK_TOOL = {
+  name: "save_picks",
+  description: "Return the picks, best first.",
+  input_schema: {
+    type: "object",
+    properties: {
+      picks: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            exercise_id: { type: "string", description: "An id from the CANDIDATES list, copied exactly." },
+            reason: { type: "string", description: "Why it fits, under 90 characters." },
+          },
+          required: ["exercise_id", "reason"],
+        },
+      },
+    },
+    required: ["picks"],
+  },
+};

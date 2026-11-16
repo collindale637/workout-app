@@ -7,6 +7,8 @@ import type { CallFn } from "./run";
 */
 
 export const AI_MODEL = process.env.AI_MODEL || "claude-sonnet-5-5";
+/** Quick picks mid-workout (swap, suggest): a faster, cheaper model; the work is small and well-defined. */
+export const AI_FAST_MODEL = process.env.AI_FAST_MODEL || "claude-haiku-5-5";
 /** Shared by the whole family: once this month's spend reaches it, AI features pause until next month. */
 export const AI_MONTHLY_CAP_USD = Number(process.env.AI_MONTHLY_CAP_USD || 10);
 export const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
@@ -44,7 +46,7 @@ export const callTool: CallFn = async (opts) => {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model: AI_MODEL,
+        model: opts.model ?? AI_MODEL,
         max_tokens: opts.maxTokens,
         // This model doesn't accept a forced tool_choice, so ask for the tool in the prompt instead. If it
         // ever answers in plain text, the result has no tool call and run.ts sends it back once to fix.
@@ -53,7 +55,7 @@ export const callTool: CallFn = async (opts) => {
         tools: [opts.tool],
         tool_choice: { type: "auto" },
       }),
-      signal: AbortSignal.timeout(130_000),
+      signal: AbortSignal.timeout(opts.maxTokens <= 1000 ? 30_000 : 130_000),
     });
   } catch (e) {
     const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");

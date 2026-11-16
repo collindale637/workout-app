@@ -23,7 +23,7 @@ function typeOf(ex: Exercise): AllowedExercise["type"] {
   return ex.mechanic === "compound" ? "compound" : "isolation";
 }
 
-function toAllowed(catalog: Catalog, ex: Exercise, prefs: Map<string, ExercisePref>): AllowedExercise {
+export function toAllowed(catalog: Catalog, ex: Exercise, prefs: Map<string, ExercisePref>): AllowedExercise {
   const muscles = (catalog.musclesOf.get(ex.id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id);
   return { id: ex.id, name: ex.name, muscles, type: typeOf(ex), ...(prefs.get(ex.id)?.favorite ? { favorite: true } : {}) };
 }
