@@ -6,7 +6,7 @@
     goes through IndexedDB in the app (Phase 1) and syncs when back online.
   Bump VERSION to force every phone to drop old caches.
 */
-const VERSION = "v1";
+const VERSION = "v2";
 const PAGES = `pages-${VERSION}`;
 const ASSETS = `assets-${VERSION}`;
 const IMAGES = `images-${VERSION}`;
@@ -56,7 +56,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/auth/") || url.pathname.startsWith("/api/")) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirstPage(request));

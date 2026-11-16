@@ -108,7 +108,7 @@ export function TodayScreen() {
         </div>
         <ul className="flex flex-col divide-y divide-line rounded-3xl border border-line bg-card">
           <SetupRow done label="Signed in" detail="Invite-only family account" />
-          <SetupRow done={hasProfile} label="Your profile" detail="Name, goal, units, default RPE" href="/more" />
+          <SetupRow done={hasProfile} label="Your profile" detail="Name, goal, units, default RPE, password" href="/more" />
           <SetupRow label="Your gyms" detail="Home, main gym, travel — with equipment" phase="Phase 1" />
           <SetupRow label="Your plan" detail="Pick a split and goal" phase="Phase 2" />
         </ul>

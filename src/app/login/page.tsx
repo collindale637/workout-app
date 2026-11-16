@@ -20,7 +20,7 @@ export default function LoginPage() {
         <span className="text-accent">to work.</span>
       </h1>
       <p className="mt-3 text-base font-medium text-muted">
-        Family members only. Enter the email you were invited with and we&apos;ll send you a sign-in code.
+        Family only. Each person gets their own login and private training log.
       </p>
       <LoginForm />
     </main>

@@ -5,23 +5,24 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
 
-type Step = "email" | "code";
-
 function friendlyError(message: string) {
   const m = message.toLowerCase();
-  if (m.includes("signups not allowed") || m.includes("not allowed for otp") || m.includes("user not found")) {
-    return "That email isn't invited yet. Ask Collin to add you.";
-  }
-  if (m.includes("expired") || m.includes("invalid")) return "That code didn't work. Check it or send a new one.";
-  if (m.includes("rate limit") || m.includes("security purposes")) return "Too many tries. Wait a minute and try again.";
+  if (m.includes("invalid login credentials")) return "That email and password don't match. Check them and try again.";
+  if (m.includes("signups not allowed") || m.includes("signup is disabled")) return "New accounts are closed. Ask Collin to add you.";
+  if (m.includes("already registered")) return "That email already has an account. Sign in instead.";
+  if (m.includes("password should be")) return "Use a longer password (at least 6 characters).";
+  if (m.includes("rate limit") || m.includes("too many")) return "Too many tries. Wait a minute and try again.";
+  if (m.includes("fetch") || m.includes("network")) return "Can't reach the server. Check your connection.";
   return message;
 }
 
 export function LoginForm() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("email");
+  const [mode, setMode] = useState<"in" | "up">("in");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,105 +34,106 @@ export function LoginForm() {
     );
   }
 
-  async function sendCode(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await getSupabaseBrowser().auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: {
-        // Invite-only: never create an account from the sign-in screen.
-        shouldCreateUser: false,
-        emailRedirectTo: `${window.location.origin}/auth/confirm`,
-      },
-    });
-    setBusy(false);
-    if (error) return setError(friendlyError(error.message));
-    setStep("code");
-  }
-
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const { error } = await getSupabaseBrowser().auth.verifyOtp({
-      email: email.trim().toLowerCase(),
-      token: code.trim(),
-      type: "email",
-    });
-    if (error) {
-      setBusy(false);
-      return setError(friendlyError(error.message));
+    const supabase = getSupabaseBrowser();
+    const cleanEmail = email.trim().toLowerCase();
+    if (mode === "in") {
+      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+      if (error) {
+        setBusy(false);
+        return setError(friendlyError(error.message));
+      }
+    } else {
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password,
+        options: { data: { name: name.trim() } },
+      });
+      if (error) {
+        setBusy(false);
+        return setError(friendlyError(error.message));
+      }
+      if (!data.session) {
+        setBusy(false);
+        return setError("Account created, but it needs email confirmation. Ask Collin to turn off \"Confirm email\" in Supabase.");
+      }
     }
     router.replace("/");
     router.refresh();
   }
 
+  const label = "text-xs font-bold tracking-[0.1em] text-muted";
   const input =
     "h-14 w-full rounded-2xl border-2 border-line bg-card px-4 text-lg font-semibold text-ink placeholder:text-muted/60 outline-none focus:border-accent-strong";
-  const button =
-    "display h-14 w-full rounded-2xl bg-primary text-xl font-extrabold text-white shadow-[inset_0_-5px_0_var(--primary-press)] active:translate-y-px disabled:opacity-50";
 
   return (
-    <div className="mt-8">
-      {step === "email" ? (
-        <form onSubmit={sendCode} className="flex flex-col gap-3">
-          <label className="text-xs font-bold tracking-[0.1em] text-muted" htmlFor="email">
-            EMAIL
-          </label>
-          <input
-            id="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className={input}
-          />
-          <button type="submit" disabled={busy || !email} className={button}>
-            {busy ? "Sending…" : "Send code"}
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={verifyCode} className="flex flex-col gap-3">
-          <label className="text-xs font-bold tracking-[0.1em] text-muted" htmlFor="code">
-            CODE SENT TO {email.toUpperCase()}
-          </label>
-          <input
-            id="code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            pattern="[0-9]{6,8}"
-            maxLength={8}
-            required
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            placeholder="123456"
-            className={`${input} num text-center text-3xl tracking-[0.3em]`}
-          />
-          <button type="submit" disabled={busy || code.length < 6} className={button}>
-            {busy ? "Checking…" : "Sign in"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setStep("email");
-              setCode("");
-              setError(null);
-            }}
-            className="h-11 text-sm font-bold text-accent"
-          >
-            Use a different email
-          </button>
-        </form>
+    <form onSubmit={submit} className="mt-8 flex flex-col gap-3">
+      {mode === "up" && (
+        <>
+          <label className={label} htmlFor="name">FIRST NAME</label>
+          <input id="name" autoComplete="given-name" required value={name} onChange={(e) => setName(e.target.value)} className={`${input} mb-2`} />
+        </>
       )}
+      <label className={label} htmlFor="email">EMAIL</label>
+      <input
+        id="email"
+        type="email"
+        inputMode="email"
+        autoComplete="username"
+        autoCapitalize="none"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        className={input}
+      />
+      <label className={`${label} mt-2`} htmlFor="password">PASSWORD</label>
+      <div className="relative">
+        <input
+          id="password"
+          type={showPassword ? "text" : "password"}
+          autoComplete={mode === "in" ? "current-password" : "new-password"}
+          minLength={6}
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={`${input} pr-20`}
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          className="display absolute inset-y-0 right-2 my-auto h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-accent"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+        >
+          {showPassword ? "Hide" : "Show"}
+        </button>
+      </div>
+      <button
+        type="submit"
+        disabled={busy || !email || !password}
+        className="display mt-2 h-14 w-full rounded-2xl bg-primary text-xl font-extrabold text-white shadow-[inset_0_-5px_0_var(--primary-press)] active:translate-y-px disabled:opacity-50"
+      >
+        {busy ? "One sec…" : mode === "in" ? "Sign in" : "Create account"}
+      </button>
       {error && (
-        <p role="alert" className="mt-4 text-sm font-semibold text-warn">
+        <p role="alert" className="mt-2 text-sm font-semibold text-warn">
           {error}
         </p>
       )}
-    </div>
+      <button
+        type="button"
+        onClick={() => {
+          setMode(mode === "in" ? "up" : "in");
+          setError(null);
+        }}
+        className="h-11 text-sm font-bold text-accent"
+      >
+        {mode === "in" ? "New here? Create an account" : "Have an account? Sign in"}
+      </button>
+      {mode === "in" && <p className="text-center text-sm font-medium text-muted">Forgot your password? Ask Collin to reset it.</p>}
+    </form>
   );
 }

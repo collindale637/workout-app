@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
+import { PasswordForm } from "./password-form";
 import { EXPERIENCE_LABELS, GOAL_LABELS, useProfile, type Experience, type Goal, type Profile, type Units } from "@/lib/profile";
 
 const RPE_CHOICES = [6, 7, 7.5, 8, 8.5, 9, 10];
@@ -61,6 +62,7 @@ export function ProfileForm() {
   const field = "h-12 w-full rounded-2xl border-2 border-line bg-card-2 px-4 text-base font-semibold text-ink outline-none focus:border-accent-strong";
 
   return (
+    <div className="flex flex-col gap-4">
     <form onSubmit={onSave} className="flex flex-col gap-4">
       <section className="flex flex-col gap-4 rounded-3xl border border-line bg-card p-4">
         <h2 className="display text-xl font-extrabold">Profile</h2>
@@ -137,9 +139,10 @@ export function ProfileForm() {
         </button>
         {message && <p role="status" className={`text-sm font-semibold ${message === "Saved" ? "text-good" : "text-warn"}`}>{message}</p>}
       </section>
-
-      <SignOut onClick={signOut} />
     </form>
+    <PasswordForm />
+    <SignOut onClick={signOut} />
+    </div>
   );
 }
 

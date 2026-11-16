@@ -24,8 +24,8 @@ and arrives in Phase 3.
 |---|---|
 | App shell, dark theme tokens, 5-tab nav | `src/app/(app)/`, `src/app/globals.css` |
 | PWA: manifest, icons, service worker | `src/app/manifest.ts`, `public/icons/`, `public/sw.js` |
-| Invite-only sign-in with an emailed code | `src/app/login/`, `src/proxy.ts`, `src/app/auth/confirm/` |
-| Profile (name, goal, units, default RPE…) | More tab, `src/lib/profile.ts` |
+| Email + password sign-in (family creates accounts, then sign-ups close) | `src/app/login/`, `src/proxy.ts` |
+| Profile (name, goal, units, default RPE…) and change password | More tab, `src/lib/profile.ts` |
 | Schema: 20 tables, RLS on every personal table | `supabase/migrations/20261115000100_schema.sql` |
 | Catalog: 19 muscles, 86 equipment items, 889 exercises, 9 splits | `supabase/migrations/20261115000200_catalog_seed.sql` (generated) |
 | Spot-check of the ~200 common lifts | `supabase/catalog-report.md` |
@@ -38,22 +38,14 @@ and arrives in Phase 3.
 1. Create a project at supabase.com.
 2. **SQL Editor:** run `supabase/migrations/20261115000100_schema.sql`, then
    `supabase/migrations/20261115000200_catalog_seed.sql` (or `supabase db push` with the CLI).
-3. **Authentication → Sign In / Providers → Email:** keep Email on, turn **"Allow new users to sign up" off**.
-4. **Authentication → Emails → Magic Link** template: make sure it shows the code, e.g.
-
-   ```html
-   <h2>Your sign-in code</h2>
-   <p style="font-size:32px;font-weight:700;letter-spacing:4px">{{ .Token }}</p>
-   <p>Or <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email">tap here</a> (opens in Safari).</p>
-   ```
-
-5. **Authentication → URL Configuration:** Site URL = your Vercel URL; add
-   `https://<your-app>.vercel.app/auth/confirm` to Redirect URLs.
-6. **Add family members:** Authentication → Users → Add user → *Create new user* (tick auto-confirm).
-   Their profile row is created automatically. They sign in with the code.
-
-Why a code instead of a link: on iPhone, links in Mail open in Safari, not the home-screen app, so a
-magic link would sign you in to the wrong place. Typing the 6-digit code signs in the app itself.
+3. **Authentication → Sign In / Providers → Email:** keep Email on and turn **off "Confirm email"**, so new
+   accounts work right away without sending email (same setup as the macro tracker).
+4. **Adding family:** while "Allow new users to sign up" is on, send them the app's address; they tap
+   *New here? Create an account*, enter their first name, email and a password, and their profile is
+   created automatically. Once everyone's in, turn **off "Allow new users to sign up"** so nobody else can join.
+   Later additions: Authentication → Users → Add user → *Create new user* (tick auto-confirm).
+5. **Forgotten password:** Authentication → Users → the person → reset/set a new password, then they can
+   change it under More → Change password.
 
 ### 2. Environment
 
