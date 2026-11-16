@@ -156,13 +156,15 @@ export function dose(goal: Goal, role: "main" | "compound" | "isolation" | "core
 }
 
 /** Minutes per lifting exercise, rest included. Fat loss supersets its accessories, so they take less. */
-const MINUTES_PER_EXERCISE: Record<Goal, number> = { strength: 11, hypertrophy: 8, fat_loss: 5.5, general: 8 };
+const MINUTES_PER_EXERCISE: Record<Goal, number> = { strength: 13, hypertrophy: 8, fat_loss: 4.5, general: 8 };
 
 /**
  * Most of the benefit from one session comes in the first ~10 hard sets for a muscle; past that it's
  * mostly extra fatigue. Spread the rest across the day's other muscles (or another day).
  */
 export const SESSION_SET_CAP = 10;
+/** Hard sets one muscle can take in a session. Beginners recover slower, so they get a lower ceiling. */
+export const setCapFor = (experience: Experience) => (experience === "beginner" ? 8 : SESSION_SET_CAP);
 
 /** Tagged "compound" in the source data but trained like isolation work (light, higher reps, short rest). */
 const ISOLATION_IDS = new Set(["Face_Pull", "Straight-Arm_Dumbbell_Pullover", "Incline_Dumbbell_Flyes"]);
@@ -264,6 +266,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const preferFree = opts.experience !== "beginner";
   /** Rough sets an exercise will get, to keep each muscle under the per-session cap. */
   const estSets = (c: Candidate, i: number) => (!c.iso && c.loadable && i < mains ? (heavy ? 5 : 4) : 3);
+  const setCap = setCapFor(opts.experience);
   const setsFor = new Map<string, number>();
   const hitDirect = new Set<string>();
   // Lower-body days want a knee-dominant lift (squat, leg press, lunge) AND a hip hinge for the hamstrings.
@@ -277,7 +280,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     if (!prim[0]) return -Infinity;
     // Already near the per-session cap for one of its main muscles: pick something else.
     const i = chosen.length;
-    if (c.primary.some((m) => targetSet.has(m) && (setsFor.get(m) ?? 0) + estSets(c, i) > SESSION_SET_CAP)) return -Infinity;
+    if (c.primary.some((m) => targetSet.has(m) && (setsFor.get(m) ?? 0) + estSets(c, i) > setCap)) return -Infinity;
     let s = prim[0] + 0.35 * prim.slice(1).reduce((a, b) => a + b, 0);
     s += 0.2 * c.secondary.reduce((a, m) => a + (need.get(m) ?? 0), 0);
     const offTarget = c.primary.filter((m) => !targetSet.has(m)).length;

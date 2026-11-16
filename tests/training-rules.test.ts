@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SESSION_SET_CAP, generateWorkout, isHold, isIsolation, type GenOptions } from "@/lib/generator";
+import { SESSION_SET_CAP, generateWorkout, setCapFor, isHold, isIsolation, type GenOptions } from "@/lib/generator";
 import { suggestNext } from "@/lib/progression";
 import { defaultTargets } from "@/lib/defaults";
 import { catalog, commercialGym, homeGym, hotelGym } from "./fixtures/catalog";
@@ -48,6 +48,19 @@ describe("training rules (Batch 5 audit)", () => {
         }
       }
     }
+  });
+
+  it("beginners get a lower per-muscle cap, and short strength sessions fit the clock", () => {
+    expect(setCapFor("beginner")).toBeLessThan(setCapFor("intermediate"));
+    for (const targets of [PUSH, PULL, LEGS, UPPER, LOWER, FULL]) {
+      for (const seed of SEEDS) {
+        const sets = new Map<string, number>();
+        for (const i of lifts(gen({ targets, experience: "beginner", sessionMinutes: 90 }, seed))) for (const m of primaryOf(i.exercise_id)) sets.set(m, (sets.get(m) ?? 0) + i.sets);
+        for (const [m, n] of sets) expect(n, `${m} ${targets.join("/")} seed ${seed}`).toBeLessThanOrEqual(setCapFor("beginner"));
+      }
+    }
+    // A 45-minute heavy session is three big lifts, not four (5 sets with 3-minute rests add up fast).
+    for (const seed of SEEDS) expect(lifts(gen({ goal: "strength", targets: UPPER, sessionMinutes: 45 }, seed)).length).toBe(3);
   });
 
   it("heavy 3–5 rep main lifts are free weights, never machines, cables or RDLs", () => {
