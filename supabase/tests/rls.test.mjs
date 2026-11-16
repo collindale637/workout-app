@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -31,6 +31,7 @@ await db.exec(readFileSync(root + "20261118000100_phase4_progress.sql", "utf8"))
 await db.exec(readFileSync(root + "20261119000100_outdoor_cardio_gear.sql", "utf8"));
 await db.exec(readFileSync(root + "20261119000200_skipped_sets.sql", "utf8"));
 await db.exec(readFileSync(root + "20261120000100_ai_pick_kinds.sql", "utf8"));
+await db.exec(readFileSync(root + "20261120000200_recovery_times.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -91,6 +92,7 @@ r.push(["B logs an AI request", await as(B, `select public.ai_log_request('impor
 r.push(["A sees own log only", await as(A, `select count(*)::int n, sum(cost_usd)::text cost from ai_requests`)]);
 r.push(["A can't write the log directly", await as(A, `insert into ai_requests (type, cost_usd) values ('plan', 0)`)]);
 r.push(["A can't erase usage", await as(A, `delete from ai_requests returning id`)]);
+r.push(["recovery times updated", await as(A, `select id, recovery_tau_hours from public.muscles where id in ('quads', 'chest', 'biceps', 'lower_back') order by id`)]);
 r.push(["household spend is shared", await as(A, `select household_usd::text, mine_usd::text, my_requests from ai_spend_this_month()`)]);
 r.push(["anon can't log AI", await (async () => { await db.exec("set role anon"); try { return { rows: (await db.query("select public.ai_log_request('plan','x',1,1,1)")).rows }; } catch (e) { return { error: e.message }; } finally { await db.exec("reset role"); } })()]);
 r.push(["A saves plan notes", await as(A, `update plans set notes = 'Add a rep each week' where id = '${P}' returning notes`)]);

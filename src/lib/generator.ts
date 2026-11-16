@@ -155,14 +155,37 @@ export function dose(goal: Goal, role: "main" | "compound" | "isolation" | "core
   return d;
 }
 
-const MINUTES_PER_EXERCISE: Record<Goal, number> = { strength: 11, hypertrophy: 8, fat_loss: 7, general: 8 };
+/** Minutes per lifting exercise, rest included. Fat loss supersets its accessories, so they take less. */
+const MINUTES_PER_EXERCISE: Record<Goal, number> = { strength: 11, hypertrophy: 8, fat_loss: 5.5, general: 8 };
+
+/**
+ * Most of the benefit from one session comes in the first ~10 hard sets for a muscle; past that it's
+ * mostly extra fatigue. Spread the rest across the day's other muscles (or another day).
+ */
+export const SESSION_SET_CAP = 10;
+
+/** Tagged "compound" in the source data but trained like isolation work (light, higher reps, short rest). */
+const ISOLATION_IDS = new Set(["Face_Pull", "Straight-Arm_Dumbbell_Pullover", "Incline_Dumbbell_Flyes"]);
+export const isIsolation = (ex: Pick<Exercise, "id" | "mechanic" | "movement_pattern">) =>
+  ex.mechanic !== "compound" || ex.movement_pattern === "isolation" || ISOLATION_IDS.has(ex.id);
+
+/** Timed holds: dosed in seconds, not reps. */
+export const isHold = (name: string) => /\bplank\b(?!\s*(jack|to|walk|up))|hollow (body )?hold|wall sit|l-sit|dead hang/i.test(name);
+
+const FREE_WEIGHTS = new Set(["barbell", "dumbbells", "trap_bar", "ez_bar", "kettlebells"]);
+const GUIDED = /machine|smith|cable|lever|pulldown|row_station|leg_press|hack_squat|pendulum|belt_squat/;
+const LOWER_BODY = new Set(["quads", "hamstrings", "glutes"]);
+/** Best kept to low reps and never supersetted outside heavy days: technique fades fast when tired. */
+const HEAVY_ONLY = new Set(["Barbell_Deadlift", "Sumo_Deadlift", "Deficit_Deadlift", "Rack_Pulls"]);
+/** Hinges usually done for 6–10 reps: an accessory to the main lifts, not a 3–5 rep main lift themselves. */
+const ACCESSORY_HINGE = /romanian|stiff-legged|good morning|single-leg deadlift/i;
 
 export function exerciseCount(goal: Goal, liftMinutes: number, targets: number) {
   const n = Math.round(liftMinutes / MINUTES_PER_EXERCISE[goal]);
   return Math.max(2, Math.min(9, n, Math.max(2, targets * 2)));
 }
 
-type Candidate = { ex: Exercise; primary: string[]; secondary: string[]; equipment: string; loadable: boolean; base: string };
+type Candidate = { ex: Exercise; primary: string[]; secondary: string[]; equipment: string; loadable: boolean; base: string; iso: boolean; free: boolean; barbell: boolean };
 
 /** Things you train on but don't load with weight: exercises using only these can't be a heavy main lift. */
 const UNLOADED = new Set([
@@ -209,6 +232,9 @@ export function liftPool(cat: GenCatalog, opts: Pick<GenOptions, "gymEquipment" 
     out.push({
       ex, primary, secondary: secondaries(cat, ex.id), equipment: needs.map((n) => n.equipment_id).sort().join(","),
       loadable: needs.some((n) => !UNLOADED.has(n.equipment_id)), base: baseName(ex.name),
+      iso: isIsolation(ex),
+      free: needs.some((n) => FREE_WEIGHTS.has(n.equipment_id)) && !needs.some((n) => GUIDED.test(n.equipment_id)),
+      barbell: needs.some((n) => n.equipment_id === "barbell" || n.equipment_id === "trap_bar"),
     });
   }
   return out;
@@ -233,18 +259,42 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const need = new Map(targets.map((m) => [m, (MUSCLE_PRIORITY[m] ?? 0.8) * scale]));
   const chosen: Candidate[] = [];
   const jitter = new Map(pool.map((c) => [c.ex.id, random()]));
+  const heavy = opts.goal === "strength" || opts.focus === "power";
+  const mains = heavy ? 2 : 1;
+  const preferFree = opts.experience !== "beginner";
+  /** Rough sets an exercise will get, to keep each muscle under the per-session cap. */
+  const estSets = (c: Candidate, i: number) => (!c.iso && c.loadable && i < mains ? (heavy ? 5 : 4) : 3);
+  const setsFor = new Map<string, number>();
+  const hitDirect = new Set<string>();
+  // Lower-body days want a knee-dominant lift (squat, leg press, lunge) AND a hip hinge for the hamstrings.
+  const wantHinge = targetSet.has("hamstrings") && (targetSet.has("quads") || targetSet.has("glutes"));
+  const knee = (c: Candidate) => !c.iso && c.primary.includes("quads");
+  const hip = (c: Candidate) => !c.iso && c.primary.includes("hamstrings");
 
   const score = (c: Candidate) => {
     const prim = c.primary.map((m) => need.get(m) ?? 0).sort((a, b) => b - a);
     // It has to train something the session still needs as a main muscle.
     if (!prim[0]) return -Infinity;
+    // Already near the per-session cap for one of its main muscles: pick something else.
+    const i = chosen.length;
+    if (c.primary.some((m) => targetSet.has(m) && (setsFor.get(m) ?? 0) + estSets(c, i) > SESSION_SET_CAP)) return -Infinity;
     let s = prim[0] + 0.35 * prim.slice(1).reduce((a, b) => a + b, 0);
     s += 0.2 * c.secondary.reduce((a, m) => a + (need.get(m) ?? 0), 0);
     const offTarget = c.primary.filter((m) => !targetSet.has(m)).length;
     s -= 0.6 * offTarget;
     const avgRec = c.primary.reduce((a, m) => a + rec(m), 0) / c.primary.length;
     s += 0.6 * (avgRec / 100 - 1);
-    if (c.ex.mechanic === "compound" && !isCore(c)) s += 0.3;
+    if (!c.iso && !isCore(c)) s += 0.3;
+    if (wantHinge && !c.iso) {
+      const hasKnee = chosen.some(knee);
+      const hasHip = chosen.some(hip);
+      if (hasKnee && !hasHip) s += hip(c) ? 1.2 : knee(c) ? -1 : 0;
+      else if (hasHip && !hasKnee && knee(c) && !hip(c)) s += 0.6;
+    }
+    // The first lifts of the day carry the heaviest loading: free weights for anyone past the beginner stage.
+    // (Barbells load heaviest, so at a full gym they lead; dumbbells are next.)
+    if (i < mains && !c.iso && c.loadable && preferFree) s += c.free ? (heavy ? 0.6 : 0.3) + (bigGym && c.barbell ? 0.3 : 0) : heavy ? -0.4 : 0;
+    if (!heavy && HEAVY_ONLY.has(c.ex.id)) s -= 1;
     const tier = STAPLES[c.ex.id];
     if (tier === 1) s += chosen.length < 2 && !offTarget ? 0.8 : 0.5;
     else if (tier === 2) s += 0.35;
@@ -282,34 +332,61 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
       }
     }
     if (!best || bestScore < (chosen.length >= 3 ? 0.15 : -0.5)) break;
+    for (const m of best.primary) setsFor.set(m, (setsFor.get(m) ?? 0) + estSets(best, chosen.length));
     chosen.push(best);
-    const compound = best.ex.mechanic === "compound";
+    const compound = !best.iso;
     for (const m of best.primary) if (need.has(m)) need.set(m, Math.max(0, need.get(m)! - (compound && DIRECT_WORK.has(m) ? 0.5 : 1)));
-    for (const m of best.secondary) if (need.has(m)) need.set(m, Math.max(0, need.get(m)! - 0.3));
+    for (const m of best.primary) hitDirect.add(m);
+    // Rows work the rear delts and presses the triceps, but a target muscle still gets one direct exercise.
+    for (const m of best.secondary) if (need.has(m)) need.set(m, Math.max(hitDirect.has(m) || (MUSCLE_PRIORITY[m] ?? 0.8) < 0.5 ? 0 : 0.4 * (MUSCLE_PRIORITY[m] ?? 0.8), need.get(m)! - 0.3));
   }
 
   // Main lifts first, then other compounds (bigger muscles first), then isolation, core last.
   const weight = (c: Candidate) => Math.max(...c.primary.map((m) => MUSCLE_PRIORITY[m] ?? 0.5));
   const rank = (c: Candidate) =>
-    isCore(c) ? 4 : c.ex.mechanic !== "compound" ? 3 : !c.loadable ? 2 : STAPLES[c.ex.id] === 1 ? 0 : 1;
-  chosen.sort((a, b) => rank(a) - rank(b) || weight(b) - weight(a));
+    isCore(c) ? 4 : c.iso ? 3 : !c.loadable ? 2 : STAPLES[c.ex.id] === 1 ? 0 : 1;
+  const freeFirst = (c: Candidate) => (preferFree && c.free ? 0 : 1);
+  chosen.sort((a, b) => rank(a) - rank(b) || (rank(a) <= 1 ? freeFirst(a) - freeFirst(b) : 0) || weight(b) - weight(a));
 
-  const mains = opts.goal === "strength" || opts.focus === "power" ? 2 : 1;
   let mainLeft = mains;
   const items: GenItem[] = chosen.map((c) => {
-    const role = isCore(c) ? "core" : c.ex.mechanic === "compound" ? (c.loadable && mainLeft-- > 0 ? "main" : "compound") : "isolation";
+    // Heavy 3–5 rep work belongs on free weights; a machine or cable lift gets the "compound" dose instead.
+    const canMain = c.loadable && (!heavy || ((c.free || !preferFree) && !ACCESSORY_HINGE.test(c.ex.name)));
+    const role = isCore(c) ? "core" : c.iso ? "isolation" : canMain && mainLeft-- > 0 ? "main" : "compound";
     const d = dose(opts.goal, role, opts.experience, opts.focus ?? null);
-    return { exercise_id: c.ex.id, ...d, superset_group: null, notes: null };
+    const item: GenItem = { exercise_id: c.ex.id, ...d, superset_group: null, notes: null };
+    if (isHold(c.ex.name)) return { ...item, rep_min: opts.experience === "beginner" ? 20 : 30, rep_max: opts.experience === "beginner" ? 30 : 45, notes: "seconds" };
+    // Big leg lifts take longer to recover from between sets than presses and rows.
+    if (role === "compound" && c.loadable && c.primary.some((m) => LOWER_BODY.has(m)) && !heavy) item.rest_sec = d.rest_sec + (opts.goal === "fat_loss" ? 15 : 30);
+    if (role !== "main" && HEAVY_ONLY.has(c.ex.id)) return { ...item, rep_min: 5, rep_max: 8, rest_sec: Math.max(150, d.rest_sec), notes: "Stop each set with 2 reps in the tank" };
+    if (role === "main") item.notes = heavy ? "Warm up: 2–3 lighter sets first" : "Warm up: 1–2 lighter sets first";
+    return item;
   });
 
-  // Fat loss: pair up the accessories as supersets to keep the pace up.
+  // Fat loss: pair up the accessories as supersets to keep the pace up. Partners shouldn't share a main
+  // muscle (chest press with a row, not with a fly), and heavy deadlifts stay on their own.
   if (opts.goal === "fat_loss" && opts.focus !== "power") {
+    const byItem = new Map(chosen.map((c) => [c.ex.id, c]));
+    const open = items.slice(1).filter((it) => !HEAVY_ONLY.has(it.exercise_id) && !isCore(byItem.get(it.exercise_id)!));
     let group = 1;
-    for (let i = 1; i + 1 < items.length; i += 2) {
-      items[i].superset_group = group;
-      items[i + 1].superset_group = group;
+    while (open.length >= 2) {
+      const a = open.shift()!;
+      const pa = byItem.get(a.exercise_id)!;
+      const j = open.findIndex((b) => {
+        const pb = byItem.get(b.exercise_id)!;
+        const bothLegs = !pa.iso && !pb.iso && pa.primary.some((m) => LOWER_BODY.has(m)) && pb.primary.some((m) => LOWER_BODY.has(m));
+        return !bothLegs && !pa.primary.some((m) => pb.primary.includes(m));
+      });
+      if (j < 0) continue;
+      const [b] = open.splice(j, 1);
+      a.superset_group = group;
+      b.superset_group = group;
       group++;
     }
+    // Keep partners next to each other.
+    const order = new Map(items.map((it, k) => [it, k]));
+    const anchor = (it: GenItem) => (it.superset_group === null ? order.get(it)! : Math.min(...items.filter((x) => x.superset_group === it.superset_group).map((x) => order.get(x)!)));
+    items.sort((x, y) => anchor(x) - anchor(y) || order.get(x)! - order.get(y)!);
   }
 
   if (cMin > 0) {
@@ -402,7 +479,7 @@ export function rankSwaps(
     if (pj === 0) continue;
     let score = 3 * pj + jaccard(s, c.secondary);
     if (c.ex.movement_pattern === ex.movement_pattern) score += 1.5;
-    if (c.ex.mechanic === ex.mechanic) score += 0.5;
+    if (c.iso === isIsolation(ex)) score += 0.5;
     if (c.ex.is_common || c.ex.owner_id) score += 0.6;
     if (!LEVELS[opts.experience].has(c.ex.level) && !c.ex.owner_id) score -= 0.8;
     if (opts.prefs?.get(c.ex.id)?.favorite) score += 0.3;
@@ -417,7 +494,7 @@ export function rankSwaps(
     if (opts.why === "hurts" || opts.why === "hard") {
       // Machines and cables guide the path and are easier to control; free-weight compounds less so.
       const guided = c.equipment.split(",").some((id) => /machine|cable|smith|leverage|lever/.test(id));
-      score += (guided ? 0.8 : 0) + (c.ex.mechanic !== "compound" ? 0.4 : 0) + (c.ex.level === "beginner" ? 0.5 : -0.4);
+      score += (guided ? 0.8 : 0) + (c.iso ? 0.4 : 0) + (c.ex.level === "beginner" ? 0.5 : -0.4) - (HEAVY_ONLY.has(c.ex.id) ? 1.5 : 0);
     }
     out.push({ id: c.ex.id, score });
   }
@@ -460,7 +537,8 @@ export function rankAdditions(
   const theme = new Set<string>();
   const lifts = inWorkout.filter((id) => cat.exercises.find((e) => e.id === id)?.category !== "cardio");
   for (const id of lifts) {
-    const compound = cat.exercises.find((e) => e.id === id)?.mechanic === "compound";
+    const found = cat.exercises.find((e) => e.id === id);
+    const compound = found ? !isIsolation(found) : false;
     for (const m of primaries(cat, id)) {
       theme.add(m);
       have.set(m, (have.get(m) ?? 0) + (compound && DIRECT_WORK.has(m) ? 0.5 : 1));
@@ -489,8 +567,9 @@ export function rankAdditions(
     }
     if (gain <= 0) return -Infinity;
     let score = gain * 2;
-    if (theme.size && c.ex.mechanic !== "compound") score += 0.4; // late in a session, accessories fit best
-    if (!theme.size && c.ex.mechanic === "compound") score += 0.4;
+    if (theme.size && c.iso) score += 0.4; // late in a session, accessories fit best
+    if (!theme.size && !c.iso) score += 0.4;
+    if (theme.size && HEAVY_ONLY.has(c.ex.id)) score -= 1.5; // not a mid-workout add-on
     if (c.ex.is_common || c.ex.owner_id) score += 0.5;
     if (opts.prefs?.get(c.ex.id)?.favorite) score += 0.5;
     if (STAPLES[c.ex.id]) score += STAPLES[c.ex.id] === 1 ? 0.4 : 0.5;

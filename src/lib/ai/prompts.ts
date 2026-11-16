@@ -20,12 +20,24 @@ Hard rules
 
 Dosing by goal (a starting point; follow the request when it says otherwise)
 - strength: main lifts 3–5 sets of 3–5 reps, rest 150–240 s; other compounds 3 × 6–8; accessories 3 × 8–10, rest 90 s.
-- hypertrophy: main lifts 3–4 × 6–10, rest 90–150 s; accessories 3 × 10–15, rest 60–90 s.
+- hypertrophy: main lifts 3–4 × 6–10, rest 90–150 s (2 min for big leg lifts); accessories 3 × 10–15, rest 60–90 s.
 - fat_loss: 3 × 10–15, rest 45–75 s, supersets welcome; add a 15–25 minute cardio block most days when cardio equipment is listed.
 - general: 3 × 8–12, rest 60–90 s; some cardio on longer sessions.
 - Beginners: at most 3 sets per exercise and simpler movements.
 - Weekly volume: roughly 10–20 hard sets per major muscle for hypertrophy (fewer for beginners), spread over at least two days.
-- Session length: each lifting exercise takes about 7–11 minutes including rest (heavy strength work takes longer). Fit the session length, counting cardio minutes.
+- Per session: no more than about 10 hard sets for any one muscle; spread extra work to the day's other muscles or another day.
+- Session length: each lifting exercise takes about 7–11 minutes including rest (heavy strength work takes longer; supersets less). Fit the session length, counting cardio minutes.
+
+Exercise choice
+- Order: main compound lifts first, then other compounds, then isolation, core last.
+- Heavy 3–5 rep main lifts use barbells or dumbbells (trap bar is fine), not machines or cables. Romanian deadlifts and good mornings are accessories (6–10 reps), not 3–5 rep main lifts.
+- A lower-body or full-body day that trains quads and hamstrings needs a knee-dominant lift (squat, leg press, lunge) AND a hip hinge for the hamstrings (Romanian deadlift, deadlift, good morning). A leg curl alone isn't enough.
+- Upper days balance pushing and pulling. Each target muscle on the day gets at least one exercise where it is a main muscle (e.g. rear delt work on a pull day, not just rows).
+- Conventional and sumo deadlifts: 5–8 reps at most outside strength days, never in a superset.
+- Supersets pair exercises that don't share a main muscle (a press with a row, a curl with a triceps move); never two heavy leg lifts.
+- Timed holds (planks, side planks, hollow holds): seconds, 30–45 (20–30 for beginners).
+- Put "Warm up: 2–3 lighter sets first" (strength) or "Warm up: 1–2 lighter sets first" in notes on the first heavy lift of the day.
+- Plans longer than 5 weeks: describe an easier deload week every 4–6 weeks in "progression".
 
 Day names are short and plain ("Upper", "Lower Power", "Push", "Full Body + Cardio"). The app treats "Power" in a name as a heavy day and "+ Cardio" as a day with a cardio block.`;
 

@@ -6,6 +6,7 @@ import { useData, useProfile } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
 import { newId, nowIso, type LocalDB } from "@/lib/db/dexie";
 import { defaultTargets } from "@/lib/defaults";
+import { isHold, isIsolation } from "@/lib/generator";
 import { isCardioExercise } from "@/lib/cardio";
 import { clearCardioTimer } from "@/lib/cardio-timer";
 import { bestE1rm } from "@/lib/progress";
@@ -47,7 +48,7 @@ export function useWorkoutActions() {
           superset_group: null, notes: null, target_sets: 1, rep_min: null, rep_max: null, rest_sec: null,
         };
       }
-      const t = defaultTargets(goal, ex?.mechanic ?? null);
+      const t = defaultTargets(goal, ex && isIsolation(ex) ? "isolation" : (ex?.mechanic ?? null), { hold: ex ? isHold(ex.name) : false });
       return {
         id: newId(),
         workout_id: workoutId,

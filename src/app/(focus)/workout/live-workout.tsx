@@ -268,14 +268,14 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       ? "Cardio"
       : `${upNextTarget.target_sets ?? 3} sets · ${upNextTarget.rep_min ?? "?"}–${upNextTarget.rep_max ?? "?"} reps${upNextLast && upNextLast.weight !== null ? ` · last time ${formatWeight(upNextLast.weight, units)} ${weightUnit(units)} × ${upNextLast.reps ?? "?"}` : ""}`
     : "";
-  // "Up 5 lb from last time" when double progression added weight for today.
+  // "Up 5 lb" when double progression added weight for today; "Down 5 lb" when last time was too heavy.
   const upHint = (() => {
     if (!current || isCardio || doneSets.length || !history) return null;
     const prev = history.get(current.exercise_id)?.last.filter((s) => s.type !== "warmup") ?? [];
     if (!prev.length) return null;
     const sug = suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null));
-    if (sug.change !== "up" || sug.weight === null || sug.from === null) return null;
-    return `▲ UP ${formatWeight(sug.weight - sug.from, units)} ${weightUnit(units).toUpperCase()}`;
+    if ((sug.change !== "up" && sug.change !== "down") || sug.weight === null || sug.from === null) return null;
+    return `${sug.change === "up" ? "▲ UP" : "▼ DOWN"} ${formatWeight(Math.abs(sug.weight - sug.from), units)} ${weightUnit(units).toUpperCase()}`;
   })();
 
   const listItems: ReorderItem[] = wexs.map((w, i) => {
@@ -477,7 +477,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
             )}
 
-            {upHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] text-[#C9F7DA]">{upHint}</p>}
+            {upHint && <p className={`mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] ${upHint.startsWith("▼") ? "text-[#FFD2B3]" : "text-[#C9F7DA]"}`}>{upHint}</p>}
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <Stepper
                 label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}

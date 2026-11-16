@@ -6,11 +6,14 @@ import type { CardioType, Muscle, SetType } from "./db/types";
   Each logged set adds fatigue to the muscles it works:  role weight × effort
     role weight: 1.0 primary, 0.5 secondary
     effort:      RPE ÷ 10 (blank RPE = your default, usually 8); warm-up sets count as 0.3
-  Fatigue fades exponentially:  F(t) = Σ f · e^(−hours since the set / τ)   (τ per muscle: 36 h small … 72 h large)
-  Recovery = 100 × max(0, 1 − F / F_MAX). F_MAX ≈ ten hard (RPE 9) primary sets.
+  Fatigue fades exponentially:  F(t) = Σ f · e^(−hours since the set / τ)   (τ per muscle: 30 h small, 36 h medium, 44 h large)
+  Recovery = 100 × max(0, 1 − F / F_MAX). F_MAX ≈ thirteen hard (RPE 9) primary sets.
+  Calibrated (Batch 5 audit) so a hard session (~10 sets near failure) reads "fatigued" for about a day and
+  "fresh" again after ~2 days for small muscles, ~2.5 for chest and shoulders, ~3 for legs and back: the usual
+  48–72 hours. Lighter sessions recover sooner.
 */
 
-export const F_MAX = 9;
+export const F_MAX = 12;
 export const WINDOW_DAYS = 7;
 export const FRESH_AT = 85;
 export const RECOVERING_AT = 60;

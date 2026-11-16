@@ -3,7 +3,8 @@ import type { EquipmentDetails, ExerciseEquipment, GymEquipment, SetType } from 
 /*
   Weight suggestions by double progression (plan doc → "Suggest weights"):
   hit the top of the rep range on every working set and the weight goes up by the smallest jump this gym
-  allows; otherwise keep the weight and aim for one more rep. With no history there's no suggestion
+  allows; otherwise keep the weight and aim for one more rep. If every set at that weight fell 2+ reps short
+  of the bottom of the range, it was too heavy: drop one step and build back up. With no history there's no suggestion
   (the first session is for finding a comfortable working weight). Weights are pounds.
 */
 
@@ -13,7 +14,7 @@ export type Suggestion = {
   /** Pounds; null = bodyweight or no history. */
   weight: number | null;
   reps: number | null;
-  change: "up" | "same" | "new";
+  change: "up" | "same" | "down" | "new";
   /** Weight used last time (top working weight). */
   from: number | null;
 };
@@ -69,6 +70,12 @@ export function suggestNext(last: LoggedSet[], repMin: number | null, repMax: nu
     // Already at the heaviest weight this gym has: chase reps instead.
     return { weight: heaviest, reps: (top ?? minReps) + 1, change: "same", from: heaviest };
   }
+  // Well short of the range on every set: the weight is too heavy to progress from.
+  const maxReps = Math.max(...atTop.map((s) => s.reps ?? 0));
+  if (bottom !== null && maxReps <= bottom - 2) {
+    const lower = stepDown(heaviest, load);
+    if (lower < heaviest) return { weight: lower, reps: bottom, change: "down", from: heaviest };
+  }
   const reps = top === null ? minReps + 1 : Math.min(top, Math.max(bottom ?? 1, minReps + 1));
   return { weight: heaviest, reps, change: "same", from: heaviest };
 }
@@ -77,4 +84,10 @@ function stepUp(weight: number, load: Load) {
   if (load.ladder) return load.ladder.find((w) => w > weight) ?? weight;
   const next = Math.round((weight + load.increment) * 100) / 100;
   return load.max !== undefined && next > load.max ? weight : next;
+}
+
+function stepDown(weight: number, load: Load) {
+  if (load.ladder) return [...load.ladder].reverse().find((w) => w < weight) ?? weight;
+  const next = Math.round((weight - load.increment) * 100) / 100;
+  return next > 0 ? next : weight;
 }
