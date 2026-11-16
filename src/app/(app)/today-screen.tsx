@@ -107,7 +107,7 @@ function CardioTimerBanner() {
   const now = useNow(1000);
   if (!timer) return null;
   return (
-    <Link href={timer.wexId ? "/workout" : "/cardio"} className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border-2 border-accent-strong bg-primary/15 px-4 py-2">
+    <Link href={timer.workoutId ? "/workout" : "/cardio"} className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border-2 border-accent-strong bg-primary/15 px-4 py-2">
       <span className="flex min-w-0 flex-col">
         <span className="text-xs font-bold tracking-[0.1em] text-accent-soft">{timer.stoppedAt ? "CARDIO · ENTER RESULTS" : "CARDIO RUNNING"}</span>
         <span className="display truncate text-xl font-extrabold">{cardioLabel(timer.type)}</span>

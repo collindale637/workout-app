@@ -23,8 +23,8 @@ export function CardioTimerFlow({ workoutId }: { workoutId: string | null }) {
   const [type, setType] = useState<CardioType | null>(null);
   const units = profile?.units ?? "lb";
 
-  // A timer started from a cardio exercise in a workout is run from the workout screen.
-  const belongsToWorkoutItem = Boolean(timer?.wexId);
+  // A timer started inside a workout runs in the workout's blue card.
+  const belongsToWorkoutItem = Boolean(timer?.workoutId);
   useEffect(() => {
     if (belongsToWorkoutItem) router.replace("/workout");
   }, [belongsToWorkoutItem, router]);

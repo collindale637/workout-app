@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -8,7 +8,7 @@ import { useData, useProfile } from "@/lib/db/provider";
 import { newId } from "@/lib/db/dexie";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
 import { useCardioTimer } from "@/lib/cardio-timer";
-import { cardioElapsedSec, cardioLabel, cardioSummary, cardioTypeFor, isCardioExercise, type CardioTimer } from "@/lib/cardio";
+import { CARDIO_TYPES, cardioElapsedSec, cardioLabel, cardioSummary, cardioTypeFor, isCardioExercise, type CardioTimer } from "@/lib/cardio";
 import { useExerciseHistory, useWorkoutActions, type RestState } from "@/lib/workout";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
@@ -16,10 +16,10 @@ import { RPE_SCALE } from "@/lib/defaults";
 import { estimate1RM, formatDuration, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { ExerciseInfo } from "@/components/exercise-info";
-import { CardioResultsForm, resultsFromSession } from "@/components/cardio-results";
 import { Sheet, btn, field, label } from "@/components/ui/kit";
-import { CardioPanel } from "./cardio-panel";
-import type { CardioSession, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
+import { RpeSlider } from "@/components/rpe-slider";
+import { CardioPanel, type CardioSave } from "./cardio-panel";
+import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 type Draft = { weight: number | null; reps: number | null; rpe: number | null; type: SetType };
 
@@ -53,7 +53,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   // Cardio exercises have no sets: they're done once their results are saved.
   const cardioRows = useLiveQuery(() => db.cardio_sessions.where("workout_id").equals(workout.id).toArray(), [db, workout.id]);
-  const { timer, start: startTimer, stop: stopTimer, clear: clearTimer } = useCardioTimer();
+  const { timer, start: startTimer, stop: stopTimer, resume: resumeTimer, clear: clearTimer } = useCardioTimer();
   const cardioByWex = useMemo(() => {
     const m = new Map<string, CardioSession>();
     for (const c of cardioRows ?? []) if (c.workout_exercise_id) m.set(c.workout_exercise_id, c);
@@ -68,6 +68,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   const [currentId, setCurrentId] = useState<string | null>(null);
   const timerWexId = timer && timer.workoutId === workout.id ? timer.wexId : null;
+  // Cardio added with "+ Cardio" (not part of the plan) runs in the blue card too: currentId "cardio:<session id or timer>".
+  const extraTimer = timer && timer.workoutId === workout.id && !timer.wexId ? timer : null;
+  const extraKey = currentId?.startsWith("cardio:") ? currentId.slice(7) : currentId === null && extraTimer ? "timer" : null;
+  const extra = (() => {
+    if (!extraKey) return null;
+    const sessionId = extraKey === "timer" ? (extraTimer?.sessionId ?? null) : extraKey;
+    const session = sessionId ? (extraCardio.find((c) => c.id === sessionId) ?? null) : null;
+    const t = extraTimer && (extraKey === "timer" || extraTimer.sessionId === extraKey) ? extraTimer : null;
+    if (!session && !t) return null;
+    return { key: `cardio:${session?.id ?? "timer"}`, session, timer: t, type: (t?.type ?? session!.type) as CardioType };
+  })();
   const current =
     wexs?.find((w) => w.id === currentId) ?? wexs?.find((w) => w.id === timerWexId) ?? wexs?.find(remaining) ?? wexs?.[wexs.length - 1] ?? null;
 
@@ -103,7 +114,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [allDoneOpen, setAllDoneOpen] = useState(false);
   const [typing, setTyping] = useState<null | "weight" | "reps">(null);
   const [typeOpen, setTypeOpen] = useState(false);
-  const [resultsOpen, setResultsOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [addCardioOpen, setAddCardioOpen] = useState(false);
 
   if (!wexs || !sets || !catalog) return null;
 
@@ -113,14 +125,45 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const elapsed = (now - new Date(workout.started_at).getTime()) / 1000;
   const isBodyweight = current ? (catalog.needs.get(current.exercise_id) ?? []).length === 0 : false;
   const restLeft = rest ? Math.max(0, Math.round((rest.endsAt - now) / 1000)) : 0;
-  const isCardio = current ? isCardioWex(current) : false;
+  const isCardio = extra !== null || (current ? isCardioWex(current) : false);
   const cardioType = ex ? cardioTypeFor(ex) : "other";
   const currentSession = current ? (cardioByWex.get(current.id) ?? null) : null;
   const wexTimer = timer && current && timer.wexId === current.id ? timer : null;
-  const otherTimer = timer && !wexTimer ? timer : null;
+  const otherTimer = timer && !(extra ? extra.timer : wexTimer) ? timer : null;
   const liveTimer: CardioTimer | null = timer && timer.workoutId === workout.id ? timer : null;
   const liftCount = wexs.filter((w) => !isCardioWex(w)).length;
   const cardioCount = wexs.length - liftCount + extraCardio.length;
+
+  /** Saves cardio results (new or edited), clears the timer they came from, and stays on the card to show them. */
+  async function saveCardio(r: CardioSave, ctx: { wexId: string | null; type: CardioType; session: CardioSession | null; timer: CardioTimer | null }) {
+    const id = ctx.session?.id ?? newId();
+    await actions.logCardio({
+      id,
+      workout_id: workout.id,
+      workout_exercise_id: ctx.wexId,
+      type: ctx.type,
+      started_at: ctx.session?.started_at ?? r.startedAt,
+      duration_sec: r.durationSec,
+      distance: r.distance,
+      avg_hr: r.avgHr,
+      rpe: r.rpe,
+      intervals: ctx.session?.intervals ?? null,
+      notes: r.notes,
+    });
+    if (ctx.timer) await clearTimer();
+    setEditingKey(null);
+    setCurrentId(ctx.wexId ?? `cardio:${id}`);
+  }
+
+  const discardTimer = async () => {
+    if (confirm("Throw this cardio timer away?")) await clearTimer();
+  };
+
+  /** What "Next" goes to after cardio: the next unfinished exercise, else nothing (finish). */
+  const nextAfter = (wexId: string | null) => {
+    const i = wexId ? wexs!.findIndex((w) => w.id === wexId) : -1;
+    return wexs!.slice(i + 1).find(remaining) ?? wexs!.find((w) => w.id !== wexId && remaining(w)) ?? null;
+  };
 
   async function startRest(seconds: number, wexId: string) {
     if (seconds <= 0) return db.setMeta("rest", null);
@@ -189,37 +232,82 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
           </Link>
           <span className="display num text-sm font-bold tracking-[0.12em] text-[#DCE4FF]">
-            {wexs.length ? `${isCardio ? "CARDIO" : "LIFT"} ${index + 1}/${wexs.length} · ` : ""}{formatDuration(elapsed)}
+            {extra ? "CARDIO · " : wexs.length ? `${isCardio ? "CARDIO" : "LIFT"} ${index + 1}/${wexs.length} · ` : ""}{formatDuration(elapsed)}
           </span>
           <button type="button" onClick={() => setFinishOpen(true)} className="display h-10 rounded-full bg-white px-4 text-base font-extrabold tracking-[0.08em] text-primary">
             Finish
           </button>
         </div>
 
-        {current && ex && isCardio ? (
+        {extra ? (
+          <CardioPanel
+            name={cardioLabel(extra.type)}
+            type={extra.type}
+            units={units}
+            now={now}
+            session={extra.session}
+            timer={extra.timer}
+            otherTimer={otherTimer}
+            editing={editingKey === extra.key}
+            nextLabel={(() => {
+              const n = nextAfter(null);
+              return n ? (catalog.byId.get(n.exercise_id)?.name ?? null) : null;
+            })()}
+            onStart={() => {}}
+            onDone={() => void stopTimer()}
+            onResume={() => void resumeTimer()}
+            onCancelTimer={discardTimer}
+            onDiscard={discardTimer}
+            onSave={(r) => saveCardio(r, { wexId: null, type: extra.type, session: extra.session, timer: extra.timer })}
+            onEnterByHand={() => setEditingKey(extra.key)}
+            onEdit={() => setEditingKey(extra.key)}
+            onCancelEdit={() => setEditingKey(null)}
+            onNext={() => {
+              const n = nextAfter(null);
+              if (n) setCurrentId(n.id);
+              else setFinishOpen(true);
+            }}
+            onResumeSaved={async () => {
+              if (!extra.session) return;
+              await startTimer(extra.type, { workoutId: workout.id, wexId: null, sessionId: extra.session.id, fromSec: extra.session.duration_sec });
+            }}
+            onGoToOther={() => setCurrentId(otherTimer?.wexId ?? null)}
+          />
+        ) : current && ex && isCardio ? (
           <CardioPanel
             name={ex.name}
             type={cardioType}
+            units={units}
+            now={now}
             session={currentSession}
             timer={wexTimer}
             otherTimer={otherTimer}
-            now={now}
-            units={units}
+            editing={editingKey === current.id}
+            nextLabel={(() => {
+              const n = nextAfter(current.id);
+              return n ? (catalog.byId.get(n.exercise_id)?.name ?? null) : null;
+            })()}
             warning={gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) ? `Heads up: ${gym.name} may not have the equipment for this. Swap?` : null}
             onInfo={() => setInfoFor(current.exercise_id)}
             onStart={() => void startTimer(cardioType, { workoutId: workout.id, wexId: current.id })}
-            onDone={async () => {
-              await stopTimer();
-              setResultsOpen(true);
+            onDone={() => void stopTimer()}
+            onResume={() => void resumeTimer()}
+            onCancelTimer={discardTimer}
+            onDiscard={discardTimer}
+            onSave={(r) => saveCardio(r, { wexId: current.id, type: cardioType, session: currentSession, timer: wexTimer })}
+            onEnterByHand={() => setEditingKey(current.id)}
+            onEdit={() => setEditingKey(current.id)}
+            onCancelEdit={() => setEditingKey(null)}
+            onNext={() => {
+              const n = nextAfter(current.id);
+              if (n) setCurrentId(n.id);
+              else setFinishOpen(true);
             }}
-            onEnterResults={() => setResultsOpen(true)}
-            onDiscardTimer={async () => {
-              if (confirm("Throw this cardio timer away?")) await clearTimer();
+            onResumeSaved={async () => {
+              if (!currentSession) return;
+              await startTimer(cardioType, { workoutId: workout.id, wexId: current.id, sessionId: currentSession.id, fromSec: currentSession.duration_sec });
             }}
-            onGoToOther={() => {
-              if (otherTimer?.wexId) setCurrentId(otherTimer.wexId);
-              else router.push("/cardio");
-            }}
+            onGoToOther={() => setCurrentId(otherTimer?.wexId ?? (otherTimer?.sessionId ? `cardio:${otherTimer.sessionId}` : null))}
           />
         ) : current && ex ? (
           <>
@@ -304,7 +392,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             return (
               <li key={w.id} className={linkedAbove ? "-mt-2" : ""}>
                 {linkedAbove && <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" />}
-                <div className={`flex min-h-16 items-center gap-2 rounded-2xl border-2 pr-1 ${w.id === current?.id ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}>
+                <div className={`flex min-h-16 items-center gap-2 rounded-2xl border-2 pr-1 ${!extra && w.id === current?.id ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}>
                   <button type="button" onClick={() => setCurrentId(w.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left">
                     <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${done(w) ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
                       {done(w) ? "✓" : i + 1}
@@ -336,21 +424,36 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               </li>
             );
           })}
-          {extraCardio.map((c) => (
-            <li key={c.id}>
-              <Link href={`/progress/session?cardio=${c.id}`} className="flex min-h-16 items-center gap-2 rounded-2xl border-2 border-line bg-card pr-4">
-                <span className="display ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-base font-extrabold text-white">✓</span>
-                <span className="min-w-0 py-2 pl-1">
-                  <span className="block truncate text-base font-bold">{cardioLabel(c.type)}</span>
-                  <span className="block truncate text-sm font-medium text-muted">{cardioSummary(c, units)}</span>
-                </span>
-              </Link>
-            </li>
-          ))}
+          {[
+            ...extraCardio.map((c) => ({ key: `cardio:${c.id}`, type: c.type, session: c as CardioSession | null })),
+            ...(extraTimer && !extraTimer.sessionId ? [{ key: "cardio:timer", type: extraTimer.type, session: null }] : []),
+          ].map((it) => {
+            const t = extraTimer && (it.session ? extraTimer.sessionId === it.session.id : !extraTimer.sessionId) ? extraTimer : null;
+            const on = extra?.key === it.key;
+            return (
+              <li key={it.key}>
+                <button type="button" onClick={() => setCurrentId(it.key)} className={`flex min-h-16 w-full items-center gap-3 rounded-2xl border-2 py-2 pr-4 pl-4 text-left ${on ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}>
+                  <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${it.session && !t ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{it.session && !t ? "✓" : "+"}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-bold">{cardioLabel(it.type)}</span>
+                    <span className="block truncate text-sm font-medium text-muted">
+                      {t
+                        ? t.stoppedAt
+                          ? `${formatDuration(cardioElapsedSec(t, now))} · enter results`
+                          : `Running ${formatDuration(cardioElapsedSec(t, now))}`
+                        : it.session
+                          ? cardioSummary(it.session, units)
+                          : ""}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" className={btn.secondary} onClick={() => setPicker({ mode: "add" })}>+ Exercise</button>
-          <Link href={`/cardio?workout=${workout.id}`} className={btn.secondary}>+ Cardio</Link>
+          <button type="button" className={btn.secondary} onClick={() => setAddCardioOpen(true)}>+ Cardio</button>
         </div>
       </div>
 
@@ -417,57 +520,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         )}
       </Sheet>
 
-      <Sheet open={resultsOpen && isCardio} onClose={() => setResultsOpen(false)} title={`${cardioLabel(cardioType)} results`}>
-        {current && isCardio && (
-          <CardioResultsForm
-            key={`${current.id}:${currentSession?.id ?? (wexTimer?.stoppedAt ? "timer" : "new")}`}
-            type={cardioType}
-            units={units}
-            initial={
-              currentSession
-                ? resultsFromSession(currentSession)
-                : wexTimer?.stoppedAt
-                  ? { durationSec: cardioElapsedSec(wexTimer, now), startedAt: new Date(wexTimer.startedAt) }
-                  : undefined
-            }
-            submitLabel={currentSession ? "Save changes" : "Save cardio"}
-            onSubmit={async (r) => {
-              await actions.logCardio({
-                id: currentSession?.id ?? newId(),
-                workout_id: workout.id,
-                workout_exercise_id: current.id,
-                type: cardioType,
-                started_at: r.startedAt,
-                duration_sec: r.durationSec,
-                distance: r.distance,
-                avg_hr: r.avgHr,
-                rpe: r.rpe,
-                intervals: currentSession?.intervals ?? null,
-                notes: r.notes,
-              });
-              if (wexTimer) await clearTimer();
-              setResultsOpen(false);
-              if (currentSession) return;
-              // Same as finishing a set: on to the next thing, or say well done.
-              const next = wexs.slice(index + 1).find(remaining) ?? wexs.find((w) => w.id !== current.id && remaining(w));
-              if (next) setCurrentId(next.id);
-              else setAllDoneOpen(true);
+      <Sheet open={addCardioOpen} onClose={() => setAddCardioOpen(false)} title="Add cardio">
+        {addCardioOpen && (
+          <AddCardio
+            busy={timer ? cardioLabel(timer.type) : null}
+            pastHref={`/cardio?manual=1&workout=${workout.id}`}
+            onStart={async (type) => {
+              if (await startTimer(type, { workoutId: workout.id, wexId: null })) setCurrentId("cardio:timer");
+              setAddCardioOpen(false);
+              window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-          >
-            {wexTimer && (
-              <button
-                type="button"
-                className={`${btn.ghost} text-danger`}
-                onClick={async () => {
-                  if (!confirm("Throw this cardio away?")) return;
-                  await clearTimer();
-                  setResultsOpen(false);
-                }}
-              >
-                Discard
-              </button>
-            )}
-          </CardioResultsForm>
+          />
         )}
       </Sheet>
 
@@ -633,47 +696,6 @@ function RestBar({ left, total, onAdd, onSkip }: { left: number; total: number; 
       <span className="display num w-12 shrink-0 text-right text-2xl font-extrabold">{formatDuration(left)}</span>
       <button type="button" onClick={onAdd} className="display -mr-1 h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-[#DCE4FF]">+15</button>
       <button type="button" onClick={onSkip} className="display h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-white">Skip</button>
-    </div>
-  );
-}
-
-/**
- * RPE picker that slides sideways from 1 to 10. Opens centred on the chosen (or default) value.
- * Sideways swipes stay inside the strip: they don't scroll the page or trigger the browser's back gesture.
- */
-function RpeSlider({ value, defaultRpe, resetKey, onChange }: { value: number | null; defaultRpe: number; resetKey: string; onChange: (v: number | null) => void }) {
-  const strip = useRef<HTMLDivElement>(null);
-  const shown = value ?? defaultRpe;
-  useEffect(() => {
-    const el = strip.current;
-    const target = el?.querySelector<HTMLElement>(`[data-rpe="${shown}"]`);
-    if (el && target) el.scrollLeft = target.offsetLeft - (el.clientWidth - target.offsetWidth) / 2;
-  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps -- recentre only when the exercise changes, not while sliding
-  return (
-    <div
-      ref={strip}
-      role="group"
-      aria-label="RPE, slide for lower values"
-      className="-mx-5 flex touch-pan-x gap-1.5 overflow-x-auto overscroll-x-contain px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {RPE_SCALE.map((r) => {
-        const on = value === r;
-        const isDefault = r === defaultRpe && value === null;
-        return (
-          <button
-            key={r}
-            data-rpe={r}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange(on ? null : r)}
-            className={`display num h-12 w-[3.25rem] shrink-0 rounded-xl text-lg font-extrabold ${
-              on ? "bg-white text-primary" : isDefault ? "border-2 border-dashed border-white/70 text-white" : "bg-white/15 text-white"
-            }`}
-          >
-            {r}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -940,6 +962,34 @@ function FinishSummary({
       <button type="button" className={btn.secondary} onClick={onClose}>Keep going</button>
       <button type="button" className={`${btn.ghost} text-danger`} onClick={onDiscard}>Discard workout</button>
       <p className="text-center text-xs font-medium text-muted">{workout.name ?? "Workout"} · started {new Date(workout.started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
+    </div>
+  );
+}
+
+/** "+ Cardio" mid-workout: pick a type and it runs in the blue card, so the workout stays on screen. */
+function AddCardio({ busy, pastHref, onStart }: { busy: string | null; pastHref: string; onStart: (t: CardioType) => void }) {
+  const [type, setType] = useState<CardioType | null>(null);
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="-mt-1 text-base font-medium text-muted">It runs in the blue card, so you can keep scrolling your workout.</p>
+      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Cardio type">
+        {CARDIO_TYPES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            aria-pressed={type === t.id}
+            onClick={() => setType(t.id)}
+            className={`display h-16 rounded-2xl border-2 text-xl font-extrabold tracking-[0.04em] ${type === t.id ? "border-accent-strong bg-primary/15 text-accent-soft" : "border-line bg-card-2 text-muted"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {busy && <p className="text-sm font-semibold text-warn">Your {busy.toLowerCase()} timer is still going. Finish it first.</p>}
+      <button type="button" disabled={!type || Boolean(busy)} className={btn.primary} onClick={() => type && onStart(type)}>
+        {type ? `Start ${cardioLabel(type).toLowerCase()}` : "Pick one to start"}
+      </button>
+      <Link href={pastHref} className={btn.ghost}>Log a past session instead</Link>
     </div>
   );
 }

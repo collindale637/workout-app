@@ -46,6 +46,8 @@ export type CardioTimer = {
   workoutId: string | null;
   /** The cardio exercise in the workout this timer is for; null for a standalone session. */
   wexId: string | null;
+  /** Set when a saved session was resumed: saving updates it instead of adding another. */
+  sessionId?: string | null;
 };
 
 export const cardioElapsedSec = (t: Pick<CardioTimer, "startedAt" | "stoppedAt">, now: number) =>
