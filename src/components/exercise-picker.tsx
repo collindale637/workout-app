@@ -124,7 +124,7 @@ export function ExercisePicker({
                 type="button"
                 onClick={picks.askAi}
                 disabled={picks.state === "loading" || picks.offline}
-                className="display flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-2 border-accent-strong/60 bg-primary/15 px-3.5 text-[15px] font-extrabold tracking-[0.06em] whitespace-nowrap text-accent-soft active:bg-primary/30 disabled:opacity-60"
+                className="display flex min-h-11 shrink-0 items-center gap-1 rounded-full border-2 border-accent-strong/60 bg-primary/15 px-2.5 text-[13px] font-extrabold tracking-[0.05em] whitespace-nowrap text-accent-soft active:bg-primary/30 disabled:opacity-60"
               >
                 {picks.state === "loading" ? (
                   <>
