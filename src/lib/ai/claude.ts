@@ -68,7 +68,9 @@ export const callTool: CallFn = async (opts) => {
     if (type === "invalid_request_error" && /credit|billing/i.test(data?.error?.message ?? "")) {
       throw new AiError("The Claude API account is out of credit.", 503);
     }
-    throw new AiError(`Claude returned an error (${res.status}). Try again.`);
+    const detail = (data?.error?.message ?? "").slice(0, 300);
+    console.error("Claude API error", res.status, type, detail);
+    throw new AiError(`Claude returned an error (${res.status}${detail ? `: ${detail}` : ""}). Try again.`);
   }
   const content = data.content ?? [];
   const use = content.find((b) => b.type === "tool_use");
