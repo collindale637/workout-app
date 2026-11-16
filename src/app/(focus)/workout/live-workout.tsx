@@ -923,13 +923,15 @@ function FinishSummary({
     if (top1 > prev.best1RM + 0.5) return [`${names.get(w.exercise_id)?.name}: best estimated max, ${formatWeight(top1, units)} ${weightUnit(units)}`];
     return [];
   });
-  // Lifts that have working sets (exercises without sets are dropped on save), with the heaviest set of each.
+  // Every logged set of each lift, in order (exercises without sets are dropped on save).
+  const setText = (s: WorkoutSet) => {
+    const load = s.weight ? `${formatWeight(s.weight, units)} ${weightUnit(units)}` : "Bodyweight";
+    return s.reps ? `${load} × ${s.reps}` : load;
+  };
   const lifts = wexs.flatMap((w) => {
-    const sets = (setsBy.get(w.id) ?? []).filter((s) => s.type !== "warmup");
+    const sets = [...(setsBy.get(w.id) ?? [])].sort((a, b) => a.set_no - b.set_no);
     if (!sets.length) return [];
-    const top = sets.reduce((best, s) => ((s.weight ?? 0) > (best.weight ?? 0) ? s : best), sets[0]);
-    const topText = top.weight && top.reps ? ` · ${formatWeight(top.weight, units)} × ${top.reps}` : top.reps ? ` · ${top.reps} reps` : "";
-    return [{ id: w.id, name: names.get(w.exercise_id)?.name ?? w.exercise_id, detail: `${sets.length} ${sets.length === 1 ? "set" : "sets"}${topText}` }];
+    return [{ id: w.id, name: names.get(w.exercise_id)?.name ?? w.exercise_id, sets }];
   });
   const stat = (v: string, l: string) => (
     <div className="rounded-2xl bg-card-2 p-3 text-center">
@@ -951,11 +953,24 @@ function FinishSummary({
         </div>
       )}
       {lifts.length > 0 && (
-        <ul className="rounded-2xl bg-card-2 px-3 py-2 text-sm font-semibold">
+        <ul className="flex flex-col gap-3 rounded-2xl bg-card-2 px-3 py-3 text-sm font-semibold">
           {lifts.map((l) => (
-            <li key={l.id} className="flex justify-between gap-3 py-1">
-              <span className="min-w-0 truncate">{l.name}</span>
-              <span className="num shrink-0 text-muted">{l.detail}</span>
+            <li key={l.id}>
+              <div className="truncate text-base font-bold">{l.name}</div>
+              <ol className="mt-1 flex flex-col">
+                {l.sets.map((st, i) => (
+                  <li key={st.id} className="flex justify-between gap-3 py-0.5">
+                    <span className="text-muted">
+                      {i + 1}
+                      {st.type === "warmup" ? " · warm-up" : st.type === "drop" ? " · drop" : ""}
+                    </span>
+                    <span className="num">
+                      {setText(st)}
+                      {st.rpe ? <span className="text-muted"> · RPE {st.rpe}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ol>
             </li>
           ))}
         </ul>
