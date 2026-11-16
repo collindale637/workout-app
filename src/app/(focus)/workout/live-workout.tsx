@@ -276,7 +276,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       ariaLabel: `${e?.name ?? w.exercise_id}. Tap to open. Swipe left for options. Hold to drag.`,
       liClassName: linkedAbove ? "-mt-2" : "",
       before: linkedAbove ? <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" /> : undefined,
-      faceClassName: `flex min-h-16 items-center rounded-2xl border-2 py-2 pr-3 pl-4 ${isCur ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`,
+      faceClassName: `flex min-h-16 items-center rounded-2xl border-2 py-2 pr-3 pl-4 ${isCur ? "border-accent-strong bg-[#0f1638]" : "border-line bg-card"}`,
       onTap: () => {
         setUpNextFrom(null);
         setCurrentId(w.id);
