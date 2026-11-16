@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useGymActions } from "@/lib/gyms";
-import { CATEGORY_LABELS, CATEGORY_ORDER, TEMPLATE_LABELS, hasDetails } from "@/lib/defaults";
+import { CATEGORY_LABELS, CATEGORY_ORDER, TEMPLATE_LABELS, defaultDetails, hasDetails } from "@/lib/defaults";
 import { Card, Sheet, PageHeader, btn, field, label } from "@/components/ui/kit";
 import { fromDisplayWeight, toDisplayWeight, weightUnit } from "@/lib/units";
 import type { EquipmentDetails, GymTemplate, Units } from "@/lib/db/types";
@@ -61,26 +61,39 @@ function NewGym() {
   );
 }
 
+type Draft = { name: string; items: Map<string, EquipmentDetails> };
+
 function EditGym({ id }: { id: string }) {
   const router = useRouter();
   const { db } = useData();
-  const { profile, save: saveProfile } = useProfile();
-  const { updateGym, setEquipment, setDetails, makeDefault, deleteGym } = useGymActions();
+  const { profile } = useProfile();
+  const { updateGym, saveEquipment, makeDefault, deleteGym } = useGymActions();
   const gym = useLiveQuery(() => db.gyms.get(id), [db, id]);
   const catalog = useLiveQuery(() => db.equipment.toArray(), [db]);
   const have = useLiveQuery(() => db.gym_equipment.where("gym_id").equals(id).toArray(), [db, id]);
   const [detailFor, setDetailFor] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(0);
+  // Edits live here until Save; nothing touches the gym until then.
+  const [draft, setDraft] = useState<Draft | null>(null);
   const units: Units = profile?.units ?? "lb";
 
-  const haveMap = useMemo(() => new Map((have ?? []).map((r) => [r.equipment_id, r])), [have]);
+  const saved = useMemo<Draft | null>(
+    () => (gym && have ? { name: gym.name, items: new Map(have.map((r) => [r.equipment_id, r.details])) } : null),
+    [gym, have],
+  );
+  const current = draft ?? saved;
+  const dirty = Boolean(draft && saved && !sameDraft(draft, saved));
+
   const grouped = useMemo(() => {
     const m = new Map<string, NonNullable<typeof catalog>>();
     for (const e of [...(catalog ?? [])].sort((a, b) => a.sort_order - b.sort_order)) m.set(e.category, [...(m.get(e.category) ?? []), e]);
     return CATEGORY_ORDER.filter((c) => m.has(c)).map((c) => ({ category: c, items: m.get(c)! }));
   }, [catalog]);
 
-  if (gym === undefined || !catalog) return null;
+  if (gym === undefined || !catalog || !current) return null;
   if (gym === null) {
     return (
       <main className="flex flex-col gap-4">
@@ -89,20 +102,51 @@ function EditGym({ id }: { id: string }) {
     );
   }
 
-  const isActive = profile?.active_gym_id === gym.id;
-  const detailRow = detailFor ? haveMap.get(detailFor) : undefined;
+  const edit = (fn: (d: Draft) => Draft) => setDraft((d) => fn(d ?? { name: current.name, items: new Map(current.items) }));
+  const toggle = (ids: string[], on: boolean) =>
+    edit((d) => {
+      const items = new Map(d.items);
+      for (const eid of ids) {
+        if (on && !items.has(eid)) items.set(eid, saved?.items.get(eid) ?? defaultDetails(eid, gym.template));
+        if (!on) items.delete(eid);
+      }
+      return { ...d, items };
+    });
+
+  async function save() {
+    if (!draft || !gym) return;
+    setSaving(true);
+    const name = draft.name.trim() || gym.name;
+    if (name !== gym.name) await updateGym({ ...gym, name });
+    await saveEquipment(gym.id, [...draft.items].map(([equipment_id, details]) => ({ equipment_id, details })));
+    setDraft(null);
+    setSaving(false);
+    setSavedAt(Date.now());
+  }
+
+  const detailDetails = detailFor ? current.items.get(detailFor) : undefined;
 
   return (
-    <main className="flex flex-col gap-4">
-      <PageHeader title={gym.name} back="/more/gyms" />
+    <main className={`flex flex-col gap-4 ${dirty ? "pb-24" : ""}`}>
+      <PageHeader
+        title={gym.name}
+        back={dirty ? undefined : "/more/gyms"}
+        right={
+          dirty ? (
+            <button type="button" onClick={() => setConfirmLeave(true)} className="h-11 px-2 text-sm font-bold text-muted">
+              Cancel
+            </button>
+          ) : undefined
+        }
+      />
       <Card className="flex flex-col gap-3 p-4">
         <label className="flex flex-col gap-2">
           <span className={label}>NAME</span>
-          <input className={field} defaultValue={gym.name} onBlur={(e) => e.target.value.trim() && e.target.value !== gym.name && updateGym({ ...gym, name: e.target.value.trim() })} />
+          <input className={field} value={current.name} onChange={(e) => edit((d) => ({ ...d, name: e.target.value }))} />
         </label>
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" className={btn.secondary} disabled={isActive} onClick={() => saveProfile({ active_gym_id: gym.id })}>
-            {isActive ? "Here now" : "I'm here now"}
+          <button type="button" className={btn.primary} disabled={!dirty || saving} onClick={save}>
+            {saving ? "Saving…" : dirty ? "Save" : savedAt ? "Saved" : "No changes"}
           </button>
           <button type="button" className={btn.secondary} disabled={gym.is_default} onClick={() => makeDefault(gym.id)}>
             {gym.is_default ? "Default gym" : "Make default"}
@@ -112,11 +156,11 @@ function EditGym({ id }: { id: string }) {
 
       <div className="flex items-baseline justify-between">
         <h2 className="display text-2xl font-extrabold">Equipment</h2>
-        <span className="text-sm font-semibold text-muted">{haveMap.size} ticked</span>
+        <span className="text-sm font-semibold text-muted">{current.items.size} ticked</span>
       </div>
 
       {grouped.map(({ category, items }) => {
-        const on = items.filter((e) => haveMap.has(e.id)).length;
+        const on = items.filter((e) => current.items.has(e.id)).length;
         return (
           <details key={category} className="group rounded-3xl border border-line bg-card" open={category === "free_weights"}>
             <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4">
@@ -127,26 +171,26 @@ function EditGym({ id }: { id: string }) {
               </span>
             </summary>
             <div className="flex justify-end gap-2 px-4 pb-1">
-              <button type="button" className="h-9 text-sm font-bold text-accent" onClick={() => items.forEach((e) => !haveMap.has(e.id) && setEquipment(gym.id, e.id, true, gym.template))}>All</button>
-              <button type="button" className="h-9 text-sm font-bold text-muted" onClick={() => items.forEach((e) => haveMap.has(e.id) && setEquipment(gym.id, e.id, false, gym.template))}>None</button>
+              <button type="button" className="h-9 text-sm font-bold text-accent" onClick={() => toggle(items.map((e) => e.id), true)}>All</button>
+              <button type="button" className="h-9 text-sm font-bold text-muted" onClick={() => toggle(items.map((e) => e.id), false)}>None</button>
             </div>
             <ul className="divide-y divide-line border-t border-line">
               {items.map((e) => {
-                const checked = haveMap.has(e.id);
+                const checked = current.items.has(e.id);
                 return (
                   <li key={e.id} className="flex min-h-13 items-center gap-3 px-4">
                     <label className="flex min-h-12 flex-1 cursor-pointer items-center gap-3">
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={(ev) => setEquipment(gym.id, e.id, ev.target.checked, gym.template)}
+                        onChange={(ev) => toggle([e.id], ev.target.checked)}
                         className="h-6 w-6 shrink-0 accent-[var(--primary)]"
                       />
                       <span className={`text-base font-semibold ${checked ? "text-ink" : "text-muted"}`}>{e.name}</span>
                     </label>
                     {checked && hasDetails(e.id) && (
                       <button type="button" onClick={() => setDetailFor(e.id)} className="h-10 rounded-xl px-2 text-sm font-bold text-accent">
-                        {summarize(e.id, haveMap.get(e.id)!.details, units)}
+                        {summarize(e.id, current.items.get(e.id)!, units)}
                       </button>
                     )}
                   </li>
@@ -159,18 +203,53 @@ function EditGym({ id }: { id: string }) {
 
       <button type="button" className={btn.danger} onClick={() => setConfirmDelete(true)}>Delete this gym</button>
 
-      <Sheet open={Boolean(detailFor && detailRow)} onClose={() => setDetailFor(null)} title={catalog.find((e) => e.id === detailFor)?.name}>
-        {detailFor && detailRow && (
+      {dirty && (
+        <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-30 mx-auto flex max-w-lg gap-2 px-4">
+          <button type="button" className={`${btn.secondary} flex-1`} onClick={() => setDraft(null)}>Discard</button>
+          <button type="button" className={`${btn.primary} flex-[2]`} disabled={saving} onClick={save}>
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      )}
+
+      <Sheet open={Boolean(detailFor && detailDetails)} onClose={() => setDetailFor(null)} title={catalog.find((e) => e.id === detailFor)?.name}>
+        {detailFor && detailDetails && (
           <DetailsForm
             equipmentId={detailFor}
-            details={detailRow.details}
+            details={detailDetails}
             units={units}
-            onSave={async (d) => {
-              await setDetails(gym.id, detailFor, d);
+            onSave={(d) => {
+              edit((dr) => ({ ...dr, items: new Map(dr.items).set(detailFor, d) }));
               setDetailFor(null);
             }}
           />
         )}
+      </Sheet>
+
+      <Sheet open={confirmLeave} onClose={() => setConfirmLeave(false)} title="Leave without saving?">
+        <p className="mb-4 text-base font-medium text-muted">Your equipment changes haven&apos;t been saved.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className={btn.secondary}
+            onClick={() => {
+              setDraft(null);
+              router.push("/more/gyms");
+            }}
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={async () => {
+              await save();
+              router.push("/more/gyms");
+            }}
+          >
+            Save
+          </button>
+        </div>
       </Sheet>
 
       <Sheet open={confirmDelete} onClose={() => setConfirmDelete(false)} title={`Delete ${gym.name}?`}>
@@ -191,6 +270,15 @@ function EditGym({ id }: { id: string }) {
       </Sheet>
     </main>
   );
+}
+
+function sameDraft(a: Draft, b: Draft) {
+  if (a.name.trim() !== b.name || a.items.size !== b.items.size) return false;
+  for (const [k, v] of a.items) {
+    const o = b.items.get(k);
+    if (!o || JSON.stringify(v) !== JSON.stringify(o)) return false;
+  }
+  return true;
 }
 
 function summarize(id: string, d: EquipmentDetails, units: Units) {
@@ -238,7 +326,7 @@ function DetailsForm({ equipmentId, details, units, onSave }: { equipmentId: str
         input(a, setA, "Stack max")
       )}
       <p className="text-sm font-medium text-muted">Used later to suggest weights you can actually load.</p>
-      <button type="submit" className={btn.primary}>Save</button>
+      <button type="submit" className={btn.primary}>Done</button>
     </form>
   );
 }

@@ -430,10 +430,6 @@ function RecentHistory() {
   return (
     <section className="flex flex-col gap-2">
       <SectionTitle title="History" href="/progress/history" link="See all" />
-      <div className="grid grid-cols-2 gap-2">
-        <Link href="/workout" className={btn.secondary}>+ Workout</Link>
-        <Link href="/cardio" className={btn.secondary}>+ Cardio</Link>
-      </div>
       <HistoryList items={items?.slice(0, 3)} />
     </section>
   );

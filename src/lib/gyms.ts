@@ -39,21 +39,15 @@ export function useGymActions() {
     [db, requestSync],
   );
 
-  const setEquipment = useCallback(
-    async (gymId: string, equipmentId: string, on: boolean, template: GymTemplate | null) => {
-      if (on) await db.gym_equipment.put({ gym_id: gymId, equipment_id: equipmentId, details: defaultDetails(equipmentId, template) });
-      else await db.gym_equipment.delete([gymId, equipmentId]);
-      await markDirty(db, "gym_equipment", gymId);
-      requestSync(3000);
-    },
-    [db, requestSync],
-  );
-
-  const setDetails = useCallback(
-    async (gymId: string, equipmentId: string, details: EquipmentDetails) => {
-      await db.gym_equipment.update([gymId, equipmentId], { details });
-      await markDirty(db, "gym_equipment", gymId);
-      requestSync(3000);
+  /** Replaces a gym's whole equipment list in one go (the editor's Save button). */
+  const saveEquipment = useCallback(
+    async (gymId: string, rows: { equipment_id: string; details: EquipmentDetails }[]) => {
+      await db.transaction("rw", [db.gym_equipment, db.outbox], async () => {
+        await db.gym_equipment.where("gym_id").equals(gymId).delete();
+        await db.gym_equipment.bulkPut(rows.map((r) => ({ gym_id: gymId, ...r })));
+        await markDirty(db, "gym_equipment", gymId);
+      });
+      requestSync(1000);
     },
     [db, requestSync],
   );
@@ -89,5 +83,5 @@ export function useGymActions() {
     [db, profile?.active_gym_id, requestSync, saveProfile],
   );
 
-  return { createGym, updateGym, setEquipment, setDetails, makeDefault, deleteGym };
+  return { createGym, updateGym, saveEquipment, makeDefault, deleteGym };
 }

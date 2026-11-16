@@ -240,8 +240,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   return (
     <main className="flex min-h-dvh flex-col pb-10">
       {/* Current set panel */}
-      <section className="safe-top rounded-b-[32px] bg-primary px-5 pb-5 text-white">
-        <div className="flex h-12 items-center justify-between">
+      <section className="safe-top rounded-b-[28px] bg-primary px-5 pb-4 text-white">
+        <div className="flex h-11 items-center justify-between">
           <Link href="/" aria-label="Minimize workout" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
           </Link>
@@ -325,10 +325,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           />
         ) : current && ex ? (
           <>
-            <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-2 block text-left">
-              <h1 className="display text-[40px] leading-[0.95] font-extrabold">{ex.name}</h1>
+            <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-1 block text-left">
+              <h1 className="display text-[30px] leading-[0.95] font-extrabold">{ex.name}</h1>
             </button>
-            <p className="mt-2 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
+            <p className="mt-1 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
               <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 pr-2.5 pl-3 after:absolute after:-inset-2 after:content-[''] active:bg-white/25" aria-label="Change set type: working, warm-up or drop">
                 {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
@@ -341,7 +341,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
             )}
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
               <Stepper
                 label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}
                 value={draft.weight === null ? (isBodyweight ? "BW" : "—") : formatWeight(draft.weight, units)}
@@ -352,8 +352,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <Stepper label="REPS" value={draft.reps === null ? "—" : String(draft.reps)} onMinus={() => bumpReps(-1)} onPlus={() => bumpReps(1)} onTap={() => setTyping("reps")} />
             </div>
 
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
+            <div className="mt-3">
+              <div className="mb-1 text-[11px] leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
               <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
             </div>
 
@@ -364,7 +364,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <button
               type="button"
               onClick={log}
-              className="display mt-3 flex h-16 w-full items-center justify-center rounded-2xl bg-white text-2xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-5px_0_#C9D3FF] active:translate-y-px"
+              className="display mt-3 flex h-13 w-full items-center justify-center rounded-2xl bg-white text-xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-4px_0_#C9D3FF] active:translate-y-px"
             >
               Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
             </button>
@@ -428,7 +428,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
                             {n}/{w.target_sets ?? 3} sets · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
                           </>
                         )}
-                        {w.notes ? " · 📝" : ""}
+                        {w.notes ? <span className="text-accent-soft"> · {w.notes}</span> : null}
                       </span>
                     </span>
                   </button>
@@ -683,15 +683,13 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
 function Stepper({ label: l, value, onMinus, onPlus, onTap }: { label: string; value: string; onMinus: () => void; onPlus: () => void; onTap: () => void }) {
   return (
-    <div className="flex flex-col items-center gap-1 rounded-3xl bg-white/10 py-3">
-      <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">{l}</span>
-      <button type="button" onClick={onTap} className="display num text-[64px] leading-none font-extrabold" aria-label={`${l} ${value}. Tap to type`}>
-        {value}
+    <div className="flex items-center gap-1 rounded-2xl bg-white/10 p-1">
+      <button type="button" onClick={onMinus} aria-label={`Less ${l}`} className="flex h-11 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white/60 text-xl font-bold">−</button>
+      <button type="button" onClick={onTap} className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center" aria-label={`${l} ${value}. Tap to type`}>
+        <span className="display num text-[34px] leading-none font-extrabold">{value}</span>
+        <span className="display mt-0.5 truncate text-[10px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{l}</span>
       </button>
-      <div className="mt-1 flex gap-3">
-        <button type="button" onClick={onMinus} aria-label={`Less ${l}`} className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/60 text-2xl font-bold">−</button>
-        <button type="button" onClick={onPlus} aria-label={`More ${l}`} className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl font-bold text-primary">+</button>
-      </div>
+      <button type="button" onClick={onPlus} aria-label={`More ${l}`} className="flex h-11 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl font-bold text-primary">+</button>
     </div>
   );
 }

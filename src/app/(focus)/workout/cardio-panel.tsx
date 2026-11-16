@@ -8,9 +8,9 @@ import type { CardioResults } from "@/components/cardio-results";
 import type { CardioSession, CardioType, Units } from "@/lib/db/types";
 
 const whiteBtn =
-  "display flex h-14 items-center justify-center gap-2.5 rounded-2xl bg-white px-4 text-[22px] font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-5px_0_#C9D3FF] active:translate-y-px disabled:opacity-60";
-const softBtn = "display flex h-14 items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 text-lg font-extrabold tracking-[0.04em] text-white active:bg-white/25";
-const squareBtn = "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15 active:bg-white/25";
+  "display flex h-12 items-center justify-center gap-2.5 rounded-2xl bg-white px-4 text-xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-5px_0_#C9D3FF] active:translate-y-px disabled:opacity-60";
+const softBtn = "display flex h-12 items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 text-lg font-extrabold tracking-[0.04em] text-white active:bg-white/25";
+const squareBtn = "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 active:bg-white/25";
 const linkBtn = "display flex h-11 items-center justify-center rounded-xl px-3 text-base font-extrabold tracking-[0.04em] text-[#DCE4FF]";
 const subLabel = "text-xs font-bold tracking-[0.1em] text-[#DCE4FF]";
 const blueField = "display num h-[52px] w-full rounded-[14px] border-2 border-transparent bg-white/15 pr-12 pl-3.5 text-[26px] font-extrabold text-white outline-none placeholder:text-white/40 focus:border-white/70";
@@ -109,7 +109,7 @@ export function CardioPanel({
             </li>
           ))}
         </ul>
-        <button type="button" className={`${whiteBtn} mt-3.5 h-16 w-full`} onClick={onNext}>
+        <button type="button" className={`${whiteBtn} mt-3 h-13 w-full`} onClick={onNext}>
           <span className="truncate">{nextLabel ? `Next: ${nextLabel}` : "Finish workout"}</span>
           {nextLabel && <Play />}
         </button>
@@ -155,7 +155,7 @@ export function CardioPanel({
 }
 
 function Title({ name, onInfo, big = false }: { name: string; onInfo?: () => void; big?: boolean }) {
-  const h = <h1 className={`display font-extrabold ${big ? "mt-2 text-[40px] leading-[0.95]" : "text-[30px] leading-[0.95]"}`}>{name}</h1>;
+  const h = <h1 className={`display font-extrabold ${big ? "mt-1 text-[30px] leading-[0.95]" : "text-[26px] leading-[0.95]"}`}>{name}</h1>;
   return onInfo ? <button type="button" onClick={onInfo} className="block min-w-0 text-left">{h}</button> : h;
 }
 
@@ -166,7 +166,7 @@ function Strip({ name, status, seconds, dim, onInfo }: { name: string; status: s
         <Title name={name} onInfo={onInfo} />
         <span className="display mt-1.5 block text-sm font-bold tracking-[0.08em] text-[#DCE4FF] uppercase">{status}</span>
       </div>
-      <span role="timer" aria-label={`Time ${formatDuration(seconds)}`} className={`display num shrink-0 text-[64px] leading-[0.85] font-extrabold ${dim ? "opacity-60" : ""}`}>
+      <span role="timer" aria-label={`Time ${formatDuration(seconds)}`} className={`display num shrink-0 text-[48px] leading-[0.85] font-extrabold ${dim ? "opacity-60" : ""}`}>
         {formatDuration(seconds)}
       </span>
     </div>
