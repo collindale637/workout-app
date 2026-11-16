@@ -491,12 +491,15 @@ function LastTime({ history, units, defaultRpe, nextSet }: { history?: { last: W
       <ol className="grid grid-cols-[repeat(auto-fill,minmax(5.25rem,1fr))] gap-2">
         {sets.map((s, i) => {
           const isNext = i === Math.min(nextSet, sets.length - 1);
+          const w = s.weight === null ? "BW" : formatWeight(s.weight, units);
+          // Heavier lifts like 225 × 10 get slightly smaller numbers so the tile never crowds.
+          const long = w.length + String(s.reps ?? "—").length > 4;
           return (
             <li key={s.id} className={`flex flex-col items-center rounded-2xl border-2 px-2 py-2 ${isNext ? "border-accent-strong bg-primary/15" : "border-transparent bg-card-2"}`}>
               <span className={`text-[11px] font-bold tracking-[0.1em] ${isNext ? "text-accent-soft" : "text-muted"}`}>{s.type === "drop" ? "DROP" : `SET ${i + 1}`}</span>
-              <span className="display num text-2xl leading-tight font-extrabold text-ink">
-                {s.weight === null ? "BW" : formatWeight(s.weight, units)}
-                <span className="text-lg text-muted"> × </span>
+              <span className={`display num leading-tight font-extrabold whitespace-nowrap text-ink ${long ? "text-xl" : "text-2xl"}`}>
+                {w}
+                <span className={`text-muted ${long ? "text-base" : "text-lg"}`}> × </span>
                 {s.reps ?? "—"}
               </span>
               <span className="text-xs font-semibold text-muted">
