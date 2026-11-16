@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cardioElapsedSec, cardioHasDistance, cardioLabel, type CardioTimer } from "@/lib/cardio";
+import { INCLINE_MAX, cardioElapsedSec, cardioHasDistance, cardioHasIncline, cardioLabel, type CardioTimer } from "@/lib/cardio";
 import { distanceUnit, formatDuration, fromDisplayDistance, toDisplayDistance } from "@/lib/units";
 import { RpeSlider } from "@/components/rpe-slider";
 import type { CardioResults } from "@/components/cardio-results";
@@ -89,6 +89,7 @@ export function CardioPanel({
     const stats = [
       [formatDuration(session.duration_sec), "TIME"],
       session.distance ? [String(toDisplayDistance(session.distance, units)), distanceUnit(units).toUpperCase()] : null,
+      session.incline ? [`${session.incline}%`, "INCLINE"] : null,
       session.avg_hr ? [String(session.avg_hr), "AVG BPM"] : null,
       session.rpe ? [String(session.rpe), "RPE"] : null,
     ].filter((x): x is string[] => x !== null);
@@ -197,6 +198,7 @@ function ResultsInCard({
   const [minutes, setMinutes] = useState(initialSec ? String(Math.floor(initialSec / 60)) : "");
   const [seconds, setSeconds] = useState(initialSec ? String(initialSec % 60 || "") : "");
   const [distance, setDistance] = useState(session?.distance ? String(toDisplayDistance(session.distance, units)) : "");
+  const [incline, setIncline] = useState(session?.incline ? String(session.incline) : "");
   const [hr, setHr] = useState(session?.avg_hr ? String(session.avg_hr) : "");
   const [rpe, setRpe] = useState<number | null>(session?.rpe ?? null);
   const [saving, setSaving] = useState(false);
@@ -208,7 +210,10 @@ function ResultsInCard({
   const hrBad = hrNum !== null && (Number.isNaN(hrNum) || hrNum < HR_MIN || hrNum > HR_MAX);
   const distNum = distance.trim() ? Number(distance.replace(",", ".")) : null;
   const distBad = hasDistance && distNum !== null && (Number.isNaN(distNum) || distNum < 0);
-  const invalid = durationSec <= 0 || hrBad || distBad;
+  const hasIncline = cardioHasIncline(type);
+  const inclineNum = incline.trim() ? Number(incline.replace(",", ".")) : null;
+  const inclineBad = hasIncline && inclineNum !== null && (Number.isNaN(inclineNum) || inclineNum < 0 || inclineNum > INCLINE_MAX);
+  const invalid = durationSec <= 0 || hrBad || distBad || inclineBad;
   const typeLabel = cardioLabel(type);
 
   const unitIn = (u: string) => <span className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-[13px] font-bold text-[#DCE4FF]">{u}</span>;
@@ -223,6 +228,7 @@ function ResultsInCard({
           await onSave({
             durationSec,
             distance: hasDistance && distNum ? fromDisplayDistance(distNum, units) : null,
+            incline: hasIncline && inclineNum ? Math.round(inclineNum * 10) / 10 : null,
             avgHr: hrNum,
             rpe,
             notes: session?.notes ?? null,
@@ -255,8 +261,14 @@ function ResultsInCard({
           <span className="relative block"><input className={blueField} inputMode="numeric" value={hr} onChange={(e) => setHr(e.target.value)} placeholder="—" />{unitIn("bpm")}</span>
         </label>
       </div>
-      {(hrBad || distBad) && (
-        <p className="mt-1.5 text-sm font-bold text-[#FFD2B3]">{hrBad ? `Heart rate should be between ${HR_MIN} and ${HR_MAX} bpm` : "Enter a distance like 3.1"}</p>
+      {hasIncline && (
+        <label className="mt-2 flex flex-col gap-1.5">
+          <span className={subLabel}>TREADMILL INCLINE (OPTIONAL)</span>
+          <span className="relative block"><input className={blueField} inputMode="decimal" value={incline} onChange={(e) => setIncline(e.target.value)} placeholder="—" />{unitIn("%")}</span>
+        </label>
+      )}
+      {(hrBad || distBad || inclineBad) && (
+        <p className="mt-1.5 text-sm font-bold text-[#FFD2B3]">{hrBad ? `Heart rate should be between ${HR_MIN} and ${HR_MAX} bpm` : distBad ? "Enter a distance like 3.1" : `Incline should be between 0 and ${INCLINE_MAX} %`}</p>
       )}
 
       <div className="mt-3.5 flex flex-col gap-2">

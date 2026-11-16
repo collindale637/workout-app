@@ -22,7 +22,7 @@ const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "ex
   workouts: ["id", "name", "gym_id", "plan_day_id", "started_at", "ended_at", "notes", "source"],
   workout_exercises: ["id", "workout_id", "exercise_id", "sort_order", "superset_group", "notes", "target_sets", "rep_min", "rep_max", "rest_sec", "skipped_sets"],
   sets: ["id", "workout_exercise_id", "set_no", "type", "weight", "reps", "rpe", "completed_at"],
-  cardio_sessions: ["id", "workout_id", "workout_exercise_id", "type", "started_at", "duration_sec", "distance", "avg_hr", "rpe", "intervals", "notes"],
+  cardio_sessions: ["id", "workout_id", "workout_exercise_id", "type", "started_at", "duration_sec", "distance", "avg_hr", "rpe", "incline", "intervals", "notes"],
   body_metrics: ["id", "date", "bodyweight"],
 };
 

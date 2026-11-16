@@ -157,6 +157,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       started_at: ctx.session?.started_at ?? r.startedAt,
       duration_sec: r.durationSec,
       distance: r.distance,
+      incline: r.incline,
       avg_hr: r.avgHr,
       rpe: r.rpe,
       intervals: ctx.session?.intervals ?? null,
