@@ -18,20 +18,28 @@ export function ExerciseInfo({ catalog, id, gymEquipment, gymName }: { catalog: 
   return (
     <div className="flex flex-col gap-4">
       {ex.images.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setFrame((f) => (f + 1) % ex.images.length)}
-          className="relative overflow-hidden rounded-3xl bg-white"
-          aria-label="Show the other position"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- remote images, cached by the service worker */}
-          <img src={exerciseImageUrl(ex.images[frame])} alt={`${ex.name}, position ${frame + 1}`} className="aspect-[4/3] w-full object-contain" loading="lazy" />
+        <div className="relative overflow-hidden rounded-3xl bg-white">
+          {/* Swipe carousel: native scroll-snap, one slide per image */}
+          <div
+            className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              setFrame(Math.round(el.scrollLeft / el.clientWidth));
+            }}
+          >
+            {ex.images.map((img, i) => (
+              <div key={img} className="w-full shrink-0 snap-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- remote images, cached by the service worker */}
+                <img src={exerciseImageUrl(img)} alt={`${ex.name}, position ${i + 1}`} className="aspect-[4/3] w-full object-contain" loading="lazy" draggable={false} />
+              </div>
+            ))}
+          </div>
           {ex.images.length > 1 && (
-            <span className="absolute right-3 bottom-3 rounded-full bg-black/60 px-3 py-1 text-xs font-bold text-white">
-              {frame + 1}/{ex.images.length} · tap
+            <span className="pointer-events-none absolute right-3 bottom-3 rounded-full bg-black/60 px-3 py-1 text-xs font-bold text-white">
+              {frame + 1}/{ex.images.length} · swipe
             </span>
           )}
-        </button>
+        </div>
       )}
       <div className="flex flex-wrap gap-1.5">
         {muscles.filter((m) => m.role === "primary").map((m) => (
