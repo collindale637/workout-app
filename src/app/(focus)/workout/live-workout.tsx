@@ -923,6 +923,16 @@ function FinishSummary({
     if (top1 > prev.best1RM + 0.5) return [`${names.get(w.exercise_id)?.name}: best estimated max, ${formatWeight(top1, units)} ${weightUnit(units)}`];
     return [];
   });
+  // Every logged set of each lift, in order (exercises without sets are dropped on save).
+  const setText = (s: WorkoutSet) => {
+    const load = s.weight ? `${formatWeight(s.weight, units)} ${weightUnit(units)}` : "Bodyweight";
+    return s.reps ? `${load} × ${s.reps}` : load;
+  };
+  const lifts = wexs.flatMap((w) => {
+    const sets = [...(setsBy.get(w.id) ?? [])].sort((a, b) => a.set_no - b.set_no);
+    if (!sets.length) return [];
+    return [{ id: w.id, name: names.get(w.exercise_id)?.name ?? w.exercise_id, sets }];
+  });
   const stat = (v: string, l: string) => (
     <div className="rounded-2xl bg-card-2 p-3 text-center">
       <div className="display num text-3xl font-extrabold">{v}</div>
@@ -941,6 +951,29 @@ function FinishSummary({
           <div className="display text-lg font-extrabold text-accent-soft">🏆 New records</div>
           <ul className="mt-1 text-sm font-semibold">{prs.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
+      )}
+      {lifts.length > 0 && (
+        <ul className="flex flex-col gap-3 rounded-2xl bg-card-2 px-3 py-3 text-sm font-semibold">
+          {lifts.map((l) => (
+            <li key={l.id}>
+              <div className="truncate text-base font-bold">{l.name}</div>
+              <ol className="mt-1 flex flex-col">
+                {l.sets.map((st, i) => (
+                  <li key={st.id} className="flex justify-between gap-3 py-0.5">
+                    <span className="text-muted">
+                      {i + 1}
+                      {st.type === "warmup" ? " · warm-up" : st.type === "drop" ? " · drop" : ""}
+                    </span>
+                    <span className="num">
+                      {setText(st)}
+                      {st.rpe ? <span className="text-muted"> · RPE {st.rpe}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </li>
+          ))}
+        </ul>
       )}
       {cardio.length > 0 && (
         <ul className="rounded-2xl bg-card-2 px-3 py-2 text-sm font-semibold">
