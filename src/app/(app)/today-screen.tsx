@@ -12,6 +12,7 @@ import { cardioElapsedSec, cardioLabel, cardioSummary } from "@/lib/cardio";
 import { formatDuration, formatWeight } from "@/lib/units";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { SyncBadge } from "@/components/sync-badge";
+import { UpNextCard } from "./up-next-card";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const noop = () => () => {};
@@ -88,7 +89,7 @@ export function TodayScreen() {
 
       <CardioTimerBanner />
 
-      {open ? <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} /> : <StartCard hasGym={gyms.length > 0} />}
+      {open ? <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} /> : <UpNextCard hasGym={gyms.length > 0} />}
 
       {lastWorkout?.kind === "workout" && !open && <LastWorkout item={lastWorkout} />}
 
@@ -137,30 +138,6 @@ function InProgressCard({ workoutId, name, startedAt }: { workoutId: string; nam
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
         Resume
       </Link>
-    </section>
-  );
-}
-
-function StartCard({ hasGym }: { hasGym: boolean }) {
-  return (
-    <section className="flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">UP NEXT</span>
-        <span className="text-[13px] font-semibold text-[#DCE4FF]">Smart plans arrive in Phase 2</span>
-      </div>
-      <h1 className="display text-[64px] leading-[0.85] font-extrabold tracking-[-0.02em]">Your call</h1>
-      <p className="text-[15px] font-medium text-[#DCE4FF]">
-        Build a workout from {hasGym ? "what your gym has" : "the exercise library"}, repeat a past one, or log cardio.
-      </p>
-      <div className="mt-1 flex gap-2">
-        <Link href="/workout" className="display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full bg-white text-xl font-extrabold tracking-[0.08em] text-primary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
-          Start
-        </Link>
-        <Link href="/cardio" className="display flex h-[52px] items-center justify-center rounded-full border-2 border-white px-5 text-lg font-extrabold tracking-[0.08em]">
-          Cardio
-        </Link>
-      </div>
     </section>
   );
 }

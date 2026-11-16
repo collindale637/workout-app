@@ -13,6 +13,17 @@ import type { CardioSession, Exercise, SetType, Workout, WorkoutExercise, Workou
 
 export type RestState = { endsAt: number; total: number; wexId: string } | null;
 
+/** An exercise with its targets, from a plan day or the generator. */
+export type PlannedItem = {
+  exercise_id: string;
+  sets: number;
+  rep_min: number | null;
+  rep_max: number | null;
+  rest_sec: number | null;
+  superset_group: number | null;
+  notes: string | null;
+};
+
 /** Everything you do to a workout. Every change is saved on the phone first, then synced. */
 export function useWorkoutActions() {
   const { db, requestSync } = useData();
@@ -55,13 +66,30 @@ export function useWorkoutActions() {
 
   /** Starts a workout with these exercises (or copies a past one). */
   const start = useCallback(
-    async (opts: { exerciseIds?: string[]; name?: string | null; gymId: string | null; copyFrom?: string }) => {
+    async (opts: {
+      exerciseIds?: string[];
+      /** A planned or generated workout: exercises with their targets. */
+      items?: PlannedItem[];
+      name?: string | null;
+      gymId: string | null;
+      copyFrom?: string;
+      planDayId?: string | null;
+      source?: Workout["source"];
+    }) => {
       const workout: Workout = {
-        id: newId(), name: opts.name ?? null, gym_id: opts.gymId, plan_day_id: null,
-        started_at: nowIso(), ended_at: null, notes: null, source: "manual",
+        id: newId(), name: opts.name ?? null, gym_id: opts.gymId, plan_day_id: opts.planDayId ?? null,
+        started_at: nowIso(), ended_at: null, notes: null, source: opts.source ?? "manual",
       };
       let rows: WorkoutExercise[] = [];
-      if (opts.copyFrom) {
+      if (opts.items) {
+        const exs = await db.exercises.bulkGet(opts.items.map((i) => i.exercise_id));
+        rows = opts.items.map((item, i) => ({
+          ...newWex(workout.id, exs[i], item.exercise_id, i, {
+            target_sets: item.sets, rep_min: item.rep_min, rep_max: item.rep_max, rest_sec: item.rest_sec, superset_group: item.superset_group,
+          }),
+          notes: item.notes,
+        }));
+      } else if (opts.copyFrom) {
         const src = await db.workout_exercises.where("workout_id").equals(opts.copyFrom).sortBy("sort_order");
         const exs = await db.exercises.bulkGet(src.map((s) => s.exercise_id));
         rows = src.map((s, i) => ({ ...newWex(workout.id, exs[i], s.exercise_id, i, s), notes: s.notes }));

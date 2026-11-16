@@ -103,4 +103,28 @@ describe("sync", () => {
     // After the push the outbox is clear, so the pulled server row lands.
     expect((await db.gyms.get("g1"))?.name).toBe("Server name");
   });
+
+  it("uploads plans before their days and exercises, switching the active plan safely, and favorites", async () => {
+    const { client, calls } = fakeSupabase({ profiles: [{ id: USER, default_rpe: 8 }], exercise_prefs: [{ exercise_id: "Pullups", favorite: true, excluded: false }] });
+    await db.plans.bulkPut([
+      { id: "p-new", name: "PPL", goal: "hypertrophy", split_id: "ppl_3", start_date: "2026-11-16", weeks: 8, source: "generated", is_active: true, created_at: "2026-11-16T10:00:00Z" },
+      { id: "p-old", name: "Old", goal: null, split_id: null, start_date: null, weeks: null, source: "manual", is_active: false, created_at: "2026-10-01T10:00:00Z" },
+    ]);
+    await db.plan_days.put({ id: "d1", plan_id: "p-new", day_order: 1, name: "Push", gym_id: null, target_muscle_ids: ["chest", "triceps"] });
+    await db.plan_exercises.put({ id: "pe1", plan_day_id: "d1", exercise_id: "Pushups", sort_order: 0, sets: 3, rep_min: 8, rep_max: 12, rest_sec: 60, superset_group: null, notes: null });
+    await db.exercise_prefs.put({ exercise_id: "Barbell_Deadlift", favorite: false, excluded: true });
+    for (const [t, id] of [["plan_exercises", "pe1"], ["plan_days", "d1"], ["plans", "p-new"], ["plans", "p-old"], ["exercise_prefs", "Barbell_Deadlift"]] as const) await markDirty(db, t, id);
+
+    await syncNow(db, client, USER);
+
+    const upserts = calls.filter((c) => c.op === "upsert");
+    expect(upserts.map((c) => c.table)).toEqual(["exercise_prefs", "plans", "plan_days", "plan_exercises"]);
+    // The plan being switched off goes first, so there's never two active plans.
+    expect((upserts[1].payload as { id: string }[]).map((r) => r.id)).toEqual(["p-old", "p-new"]);
+    expect((upserts[2].payload as Record<string, unknown>[])[0]).toMatchObject({ target_muscle_ids: ["chest", "triceps"] });
+    expect((upserts[0].payload as Record<string, unknown>[])[0]).toMatchObject({ owner_id: USER, exercise_id: "Barbell_Deadlift", excluded: true });
+    expect(await db.outbox.count()).toBe(0);
+    // Favorites from another device come down.
+    expect((await db.exercise_prefs.get("Pullups"))?.favorite).toBe(true);
+  });
 });

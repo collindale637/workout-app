@@ -149,13 +149,66 @@ export type CardioSession = {
   updated_at?: string;
 };
 
+/** A split from the library (catalog, read-only). */
+export type Split = { id: string; name: string; days_per_week: number; description: string; sort_order: number };
+
+export type SplitDay = { id: string; split_id: string; day_order: number; name: string; target_muscle_ids: string[] };
+
+export type PlanSource = "generated" | "ai" | "imported" | "manual";
+
+export type Plan = {
+  id: string;
+  name: string;
+  goal: Goal | null;
+  split_id: string | null;
+  /** YYYY-MM-DD */
+  start_date: string | null;
+  weeks: number | null;
+  source: PlanSource;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+};
+
+export type PlanDay = {
+  id: string;
+  plan_id: string;
+  day_order: number;
+  name: string;
+  gym_id: string | null;
+  /** What the day trains; used to regenerate it and to pick swaps. */
+  target_muscle_ids: string[];
+  updated_at?: string;
+};
+
+export type PlanExercise = {
+  id: string;
+  plan_day_id: string;
+  exercise_id: string;
+  sort_order: number;
+  sets: number;
+  rep_min: number | null;
+  rep_max: number | null;
+  rest_sec: number | null;
+  superset_group: number | null;
+  notes: string | null;
+  updated_at?: string;
+};
+
+/** Favorites get picked more often; excluded exercises are never suggested. Keyed by exercise. */
+export type ExercisePref = { exercise_id: string; favorite: boolean; excluded: boolean };
+
 /** Tables the phone writes and syncs. */
 export type SyncTable =
   | "profiles"
   | "exercises"
   | "exercise_tags"
+  | "exercise_prefs"
   | "gyms"
   | "gym_equipment"
+  | "plans"
+  | "plan_days"
+  | "plan_exercises"
   | "workouts"
   | "workout_exercises"
   | "sets"

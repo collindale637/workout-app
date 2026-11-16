@@ -12,10 +12,13 @@ import type { OutboxEntry, SyncTable } from "./types";
  */
 
 /** Columns sent to the server for each table (anything else is local-only). */
-const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment">, string[]> = {
+const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "exercise_prefs">, string[]> = {
   profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at"],
   exercises: ["id", "name", "aliases", "category", "movement_pattern", "mechanic", "force", "level", "instructions", "images", "is_common", "is_active", "owner_id", "source"],
   gyms: ["id", "name", "template", "is_default"],
+  plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active"],
+  plan_days: ["id", "plan_id", "day_order", "name", "gym_id", "target_muscle_ids"],
+  plan_exercises: ["id", "plan_day_id", "exercise_id", "sort_order", "sets", "rep_min", "rep_max", "rest_sec", "superset_group", "notes"],
   workouts: ["id", "name", "gym_id", "plan_day_id", "started_at", "ended_at", "notes", "source"],
   workout_exercises: ["id", "workout_id", "exercise_id", "sort_order", "superset_group", "notes", "target_sets", "rep_min", "rep_max", "rest_sec"],
   sets: ["id", "workout_exercise_id", "set_no", "type", "weight", "reps", "rpe", "completed_at"],
@@ -24,13 +27,14 @@ const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment">, str
 
 /** Upload order: parents first. Deletes run in reverse. */
 const PUSH_ORDER: SyncTable[] = [
-  "exercises", "exercise_tags", "gyms", "gym_equipment", "profiles",
+  "exercises", "exercise_tags", "exercise_prefs", "gyms", "gym_equipment", "profiles",
+  "plans", "plan_days", "plan_exercises",
   "workouts", "workout_exercises", "sets", "cardio_sessions",
 ];
 
 /** Tables pulled incrementally by updated_at. */
-const INCREMENTAL: Array<"gyms" | "workouts" | "workout_exercises" | "sets" | "cardio_sessions"> = [
-  "gyms", "workouts", "workout_exercises", "sets", "cardio_sessions",
+const INCREMENTAL: Array<"gyms" | "plans" | "plan_days" | "plan_exercises" | "workouts" | "workout_exercises" | "sets" | "cardio_sessions"> = [
+  "gyms", "plans", "plan_days", "plan_exercises", "workouts", "workout_exercises", "sets", "cardio_sessions",
 ];
 
 const pick = (row: Record<string, unknown>, cols: string[]) =>
@@ -89,6 +93,15 @@ async function push(db: LocalDB, sb: SupabaseClient, userId: string) {
           if (ins.error) throw new Error(ins.error.message);
         }
       }
+    } else if (table === "exercise_prefs") {
+      // Favorites/exclusions are never deleted, just switched off, so an upsert covers every change.
+      const rows = (await db.exercise_prefs.bulkGet(ids)).filter(Boolean).map((r) => ({
+        owner_id: userId, exercise_id: r!.exercise_id, favorite: r!.favorite, excluded: r!.excluded,
+      }));
+      if (rows.length) {
+        const { error } = await sb.from("exercise_prefs").upsert(rows, { onConflict: "owner_id,exercise_id" });
+        if (error) throw new Error(`exercise_prefs: ${error.message}`);
+      }
     } else if (table === "exercise_tags") {
       for (const exId of ids) {
         const muscles = await db.exercise_muscles.where("exercise_id").equals(exId).toArray();
@@ -108,8 +121,9 @@ async function push(db: LocalDB, sb: SupabaseClient, userId: string) {
           ? await db.profile.bulkGet(ids)
           : await (db[table] as unknown as { bulkGet: (k: string[]) => Promise<(Record<string, unknown> | undefined)[]> }).bulkGet(ids);
       const rows = local.filter(Boolean).map((r) => pick(r as Record<string, unknown>, COLUMNS[table]));
-      // Only one default gym is allowed, so clear the old default before setting the new one.
+      // Only one default gym (and one active plan) is allowed, so clear the old one before setting the new one.
       if (table === "gyms") rows.sort((a, b) => Number(a.is_default) - Number(b.is_default));
+      if (table === "plans") rows.sort((a, b) => Number(a.is_active) - Number(b.is_active));
       if (rows.length) {
         const { error } =
           table === "profiles"
@@ -163,6 +177,13 @@ async function pull(db: LocalDB, sb: SupabaseClient, userId: string) {
     const locals = await db.gym_equipment.toArray();
     await db.gym_equipment.bulkDelete(locals.filter((r) => !dirtyGyms.has(r.gym_id)).map((r) => [r.gym_id, r.equipment_id] as [string, string]));
     await db.gym_equipment.bulkPut(ge.filter((r) => !dirtyGyms.has(r.gym_id as string)) as never);
+  });
+
+  const prefs = await sb.from("exercise_prefs").select("exercise_id, favorite, excluded");
+  if (prefs.error) throw new Error(prefs.error.message);
+  await db.transaction("rw", db.exercise_prefs, async () => {
+    const fresh = (prefs.data ?? []).filter((r) => keep("exercise_prefs", r.exercise_id));
+    await db.exercise_prefs.bulkPut(fresh);
   });
 
   const custom = await sb.from("exercises").select("*").eq("owner_id", userId);
