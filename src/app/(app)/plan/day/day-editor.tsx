@@ -217,6 +217,7 @@ export function DayEditor() {
             gymEquipment={gymEquipment}
             gymName={gym?.name}
             excludeIds={list.map((e) => e.exercise_id)}
+            initialFilter={picker !== "add" && isCardioExercise(catalog.byId.get(picker.exercise_id)) ? "cardio" : undefined}
             initialMuscles={
               picker === "add"
                 ? day.target_muscle_ids

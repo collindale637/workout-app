@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { AI_MODEL, AI_MONTHLY_CAP_USD, AiError, aiConfigured, callTool, costUsd } from "@/lib/ai/claude";
+import { AI_FAST_MODEL, AI_MODEL, AI_MONTHLY_CAP_USD, AiError, aiConfigured, callTool, costUsd } from "@/lib/ai/claude";
 import { runAi } from "@/lib/ai/run";
 import { GOALS } from "@/lib/ai/validate";
-import { MAX_IMAGES, MAX_IMPORT_TEXT, MAX_PROMPT, type AiKind, type AiRequest, type AiResponse, type AiWorkout, type AiUsage } from "@/lib/ai/types";
+import { MAX_IMAGES, MAX_IMPORT_TEXT, MAX_PROMPT, PICK_KINDS, type AiKind, type AiRequest, type AiResponse, type AiWorkout, type AiUsage } from "@/lib/ai/types";
 
 /*
   The one door to Claude. POST asks for a plan, an edit, a workout, a plan day, or an import; GET reports
@@ -13,7 +13,7 @@ import { MAX_IMAGES, MAX_IMPORT_TEXT, MAX_PROMPT, type AiKind, type AiRequest, t
 
 export const maxDuration = 300;
 
-const KINDS: AiKind[] = ["plan", "edit", "workout", "day", "import"];
+const KINDS: AiKind[] = ["plan", "edit", "workout", "day", "import", "swap", "suggest"];
 const MAX_IMAGE_CHARS = 2_000_000; // ~1.5 MB per image after base64
 
 type Supabase = Awaited<ReturnType<typeof getSupabaseServer>>;
@@ -60,7 +60,11 @@ function parseRequest(body: unknown): AiRequest | string {
     if (img.data.length > MAX_IMAGE_CHARS) return "A photo is too large.";
   }
   if (b.kind === "import" && !prompt.trim() && !images.length) return "Paste the plan or add a photo.";
-  if (b.kind !== "import" && b.kind !== "edit" && !prompt.trim() && b.kind !== "plan") return "Say what you'd like.";
+  const pick = PICK_KINDS.includes(b.kind);
+  if (pick && (!b.today || !Array.isArray(b.today.items))) return "Missing the workout.";
+  if (pick && b.exercises.length > 60) return "Too many candidates sent.";
+  if (b.kind === "swap" && !b.swap?.exercise_id) return "Missing the exercise to swap.";
+  if (!pick && b.kind !== "import" && b.kind !== "edit" && !prompt.trim() && b.kind !== "plan") return "Say what you'd like.";
   if (b.kind === "edit" && (!b.plan || !Array.isArray(b.plan.days))) return "Missing plan to edit.";
   if (b.kind === "edit" && !prompt.trim()) return "Say what to change.";
   if (b.kind === "plan") {
@@ -82,14 +86,15 @@ export async function POST(request: NextRequest) {
     return fail(`AI has reached this month's $${before.cap_usd.toFixed(2)} limit. It resets on the 1st; everything else keeps working.`, 429, before);
   }
 
+  const model = PICK_KINDS.includes(req.kind) ? AI_FAST_MODEL : AI_MODEL;
   let tokens = { input_tokens: 0, output_tokens: 0 };
   const log = async (ok: boolean) => {
     const { error } = await sb.rpc("ai_log_request", {
       p_type: req.kind,
-      p_model: AI_MODEL,
+      p_model: model,
       p_input_tokens: tokens.input_tokens,
       p_output_tokens: tokens.output_tokens,
-      p_cost_usd: Number(costUsd(AI_MODEL, tokens).toFixed(5)),
+      p_cost_usd: Number(costUsd(model, tokens).toFixed(5)),
       p_ok: ok,
     });
     if (error) console.error("ai_log_request failed", error.message);
@@ -102,13 +107,15 @@ export async function POST(request: NextRequest) {
   };
 
   try {
-    const r = await runAi(req, counted);
+    const r = await runAi(req, counted, model);
     await log(!r.empty);
     const usage = await readUsage(sb);
+    if (r.empty && (r.kind === "swap" || r.kind === "suggest")) return fail("No AI picks this time.", 422, usage);
     if (r.empty) return fail("Claude couldn't build that with this gym's equipment. Try rewording it, or check the gym's equipment.", 422, usage);
     const warnings = r.errors.length ? [`Fixed or left out ${r.errors.length} thing${r.errors.length === 1 ? "" : "s"} the AI got wrong. Check it over before accepting.`] : [];
     let out: AiResponse;
-    if (r.kind === "import") out = { ok: true, kind: "import", result: r.value, warnings, usage };
+    if (r.kind === "swap" || r.kind === "suggest") out = { ok: true, kind: r.kind, picks: r.value, warnings: [], usage };
+    else if (r.kind === "import") out = { ok: true, kind: "import", result: r.value, warnings, usage };
     else if (r.kind === "plan" || r.kind === "edit") out = { ok: true, kind: r.kind, plan: r.value, warnings, usage };
     else out = { ok: true, kind: r.kind, workout: r.value as AiWorkout, warnings, usage };
     return NextResponse.json(out);

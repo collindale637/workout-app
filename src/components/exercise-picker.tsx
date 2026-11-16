@@ -7,6 +7,7 @@ import { isAvailable } from "@/lib/availability";
 import { MUSCLE_GROUPS } from "@/lib/defaults";
 import { Chip, btn, field } from "@/components/ui/kit";
 import type { Exercise } from "@/lib/db/types";
+import type { SmartPicks } from "@/lib/ai/picks";
 
 type Filter = { kind: "all" } | { kind: "group"; muscles: string[]; label: string } | { kind: "cardio" } | { kind: "stretch" };
 
@@ -29,20 +30,37 @@ export function ExercisePicker({
   gymName,
   onPick,
   initialMuscles,
+  initialFilter,
   excludeIds = [],
+  smart,
+  reasons,
+  reason = null,
+  onReason,
 }: {
   mode: "multi" | "single" | "browse";
   gymEquipment: Set<string> | null;
   gymName?: string;
   onPick?: (ids: string[]) => void;
   initialMuscles?: string[];
+  /** Start on the Cardio filter (swapping a cardio exercise). */
+  initialFilter?: "cardio";
   excludeIds?: string[];
+  /** "Best swaps" / "Suggested for today", shown above the search while it's empty. */
+  smart?: { title: string; picks: SmartPicks | null };
+  /** "Why?" chips for a swap; tapping one re-asks with that reason. */
+  reasons?: { key: string; label: string }[];
+  reason?: string | null;
+  onReason?: (key: string | null) => void;
 }) {
   const catalog = useCatalog();
   const [query, setQuery] = useState("");
   const q = useDeferredValue(query.trim().toLowerCase());
   const [filter, setFilter] = useState<Filter>(
-    initialMuscles?.length ? { kind: "group", muscles: initialMuscles, label: "Similar" } : { kind: "all" },
+    initialFilter === "cardio"
+      ? { kind: "cardio" }
+      : initialMuscles?.length
+        ? { kind: "group", muscles: initialMuscles, label: "Similar" }
+        : { kind: "all" },
   );
   const [gymOnlyChoice, setAtGymOnly] = useState<boolean | null>(null);
   // Default to the gym filter once the gym has loaded, unless you changed it.
@@ -81,8 +99,69 @@ export function ExercisePicker({
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   };
 
+  const picks = smart?.picks;
   return (
     <div className="flex flex-col gap-3">
+      {reasons?.length ? (
+        <div className="-mx-5 flex items-center gap-2 overflow-x-auto px-5 [scrollbar-width:none]">
+          <span className="display shrink-0 text-xs font-bold tracking-[0.1em] text-muted">Why?</span>
+          {reasons.map((r) => (
+            <Chip key={r.key} active={reason === r.key} onClick={() => onReason?.(reason === r.key ? null : r.key)}>{r.label}</Chip>
+          ))}
+        </div>
+      ) : null}
+      {smart && picks && picks.picks.length > 0 && !q && (
+        <section className="rounded-3xl border-2 border-accent-strong/55 bg-gradient-to-b from-primary/15 to-primary/5 px-3 pt-3 pb-1.5" aria-live="polite">
+          <div className="flex items-center justify-between gap-2 px-1 pb-1.5">
+            <h3 className="display text-[17px] font-extrabold tracking-[0.1em] text-accent-soft">{smart.title}</h3>
+            <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold tracking-[0.06em] whitespace-nowrap text-muted">
+              {picks.state === "loading" ? (
+                <>
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+                  AI is checking…
+                </>
+              ) : picks.state === "ai" ? (
+                <>
+                  <span className="text-accent" aria-hidden="true">✦</span>
+                  Picked by AI
+                </>
+              ) : (
+                "Best matches"
+              )}
+            </span>
+          </div>
+          <ul className="flex flex-col divide-y divide-white/7">
+            {picks.picks.map((p, i) => {
+              const ex = catalog.byId.get(p.exercise_id);
+              if (!ex) return null;
+              const order = picked.indexOf(ex.id);
+              return (
+                <li key={`${picks.state}-${ex.id}`}>
+                  <button type="button" onClick={() => toggle(ex.id)} className="flex min-h-16 w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left active:bg-white/5">
+                    {mode !== "multi" && (
+                      <span className="display flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-base font-extrabold text-white">{i + 1}</span>
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-bold">{ex.name}</span>
+                      <span className={`block text-[13.5px] leading-snug font-semibold ${p.reason ? "text-[#DCE4FF]/80" : "text-muted"}`}>
+                        {p.reason || primaryLabel(catalog, ex.id) || ex.category}
+                      </span>
+                    </span>
+                    {mode === "multi" ? (
+                      <span className={`display flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${order >= 0 ? "bg-primary text-white" : "border-2 border-line text-muted"}`}>
+                        {order >= 0 ? order + 1 : "+"}
+                      </span>
+                    ) : (
+                      <span className="display shrink-0 text-[15px] font-extrabold tracking-[0.06em] text-accent-soft">Use</span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {picks.state === "local" && picks.note && <p className="px-2 pt-1 pb-2 text-[12.5px] font-semibold text-muted">{picks.note}</p>}
+        </section>
+      )}
       <div className="relative">
         <input
           className={`${field} h-13 pl-11 text-lg`}

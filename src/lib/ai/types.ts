@@ -6,7 +6,10 @@ import type { Goal } from "@/lib/db/types";
   checks the answer against that context, and sends back a proposal. Nothing is saved until you accept it.
 */
 
-export type AiKind = "plan" | "edit" | "workout" | "day" | "import";
+export type AiKind = "plan" | "edit" | "workout" | "day" | "import" | "swap" | "suggest";
+
+/** Quick picks during a workout: "swap" replaces one exercise, "suggest" adds to the workout. */
+export const PICK_KINDS: AiKind[] = ["swap", "suggest"];
 
 /** One exercise Claude may use: "id | name | main muscles | type". */
 export type AllowedExercise = {
@@ -122,7 +125,17 @@ export type AiRequest = {
   /** "workout" / "day": what's there now (the starting point), and the day's name. */
   current?: { name: string; items: AiItem[] };
   images?: AiImage[];
+  /** "swap" / "suggest": the workout in progress. */
+  today?: { name: string; items: TodayItem[] };
+  /** "swap": the exercise being replaced, and why (from the chips), if given. */
+  swap?: { exercise_id: string; why: string | null };
 };
+
+/** One exercise in the workout in progress. */
+export type TodayItem = { id: string; name: string; muscles: string[]; type: AllowedExercise["type"]; sets_done: number; sets_planned: number };
+
+/** A pick for a swap or an addition, with a short reason shown under it. */
+export type AiPick = { exercise_id: string; reason: string };
 
 export type AiUsage = { configured: boolean; household_usd: number; mine_usd: number; cap_usd: number; my_requests: number };
 
@@ -130,6 +143,7 @@ export type AiResponse =
   | { ok: true; kind: "plan" | "edit"; plan: AiPlan; warnings: string[]; usage: AiUsage }
   | { ok: true; kind: "workout" | "day"; workout: AiWorkout; warnings: string[]; usage: AiUsage }
   | { ok: true; kind: "import"; result: AiImport; warnings: string[]; usage: AiUsage }
+  | { ok: true; kind: "swap" | "suggest"; picks: AiPick[]; warnings: string[]; usage: AiUsage }
   | { ok: false; error: string; usage?: AiUsage };
 
 export const MAX_IMAGES = 5;

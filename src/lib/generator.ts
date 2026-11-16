@@ -344,23 +344,58 @@ const jaccard = (a: string[], b: string[]) => {
   return inter / (a.length + b.length - inter);
 };
 
+export type Ranked = { id: string; score: number };
+
+/** Why a swap is wanted, from the "Why?" chips. Shapes the ranking (and the AI's picks). */
+export type SwapWhy = "busy" | "hurts" | "hard" | "different" | "impact" | "outdoors" | null;
+
+const CARDIO_MACHINE = new Set(["treadmill", "stationary_bike", "recumbent_bike", "rower", "elliptical", "stair_climber", "air_bike", "ski_erg"]);
+const OUTDOOR_GEAR = new Set(["bicycle", "skates", "jump_rope"]);
+const HIGH_IMPACT_CARDIO = /run|jog|sprint|jump|rope|burpee|prowler/i;
+
+/** Cardio this gym supports, best first: favorites, common machines, then the rest. */
+export function rankCardio(
+  cat: GenCatalog,
+  opts: Pick<GenOptions, "gymEquipment" | "prefs"> & { from?: string; exclude?: Set<string>; why?: SwapWhy },
+): Ranked[] {
+  const from = opts.from ? cat.exercises.find((e) => e.id === opts.from) : undefined;
+  const fromNeeds = new Set((opts.from ? cat.needs.get(opts.from) ?? [] : []).map((n) => n.equipment_id));
+  const out: Ranked[] = [];
+  for (const e of cat.exercises) {
+    if (!e.is_active || e.category !== "cardio" || e.id === opts.from || opts.exclude?.has(e.id) || opts.prefs?.get(e.id)?.excluded) continue;
+    const needs = cat.needs.get(e.id) ?? [];
+    if (opts.gymEquipment && !isAvailable(needs, opts.gymEquipment)) continue;
+    const machine = needs.some((n) => CARDIO_MACHINE.has(n.equipment_id));
+    let score = (e.is_common ? 1 : 0) + (opts.prefs?.get(e.id)?.favorite ? 2 : 0) + (machine ? 0.6 : 0);
+    const sameGear = needs.some((n) => fromNeeds.has(n.equipment_id));
+    if (opts.why === "busy" || opts.why === "different") score += sameGear ? -2 : 0.4;
+    else if (sameGear) score += 0.5; // e.g. treadmill run → incline treadmill walk
+    if (opts.why === "impact") score += HIGH_IMPACT_CARDIO.test(e.name) ? -2 : 1;
+    if (opts.why === "outdoors") score += needs.every((n) => OUTDOOR_GEAR.has(n.equipment_id)) ? (needs.length ? 2 : 2.5) : -1.5;
+    if (from && from.name.split(" ")[0] === e.name.split(" ")[0]) score += 0.2;
+    out.push({ id: e.id, score });
+  }
+  return out.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+}
+
 /**
- * The closest exercise this gym can do: same main muscles, same kind of movement.
- * Returns null when nothing sensible is available.
+ * Replacements for an exercise at this gym, best first: same main muscles, same kind of movement,
+ * favoring staples and favorites, avoiding what's already in the workout. Cardio gets other cardio.
  */
-export function closestMatch(
+export function rankSwaps(
   cat: GenCatalog,
   exerciseId: string,
-  opts: Pick<GenOptions, "gymEquipment" | "experience" | "prefs"> & { exclude?: Set<string> },
-): string | null {
+  opts: Pick<GenOptions, "gymEquipment" | "experience" | "prefs"> & { exclude?: Set<string>; why?: SwapWhy; inWorkout?: string[] },
+): Ranked[] {
   const ex = cat.exercises.find((e) => e.id === exerciseId);
-  if (!ex) return null;
-  if (ex.category === "cardio") return pickCardio(cat, opts, () => 0);
+  if (!ex) return [];
+  if (ex.category === "cardio") return rankCardio(cat, { ...opts, from: exerciseId });
   const p = primaries(cat, exerciseId);
   const s = secondaries(cat, exerciseId);
   const fromWords = new Set(words(ex.name));
-  let best: string | null = null;
-  let bestScore = 0;
+  const fromNeeds = new Set((cat.needs.get(exerciseId) ?? []).map((n) => n.equipment_id));
+  const todayBases = new Set((opts.inWorkout ?? []).filter((id) => id !== exerciseId).map((id) => baseName(cat.exercises.find((e) => e.id === id)?.name ?? "")));
+  const out: Ranked[] = [];
   for (const c of liftPool(cat, { ...opts, experience: "advanced" })) {
     if (c.ex.id === exerciseId || opts.exclude?.has(c.ex.id)) continue;
     const pj = jaccard(p, c.primary);
@@ -374,12 +409,133 @@ export function closestMatch(
     if (STAPLES[c.ex.id]) score += STAPLES[c.ex.id] === 1 ? 0.5 : 0.25;
     // Similar names are usually the closest swap: "Bench Press" → "Dumbbell Bench Press".
     score += 0.3 * words(c.ex.name).filter((w) => fromWords.has(w)).length;
-    if (score > bestScore) {
-      best = c.ex.id;
-      bestScore = score;
+    // Already doing a version of it today: a different exercise is more useful.
+    if (todayBases.has(c.base)) score -= 1.2;
+    const sameGear = c.equipment !== "" && c.equipment.split(",").every((id) => fromNeeds.has(id));
+    if (opts.why === "busy") score += sameGear ? -2 : 0;
+    if (opts.why === "different") score += (sameGear ? -0.8 : 0) - 0.3 * words(c.ex.name).filter((w) => fromWords.has(w)).length;
+    if (opts.why === "hurts" || opts.why === "hard") {
+      // Machines and cables guide the path and are easier to control; free-weight compounds less so.
+      const guided = c.equipment.split(",").some((id) => /machine|cable|smith|leverage|lever/.test(id));
+      score += (guided ? 0.8 : 0) + (c.ex.mechanic !== "compound" ? 0.4 : 0) + (c.ex.level === "beginner" ? 0.5 : -0.4);
     }
+    out.push({ id: c.ex.id, score });
   }
-  return bestScore >= 2 ? best : null;
+  return out.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+}
+
+/**
+ * The closest exercise this gym can do: same main muscles, same kind of movement.
+ * Returns null when nothing sensible is available.
+ */
+export function closestMatch(
+  cat: GenCatalog,
+  exerciseId: string,
+  opts: Pick<GenOptions, "gymEquipment" | "experience" | "prefs"> & { exclude?: Set<string> },
+): string | null {
+  const ex = cat.exercises.find((e) => e.id === exerciseId);
+  if (!ex) return null;
+  if (ex.category === "cardio") return pickCardio(cat, opts, () => 0);
+  const best = rankSwaps(cat, exerciseId, opts)[0];
+  return best && best.score >= 2 ? best.id : null;
+}
+
+/** Opposite muscles: a push-heavy session is better balanced with a little upper back and rear delt work. */
+const BALANCE: Record<string, string[]> = {
+  chest: ["upper_back", "rear_delts"], front_delts: ["rear_delts"], quads: ["hamstrings"], hamstrings: ["quads"],
+};
+
+/**
+ * Exercises worth adding to a workout in progress, best first. Fills what today's muscles still need
+ * (e.g. direct triceps work on a push day), adds a little balance (rear delts after lots of pressing)
+ * and core if there is none. With an empty workout it leans on the freshest big muscles.
+ */
+export function rankAdditions(
+  cat: GenCatalog,
+  inWorkout: string[],
+  opts: Pick<GenOptions, "gymEquipment" | "experience" | "prefs" | "recovery">,
+): Ranked[] {
+  const rec = (m: string) => opts.recovery?.get(m) ?? 100;
+  const have = new Map<string, number>();
+  const theme = new Set<string>();
+  const lifts = inWorkout.filter((id) => cat.exercises.find((e) => e.id === id)?.category !== "cardio");
+  for (const id of lifts) {
+    const compound = cat.exercises.find((e) => e.id === id)?.mechanic === "compound";
+    for (const m of primaries(cat, id)) {
+      theme.add(m);
+      have.set(m, (have.get(m) ?? 0) + (compound && DIRECT_WORK.has(m) ? 0.5 : 1));
+    }
+    for (const m of secondaries(cat, id)) have.set(m, (have.get(m) ?? 0) + 0.25);
+  }
+  const need = new Map<string, number>();
+  if (theme.size) {
+    for (const m of theme) need.set(m, MUSCLE_PRIORITY[m] ?? 0.8);
+    // Arms ride along with their compound partners: a push day wants triceps, a pull day biceps.
+    if (theme.has("chest") || theme.has("front_delts")) need.set("triceps", Math.max(need.get("triceps") ?? 0, 1));
+    if (theme.has("lats") || theme.has("upper_back")) need.set("biceps", Math.max(need.get("biceps") ?? 0, 1));
+    for (const m of theme) for (const b of BALANCE[m] ?? []) if (!theme.has(b)) need.set(b, Math.max(need.get(b) ?? 0, 0.5));
+    if (![...theme].some((m) => m === "abs" || m === "obliques")) need.set("abs", Math.max(need.get("abs") ?? 0, 0.6));
+  } else {
+    for (const [m, pr] of Object.entries(MUSCLE_PRIORITY)) need.set(m, pr * (rec(m) / 100));
+  }
+  const bases = new Set(inWorkout.map((id) => baseName(cat.exercises.find((e) => e.id === id)?.name ?? "")));
+  const pool = liftPool(cat, opts).filter((c) => !inWorkout.includes(c.ex.id) && !bases.has(c.base));
+  const scoreOf = (c: Candidate) => {
+    let gain = 0;
+    for (const m of c.primary) {
+      const gap = Math.max(0, (need.get(m) ?? 0) - (have.get(m) ?? 0));
+      // Muscles that aren't today's focus and are still tired from earlier days count for less.
+      gain += theme.has(m) ? gap : gap * Math.min(1, rec(m) / 80);
+    }
+    if (gain <= 0) return -Infinity;
+    let score = gain * 2;
+    if (theme.size && c.ex.mechanic !== "compound") score += 0.4; // late in a session, accessories fit best
+    if (!theme.size && c.ex.mechanic === "compound") score += 0.4;
+    if (c.ex.is_common || c.ex.owner_id) score += 0.5;
+    if (opts.prefs?.get(c.ex.id)?.favorite) score += 0.5;
+    if (STAPLES[c.ex.id]) score += STAPLES[c.ex.id] === 1 ? 0.4 : 0.5;
+    return score;
+  };
+  const firstScore = new Map(pool.map((c) => [c.ex.id, scoreOf(c)]));
+  // Greedy, like the generator: each pick covers some of what's needed, so the next one looks elsewhere.
+  const out: Ranked[] = [];
+  const left = [...pool];
+  const pickedBases = new Set<string>();
+  while (out.length < 8 && left.length) {
+    let bi = -1;
+    let bs = -Infinity;
+    left.forEach((c, i) => {
+      if (pickedBases.has(c.base)) return;
+      const sc = scoreOf(c);
+      if (sc > bs) [bi, bs] = [i, sc];
+    });
+    if (bi < 0 || bs === -Infinity) break;
+    const [c] = left.splice(bi, 1);
+    pickedBases.add(c.base);
+    out.push({ id: c.ex.id, score: bs });
+    for (const m of c.primary) have.set(m, (have.get(m) ?? 0) + 1);
+  }
+  // After the varied first picks, everything else that would help, best first (more choice for the AI).
+  const rest = left
+    .filter((c) => (firstScore.get(c.ex.id) ?? -Infinity) > -Infinity)
+    .map((c) => ({ id: c.ex.id, score: firstScore.get(c.ex.id)! }))
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+  return [...out, ...rest];
+}
+
+/** Top `n` from a ranking, skipping exercises that are just versions of one already picked. */
+export function topDistinct(cat: GenCatalog, ranked: Ranked[], n: number): string[] {
+  const names = new Map(cat.exercises.map((e) => [e.id, e.name]));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of ranked) {
+    const b = baseName(names.get(r.id) ?? r.id);
+    if (seen.has(b)) continue;
+    seen.add(b);
+    out.push(r.id);
+    if (out.length >= n) break;
+  }
+  return out;
 }
 
 export type Swap = { from: string; to: string | null };
