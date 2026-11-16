@@ -6,8 +6,10 @@ import { useData, useProfile } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
 import { newId, nowIso, type LocalDB } from "@/lib/db/dexie";
 import { defaultTargets } from "@/lib/defaults";
+import { isCardioExercise } from "@/lib/cardio";
+import { clearCardioTimer } from "@/lib/cardio-timer";
 import { estimate1RM } from "@/lib/units";
-import type { Exercise, SetType, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
+import type { CardioSession, Exercise, SetType, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 export type RestState = { endsAt: number; total: number; wexId: string } | null;
 
@@ -18,7 +20,7 @@ export function useWorkoutActions() {
   const goal = profile?.goal ?? "hypertrophy";
 
   const touch = useCallback(
-    async (table: "workouts" | "workout_exercises" | "sets", id: string) => {
+    async (table: "workouts" | "workout_exercises" | "sets" | "cardio_sessions", id: string) => {
       await markDirty(db, table, id);
       requestSync(4000);
     },
@@ -27,6 +29,13 @@ export function useWorkoutActions() {
 
   const newWex = useCallback(
     (workoutId: string, ex: Exercise | undefined, exerciseId: string, sortOrder: number, from?: Partial<WorkoutExercise>): WorkoutExercise => {
+      // Cardio is Start / Done: no reps and no rest between sets. One "set" means it's done once its results are saved.
+      if (isCardioExercise(ex)) {
+        return {
+          id: newId(), workout_id: workoutId, exercise_id: exerciseId, sort_order: sortOrder,
+          superset_group: null, notes: null, target_sets: 1, rep_min: null, rep_max: null, rest_sec: null,
+        };
+      }
       const t = defaultTargets(goal, ex?.mechanic ?? null);
       return {
         id: newId(),
@@ -107,14 +116,21 @@ export function useWorkoutActions() {
   const removeWex = useCallback(
     async (id: string) => {
       const sets = await db.sets.where("workout_exercise_id").equals(id).toArray();
-      await db.transaction("rw", [db.sets, db.workout_exercises, db.outbox, db.tombstones], async () => {
+      const wex = await db.workout_exercises.get(id);
+      const cardio = wex ? (await db.cardio_sessions.where("workout_id").equals(wex.workout_id).toArray()).filter((c) => c.workout_exercise_id === id) : [];
+      await db.transaction("rw", [db.sets, db.workout_exercises, db.cardio_sessions, db.outbox, db.tombstones], async () => {
         for (const s of sets) {
           await db.sets.delete(s.id);
           await markDeleted(db, "sets", s.id);
         }
+        for (const c of cardio) {
+          await db.cardio_sessions.delete(c.id);
+          await markDeleted(db, "cardio_sessions", c.id);
+        }
         await db.workout_exercises.delete(id);
         await markDeleted(db, "workout_exercises", id);
       });
+      await clearCardioTimer(db, { wexId: id });
       requestSync(4000);
     },
     [db, requestSync],
@@ -193,6 +209,15 @@ export function useWorkoutActions() {
     [db, requestSync, updateSet],
   );
 
+  /** Saves the results of a cardio exercise (or a standalone cardio session added to the workout). */
+  const logCardio = useCallback(
+    async (row: CardioSession) => {
+      await db.cardio_sessions.put(row);
+      await touch("cardio_sessions", row.id);
+    },
+    [db, touch],
+  );
+
   const updateWorkout = useCallback(
     async (id: string, changes: Partial<Workout>) => {
       await db.workouts.update(id, changes);
@@ -203,14 +228,17 @@ export function useWorkoutActions() {
 
   const finish = useCallback(
     async (id: string) => {
-      // Drop exercises with no sets so history stays clean.
+      // Drop exercises with no sets (or, for cardio, no results) so history stays clean.
       const wexs = await db.workout_exercises.where("workout_id").equals(id).toArray();
+      const cardioDone = new Set((await db.cardio_sessions.where("workout_id").equals(id).toArray()).map((c) => c.workout_exercise_id));
       for (const w of wexs) {
+        if (cardioDone.has(w.id)) continue;
         if ((await db.sets.where("workout_exercise_id").equals(w.id).count()) === 0) await removeWex(w.id);
       }
       await db.workouts.update(id, { ended_at: nowIso() });
       await markDirty(db, "workouts", id);
       await db.setMeta("rest", null);
+      await clearCardioTimer(db, { workoutId: id }); // a timer left running for this workout is dropped
       requestSync(0);
     },
     [db, removeWex, requestSync],
@@ -220,12 +248,13 @@ export function useWorkoutActions() {
     async (id: string) => {
       await deleteWorkout(db, id);
       await db.setMeta("rest", null);
+      await clearCardioTimer(db, { workoutId: id });
       requestSync(0);
     },
     [db, requestSync],
   );
 
-  return { start, addExercises, updateWex, removeWex, move, toggleSuperset, logSet, updateSet, deleteSet, updateWorkout, finish, discard };
+  return { start, addExercises, updateWex, removeWex, move, toggleSuperset, logSet, updateSet, deleteSet, logCardio, updateWorkout, finish, discard };
 }
 
 /** Deletes a workout with its exercises, sets and attached cardio. */

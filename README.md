@@ -54,6 +54,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261115000200_catalog_seed.sql` | Exercise catalog (generated) | ✓ |
 | `20261115000300_lock_trigger_functions.sql` | Security advisor fix | ✓ |
 | `20261116000100_phase1_logging.sql` | Workout name; per-exercise targets, rest, notes; onboarding flag; cardio notes | ✓ |
+| `20261116000200_cardio_in_workouts.sql` | Cardio results link to the cardio exercise in a workout (Start / Done) | ✓ |
 
 ## One-time setup
 

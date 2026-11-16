@@ -70,6 +70,22 @@ describe("sync", () => {
     expect((await db.profile.get(USER))?.default_rpe).toBe(8);
   });
 
+  it("uploads cardio results with the exercise they belong to, after that exercise", async () => {
+    const { client, calls } = fakeSupabase({ profiles: [{ id: USER, default_rpe: 8 }] });
+    await db.workouts.put({ id: "w1", name: null, gym_id: null, plan_day_id: null, started_at: "2026-11-16T10:00:00Z", ended_at: null, notes: null, source: "manual" });
+    await db.workout_exercises.put({ id: "we1", workout_id: "w1", exercise_id: "Running_Treadmill", sort_order: 0, superset_group: null, notes: null, target_sets: 1, rep_min: null, rep_max: null, rest_sec: null });
+    await db.cardio_sessions.put({ id: "c1", workout_id: "w1", workout_exercise_id: "we1", type: "run", started_at: "2026-11-16T10:05:00Z", duration_sec: 1800, distance: 3.1, avg_hr: 150, rpe: 7, intervals: null, notes: null });
+    await markDirty(db, "cardio_sessions", "c1");
+    await markDirty(db, "workout_exercises", "we1");
+    await markDirty(db, "workouts", "w1");
+
+    await syncNow(db, client, USER);
+
+    expect(calls.filter((c) => c.op === "upsert").map((c) => c.table)).toEqual(["workouts", "workout_exercises", "cardio_sessions"]);
+    const payload = (calls.find((c) => c.table === "cardio_sessions")!.payload as Record<string, unknown>[])[0];
+    expect(payload).toMatchObject({ id: "c1", workout_exercise_id: "we1", duration_sec: 1800, distance: 3.1 });
+  });
+
   it("keeps unsent local changes over server copies and sends deletes", async () => {
     const { client, calls } = fakeSupabase({
       profiles: [{ id: USER, default_rpe: 8 }],

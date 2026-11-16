@@ -6,7 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile, useRemove } from "@/lib/db/provider";
 import { useCatalog, useOpenWorkout } from "@/lib/hooks";
 import { deleteWorkout } from "@/lib/workout";
-import { cardioLabel } from "@/lib/cardio";
+import { cardioLabel, cardioSummary } from "@/lib/cardio";
 import { distanceUnit, formatDuration, formatWeight, toDisplayDistance, volumeLb, weightUnit } from "@/lib/units";
 import { Card, PageHeader, btn } from "@/components/ui/kit";
 
@@ -62,6 +62,7 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
       {workout.notes && <p className="rounded-2xl bg-card-2 px-4 py-3 text-base font-medium">📝 {workout.notes}</p>}
       {wexs.map((w) => {
         const list = sets.filter((s) => s.workout_exercise_id === w.id).sort((a, b) => a.set_no - b.set_no);
+        const linked = cardio.find((c) => c.workout_exercise_id === w.id);
         return (
           <Card key={w.id} className="p-4">
             <div className="flex items-baseline justify-between gap-2">
@@ -69,6 +70,12 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
               {w.superset_group !== null && <span className="display text-xs font-extrabold tracking-[0.08em] text-accent">SUPERSET {String.fromCharCode(64 + w.superset_group)}</span>}
             </div>
             {w.notes && <p className="mt-1 text-sm font-medium text-muted">📝 {w.notes}</p>}
+            {linked && (
+              <Link href={`/progress/session?cardio=${linked.id}`} className="mt-2 flex items-center justify-between gap-3 text-base">
+                <span className="num font-bold">{cardioSummary(linked, units)}</span>
+                <span className="num text-accent">{[linked.avg_hr ? `${linked.avg_hr} bpm` : null, linked.rpe ? `RPE ${linked.rpe}` : null].filter(Boolean).join(" · ")}</span>
+              </Link>
+            )}
             <ol className="mt-2 flex flex-col gap-1">
               {list.map((s) => (
                 <li key={s.id} className="num flex items-center gap-3 text-base">
@@ -81,10 +88,10 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
           </Card>
         );
       })}
-      {cardio.map((c) => (
+      {cardio.filter((c) => !c.workout_exercise_id).map((c) => (
         <Link key={c.id} href={`/progress/session?cardio=${c.id}`} className="rounded-3xl border border-line bg-card p-4">
           <div className="text-lg font-bold">{cardioLabel(c.type)}</div>
-          <div className="text-sm font-medium text-muted">{formatDuration(c.duration_sec)}{c.distance ? ` · ${toDisplayDistance(c.distance, units)} ${distanceUnit(units)}` : ""}</div>
+          <div className="text-sm font-medium text-muted">{cardioSummary(c, units)}</div>
         </Link>
       ))}
       <button

@@ -135,6 +135,8 @@ export type CardioType = "run" | "walk" | "bike" | "row" | "elliptical" | "stair
 export type CardioSession = {
   id: string;
   workout_id: string | null;
+  /** Set when this is the result of a cardio exercise in the workout (Start / Done), not a standalone log. */
+  workout_exercise_id?: string | null;
   type: CardioType;
   started_at: string;
   duration_sec: number;
