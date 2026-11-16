@@ -121,7 +121,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261119000200_skipped_sets.sql` | `workout_exercises.skipped_sets`: which planned sets were skipped | ✓ |
 | `20261120000100_ai_pick_kinds.sql` | AI usage log accepts `swap` and `suggest` requests | ✓ |
 | `20261120000200_recovery_times.sql` | Faster muscle recovery times (30 / 36 / 44 h; lower back 48 h) | ✓ |
-| `20261121000100_cardio_incline.sql` | `cardio_sessions.incline`: optional treadmill incline (% grade, 0–40) | pending |
+| `20261121000100_cardio_incline.sql` | `cardio_sessions.incline`: optional treadmill incline (% grade, 0–40) | ✓ |
 
 ## One-time setup
 
