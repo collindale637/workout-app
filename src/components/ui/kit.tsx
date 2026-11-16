@@ -58,11 +58,24 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+  // Freeze the page behind the sheet so swipes don't scroll it.
+  useEffect(() => {
+    if (!open) return;
+    const html = document.documentElement;
+    const prevHtml = html.style.overflow;
+    const prevBody = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtml;
+      document.body.style.overflow = prevBody;
+    };
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
-      <button className="absolute inset-0 bg-black/60" aria-label="Close" onClick={onClose} />
-      <div className="safe-bottom relative mx-auto max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] border-t border-line bg-card px-5 pt-3">
+      <button className="absolute inset-0 touch-none bg-black/60" aria-label="Close" onClick={onClose} />
+      <div className="safe-bottom relative mx-auto max-h-[85dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-line bg-card px-5 pt-3">
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
         {title && <h2 className="display mb-3 text-2xl font-extrabold">{title}</h2>}
         {children}
