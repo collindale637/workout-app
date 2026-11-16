@@ -78,7 +78,7 @@ export function ProfileForm() {
         </div>
         <div className="flex flex-col gap-2">
           <span className={label}>DEFAULT RPE (USED WHEN YOU SKIP IT)</span>
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-6 gap-1.5">
             {RPE_CHOICES.map((r) => (
               <button
                 key={r}

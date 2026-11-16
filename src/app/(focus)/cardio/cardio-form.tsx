@@ -93,7 +93,7 @@ function Form({ existing, workoutId, units, onSave, onCancel }: {
       </label>
       <div className="flex flex-col gap-2">
         <span className={label}>EFFORT (RPE, OPTIONAL)</span>
-        <div className="grid grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-6 gap-1.5">
           {RPE_CHOICES.map((r) => (
             <button key={r} type="button" onClick={() => setRpe(rpe === r ? null : r)} aria-pressed={rpe === r} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === r ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{r}</button>
           ))}
