@@ -78,7 +78,7 @@ body {
 
 /* Home-screen app: respect the notch and home indicator. */
 .safe-top {
-  padding-top: max(env(safe-area-inset-top), 16px);
+  padding-top: calc(env(safe-area-inset-top) + 14px);
 }
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 8px);
