@@ -9,6 +9,8 @@ import { FRESH_AT, RECOVERING_AT, type MuscleRecovery } from "@/lib/recovery";
 import { formatWeight } from "@/lib/units";
 import { BodyMap, STATE_COLOR, STATE_LABEL } from "@/components/body-map";
 import { Sheet } from "@/components/ui/kit";
+import { READY_AVG } from "@/lib/readiness";
+import { ReadinessTiles } from "./readiness-tiles";
 
 export function ago(iso: string | null, now = Date.now()) {
   if (!iso) return "Not in the last 7 days";
@@ -25,6 +27,7 @@ export function RecoveryScreen() {
   const { profile } = useProfile();
   const { set: setAdjustment, clear: clearAdjustment } = useFatigueAdjustments();
   const [selected, setSelected] = useState<string | null>(null);
+  const [lit, setLit] = useState<{ name: string; muscles: string[] } | null>(null);
 
   const list = useMemo(() => {
     if (!recovery || !catalog) return [];
@@ -44,17 +47,20 @@ export function RecoveryScreen() {
         <span className="text-xs font-bold tracking-[0.1em] text-muted">LAST 7 DAYS</span>
       </header>
 
-      <section className="rounded-3xl border border-line bg-card p-4">
-        <BodyMap recovery={recovery.map} selected={selected} onSelect={setSelected} />
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {(["fresh", "recovering", "fatigued"] as const).map((s) => (
-            <div key={s} className="flex flex-col items-center rounded-2xl bg-card-2 py-2">
-              <span className="display num text-2xl font-extrabold" style={{ color: STATE_COLOR[s] }}>{counts[s]}</span>
-              <span className="text-xs font-bold tracking-[0.08em] text-muted">{STATE_LABEL[s].toUpperCase()}</span>
-            </div>
+      <section className="flex flex-col gap-3 rounded-3xl border border-line bg-card p-4">
+        <ReadinessTiles recovery={recovery.map} lit={lit?.name ?? null} onLight={setLit} />
+        <BodyMap recovery={recovery.map} selected={selected} highlight={lit?.muscles ?? null} onSelect={(m) => { setLit(null); setSelected(m); }} />
+        <div className="flex justify-center gap-4 text-xs font-bold tracking-[0.06em] text-muted">
+          {(["fresh", "recovering", "fatigued"] as const).map((st) => (
+            <span key={st} className="flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: STATE_COLOR[st] }} />
+              {STATE_LABEL[st].toUpperCase()} {counts[st]}
+            </span>
           ))}
         </div>
-        <p className="mt-3 text-center text-sm font-medium text-muted">Tap a muscle for details. Fresh is {FRESH_AT}%+, fatigued is under {RECOVERING_AT}%.</p>
+        <p className="text-center text-sm font-medium text-muted">
+          Tap a muscle for details. Fresh is {FRESH_AT}%+, fatigued is under {RECOVERING_AT}%. A group is ready at {READY_AVG}%+ with no fatigued muscle.
+        </p>
       </section>
 
       <section className="flex flex-col">
