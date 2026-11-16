@@ -32,7 +32,7 @@ export function GymList() {
                 key={g.id}
                 href={`/more/gyms/edit?id=${g.id}`}
                 title={g.name}
-                detail={`${counts?.get(g.id) ?? 0} items · ${g.template ? TEMPLATE_LABELS[g.template].name : "Custom"}${g.is_default ? " · Default" : ""}`}
+                detail={`${counts?.get(g.id) ?? 0} items · ${g.template ? TEMPLATE_LABELS[g.template].name : "Custom"}${g.is_default ? " · Primary" : ""}`}
                 right={g.id === active?.id ? <span className="display text-xs font-extrabold tracking-[0.08em] text-accent">HERE NOW</span> : null}
               />
             ))}

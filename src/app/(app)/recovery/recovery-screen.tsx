@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { useCatalog } from "@/lib/hooks";
 import { useRecovery } from "@/lib/smart";
+import { useFatigueAdjustments } from "@/lib/fatigue-adjust";
 import { FRESH_AT, RECOVERING_AT, type MuscleRecovery } from "@/lib/recovery";
 import { formatWeight } from "@/lib/units";
 import { BodyMap, STATE_COLOR, STATE_LABEL } from "@/components/body-map";
@@ -22,6 +23,7 @@ export function RecoveryScreen() {
   const catalog = useCatalog();
   const recovery = useRecovery();
   const { profile } = useProfile();
+  const { set: setAdjustment, clear: clearAdjustment } = useFatigueAdjustments();
   const [selected, setSelected] = useState<string | null>(null);
 
   const list = useMemo(() => {
@@ -66,6 +68,7 @@ export function RecoveryScreen() {
                   <span className="block h-full rounded-full" style={{ width: `${Math.max(4, r.score)}%`, background: STATE_COLOR[r.state] }} />
                 </span>
                 <span className="display num w-12 text-right text-lg font-extrabold">{r.score}%</span>
+                {r.adjusted && <span className="-ml-1 text-xs text-accent-soft" role="img" aria-label="Adjusted by you" title="Adjusted by you">✎</span>}
               </button>
             </li>
           ))}
@@ -73,20 +76,105 @@ export function RecoveryScreen() {
       </section>
 
       <Sheet open={sel !== null && sel !== undefined} onClose={() => setSelected(null)} title={sel ? name(sel.muscleId) : undefined}>
-        {sel && <MuscleDetail r={sel} units={profile?.units ?? "lb"} sets={recovery.sets} defaultRpe={profile?.default_rpe ?? 8} exerciseName={(id) => catalog.byId.get(id)?.name ?? id} />}
+        {sel && (
+          <MuscleDetail
+            r={sel}
+            onAdjust={(score) => setAdjustment(sel.muscleId, score, sel.autoFatigue)}
+            onReset={() => clearAdjustment(sel.muscleId)}
+            units={profile?.units ?? "lb"} sets={recovery.sets} defaultRpe={profile?.default_rpe ?? 8} exerciseName={(id) => catalog.byId.get(id)?.name ?? id}
+          />
+        )}
       </Sheet>
     </main>
   );
 }
 
+/** Quick answers for "how does it feel?", as the recovery % they set. */
+export const FEEL_PRESETS = [
+  { label: "Wrecked", score: 15 },
+  { label: "Sore", score: 45 },
+  { label: "Fine", score: 75 },
+  { label: "Fresh", score: 100 },
+] as const;
+
+/** Tell the app how this muscle really feels; it fades back to the automatic estimate on its own. */
+function FeelSlider({ r, onAdjust, onReset }: { r: MuscleRecovery; onAdjust: (score: number) => void; onReset: () => void }) {
+  // While dragging the thumb shows the finger's position; once the real number changes (saved, a set gets
+  // logged, time passes, a reset) it goes back to following it.
+  const [drag, setDrag] = useState<number | null>(null);
+  const [seen, setSeen] = useState(r.score);
+  if (seen !== r.score) {
+    setSeen(r.score);
+    setDrag(null);
+  }
+  const value = drag ?? r.score;
+  const commit = () => {
+    if (drag !== null && drag !== r.score) onAdjust(drag);
+  };
+  return (
+    <section className="flex flex-col gap-1 rounded-2xl bg-card-2 p-4" aria-label="How does it feel">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="display text-base font-extrabold tracking-[0.08em] text-accent-soft uppercase">How does it feel?</h3>
+        <span className="text-xs font-bold text-muted">{r.adjusted ? `You set it · auto was ${r.autoScore}%` : `Auto: ${r.autoScore}%`}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={value}
+        onChange={(e) => setDrag(Number(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+        aria-label={`${value}% recovered`}
+        aria-valuetext={`${value}% recovered`}
+        className="feel-slider h-11 w-full"
+      />
+      <div className="-mt-1 flex justify-between px-0.5 text-xs font-bold text-muted" aria-hidden="true">
+        <span>Wrecked</span>
+        <span>Sore</span>
+        <span>Fine</span>
+        <span>Fresh</span>
+      </div>
+      <div className="mt-2 grid grid-cols-4 gap-1.5">
+        {FEEL_PRESETS.map((p) => {
+          const on = r.adjusted && r.score === p.score;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => onAdjust(p.score)}
+              aria-pressed={on}
+              className={`min-h-11 rounded-2xl border-2 text-sm font-bold ${on ? "border-accent-strong bg-primary/15 text-accent-soft" : "border-line bg-card text-muted"}`}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+      {r.adjusted && (
+        <button type="button" onClick={onReset} className="mt-1 min-h-11 self-start text-sm font-bold text-accent">
+          ↺ Back to automatic
+        </button>
+      )}
+      <p className="text-sm font-medium text-muted">Overrides the estimate for this muscle. It fades back the way recovery does, and sets you log after this still count.</p>
+    </section>
+  );
+}
+
 function MuscleDetail({
   r,
+  onAdjust,
+  onReset,
   sets,
   units,
   defaultRpe,
   exerciseName,
 }: {
   r: MuscleRecovery;
+  onAdjust: (score: number) => void;
+  onReset: () => void;
   sets: NonNullable<ReturnType<typeof useRecovery>>["sets"];
   units: "lb" | "kg";
   defaultRpe: number;
@@ -110,6 +198,7 @@ function MuscleDetail({
           </span>
         </div>
       </div>
+      <FeelSlider r={r} onAdjust={onAdjust} onReset={onReset} />
       {groups.size === 0 ? (
         <p className="text-base font-medium text-muted">No sets hit this muscle in the last 7 days.</p>
       ) : (

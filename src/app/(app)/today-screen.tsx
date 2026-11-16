@@ -10,7 +10,10 @@ import { useNow } from "@/lib/use-now";
 import { useCardioTimer } from "@/lib/cardio-timer";
 import { cardioElapsedSec, cardioLabel, cardioSummary } from "@/lib/cardio";
 import { formatDuration, formatWeight } from "@/lib/units";
+import { dateKey } from "@/lib/progress";
 import { GymSwitcher } from "@/components/gym-switcher";
+import { WeighInCard } from "@/components/weigh-in-card";
+import { QuickCardio } from "./quick-cardio";
 import { SyncBadge } from "@/components/sync-badge";
 import { UpNextCard } from "./up-next-card";
 
@@ -87,9 +90,13 @@ export function TodayScreen() {
         </div>
       </section>
 
+      <WeighInCard today={todayKey ? dateKey(new Date(todayKey)) : null} />
+
       <CardioTimerBanner />
 
       {open ? <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} /> : <UpNextCard hasGym={gyms.length > 0} />}
+
+      <QuickCardio />
 
       {lastWorkout?.kind === "workout" && !open && <LastWorkout item={lastWorkout} />}
 
