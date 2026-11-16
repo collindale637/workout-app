@@ -7,6 +7,8 @@ import { useData, useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog, useOpenWorkout } from "@/lib/hooks";
 import { useHistory } from "@/lib/history";
 import { useNow } from "@/lib/use-now";
+import { useCardioTimer } from "@/lib/cardio-timer";
+import { cardioElapsedSec, cardioLabel, cardioSummary } from "@/lib/cardio";
 import { formatDuration, formatWeight } from "@/lib/units";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { SyncBadge } from "@/components/sync-badge";
@@ -84,6 +86,8 @@ export function TodayScreen() {
         </div>
       </section>
 
+      <CardioTimerBanner />
+
       {open ? <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} /> : <StartCard hasGym={gyms.length > 0} />}
 
       {lastWorkout?.kind === "workout" && !open && <LastWorkout item={lastWorkout} />}
@@ -94,6 +98,22 @@ export function TodayScreen() {
         </Link>
       )}
     </main>
+  );
+}
+
+/** Shows while a cardio timer is going, so it can't get lost when you leave the screen. */
+function CardioTimerBanner() {
+  const { timer } = useCardioTimer();
+  const now = useNow(1000);
+  if (!timer) return null;
+  return (
+    <Link href={timer.wexId ? "/workout" : "/cardio"} className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border-2 border-accent-strong bg-primary/15 px-4 py-2">
+      <span className="flex min-w-0 flex-col">
+        <span className="text-xs font-bold tracking-[0.1em] text-accent-soft">{timer.stoppedAt ? "CARDIO · ENTER RESULTS" : "CARDIO RUNNING"}</span>
+        <span className="display truncate text-xl font-extrabold">{cardioLabel(timer.type)}</span>
+      </span>
+      <span className="display num text-3xl font-extrabold">{formatDuration(cardioElapsedSec(timer, now))}</span>
+    </Link>
   );
 }
 
@@ -153,13 +173,16 @@ function LastWorkout({ item }: { item: Extract<NonNullable<ReturnType<typeof use
   const rows = useLiveQuery(async () => {
     const wexs = await db.workout_exercises.where("workout_id").equals(item.workout.id).sortBy("sort_order");
     const sets = await db.sets.where("workout_exercise_id").anyOf(wexs.map((w) => w.id)).toArray();
+    const cardio = await db.cardio_sessions.where("workout_id").equals(item.workout.id).toArray();
     return wexs.map((w) => {
+      const session = cardio.find((c) => c.workout_exercise_id === w.id);
+      if (session) return { id: w.id, exerciseId: w.exercise_id, cardio: cardioSummary(session, units), sets: 0, reps: "", top: null as number | null };
       const ws = sets.filter((s) => s.workout_exercise_id === w.id && s.type !== "warmup");
       const top = ws.reduce<number | null>((m, s) => (s.weight !== null && (m === null || s.weight > m) ? s.weight : m), null);
       const reps = ws.map((s) => s.reps ?? 0);
-      return { id: w.id, exerciseId: w.exercise_id, sets: ws.length, reps: reps.length ? `${Math.min(...reps)}${Math.min(...reps) !== Math.max(...reps) ? `–${Math.max(...reps)}` : ""}` : "—", top };
+      return { id: w.id, exerciseId: w.exercise_id, cardio: null as string | null, sets: ws.length, reps: reps.length ? `${Math.min(...reps)}${Math.min(...reps) !== Math.max(...reps) ? `–${Math.max(...reps)}` : ""}` : "—", top };
     });
-  }, [db, item.workout.id]);
+  }, [db, item.workout.id, units]);
   if (!rows || !catalog) return null;
   return (
     <section className="flex flex-col">
@@ -172,7 +195,13 @@ function LastWorkout({ item }: { item: Extract<NonNullable<ReturnType<typeof use
           <li key={r.id} className="flex min-h-13 items-center justify-between gap-3">
             <span className="truncate text-base font-bold">{catalog.byId.get(r.exerciseId)?.name ?? r.exerciseId}</span>
             <span className="display num shrink-0 text-base font-bold text-muted">
-              {r.sets}×{r.reps} · <span className="text-ink">{formatWeight(r.top, units)}</span>
+              {r.cardio ? (
+                <span className="text-ink">{r.cardio}</span>
+              ) : (
+                <>
+                  {r.sets}×{r.reps} · <span className="text-ink">{formatWeight(r.top, units)}</span>
+                </>
+              )}
             </span>
           </li>
         ))}

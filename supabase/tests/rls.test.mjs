@@ -15,13 +15,16 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
 }
 // Re-run the seed to prove it's idempotent.
 await db.exec(readFileSync(root + "20261115000200_catalog_seed.sql", "utf8"));
+// ...and that the additive migrations are safe to run twice.
+await db.exec(readFileSync(root + "20261116000100_phase1_logging.sql", "utf8"));
+await db.exec(readFileSync(root + "20261116000200_cardio_in_workouts.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -50,6 +53,10 @@ r.push(["A logs workout", await as(A, `insert into workouts (id, gym_id) values 
 r.push(["A adds exercise", await as(A, `insert into workout_exercises (id, workout_id, exercise_id, sort_order) values ('cccccccc-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000001','Barbell_Bench_Press_-_Medium_Grip',1) returning id`)]);
 r.push(["A logs set (blank RPE)", await as(A, `insert into sets (workout_exercise_id, set_no, weight, reps) values ('cccccccc-0000-0000-0000-000000000001',1,185,8) returning rpe, weight`)]);
 r.push(["B can't add exercise to A's workout", await as(B, `insert into workout_exercises (workout_id, exercise_id) values ('bbbbbbbb-0000-0000-0000-000000000001','Pullups')`)]);
+r.push(["A saves cardio results for an exercise", await as(A, `insert into cardio_sessions (workout_id, workout_exercise_id, type, duration_sec, distance) values ('bbbbbbbb-0000-0000-0000-000000000001','cccccccc-0000-0000-0000-000000000001','run',1800,3.1) returning workout_exercise_id`)]);
+r.push(["B cannot attach cardio to A's exercise", await as(B, `insert into cardio_sessions (workout_exercise_id, type, duration_sec) values ('cccccccc-0000-0000-0000-000000000001','run',600)`)]);
+r.push(["B sees none of A's cardio", await as(B, `select count(*)::int n from cardio_sessions`)]);
+r.push(["standalone cardio still works", await as(B, `insert into cardio_sessions (type, duration_sec) values ('walk',900) returning id`)]);
 r.push(["B sees no sets", await as(B, `select count(*)::int n from sets`)]);
 r.push(["B cannot attach a set to A's exercise", await as(B, `insert into sets (workout_exercise_id, set_no, weight, reps) values ('cccccccc-0000-0000-0000-000000000001', 2, 1, 1)`)]);
 r.push(["B creates custom exercise", await as(B, `insert into exercises (name, owner_id) values ('My Move', '${B}') returning id`)]);
@@ -59,6 +66,10 @@ r.push(["catalog readable", await as(A, `select count(*)::int n from exercises w
 r.push(["anon sees nothing", await (async () => { await db.exec("set role anon"); try { return { rows: (await db.query("select count(*) from exercises")).rows }; } catch (e) { return { error: e.message }; } finally { await db.exec("reset role"); } })()]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
+
+// Deleting a cardio exercise from a workout takes its results with it (checked last so the checks above can use it).
+await db.exec(`delete from workout_exercises where id='cccccccc-0000-0000-0000-000000000001'`);
+console.log("cardio left after removing its exercise:", await one(`select count(*)::int n from cardio_sessions where workout_exercise_id is not null`));
 
 // Equipment-aware query: exercises doable at A's gym if it only has dumbbells + adjustable bench.
 await db.exec(`insert into gym_equipment (gym_id, equipment_id, owner_id) values ('aaaaaaaa-0000-0000-0000-000000000001','adjustable_bench','${A}')`);

@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
+import { newId } from "@/lib/db/dexie";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
+import { useCardioTimer } from "@/lib/cardio-timer";
+import { cardioElapsedSec, cardioLabel, cardioSummary, cardioTypeFor, isCardioExercise, type CardioTimer } from "@/lib/cardio";
 import { useExerciseHistory, useWorkoutActions, type RestState } from "@/lib/workout";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
@@ -13,8 +16,10 @@ import { RPE_SCALE } from "@/lib/defaults";
 import { estimate1RM, formatDuration, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { ExerciseInfo } from "@/components/exercise-info";
+import { CardioResultsForm, resultsFromSession } from "@/components/cardio-results";
 import { Sheet, btn, field, label } from "@/components/ui/kit";
-import type { SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
+import { CardioPanel } from "./cardio-panel";
+import type { CardioSession, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 type Draft = { weight: number | null; reps: number | null; rpe: number | null; type: SetType };
 
@@ -46,18 +51,32 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     return m;
   }, [sets]);
 
+  // Cardio exercises have no sets: they're done once their results are saved.
+  const cardioRows = useLiveQuery(() => db.cardio_sessions.where("workout_id").equals(workout.id).toArray(), [db, workout.id]);
+  const { timer, start: startTimer, stop: stopTimer, clear: clearTimer } = useCardioTimer();
+  const cardioByWex = useMemo(() => {
+    const m = new Map<string, CardioSession>();
+    for (const c of cardioRows ?? []) if (c.workout_exercise_id) m.set(c.workout_exercise_id, c);
+    return m;
+  }, [cardioRows]);
+  const extraCardio = (cardioRows ?? []).filter((c) => !c.workout_exercise_id).sort((a, b) => a.started_at.localeCompare(b.started_at));
+
   const working = (id: string) => (setsBy.get(id) ?? []).filter((s) => s.type !== "warmup").length;
-  const remaining = (w: WorkoutExercise) => working(w.id) < (w.target_sets ?? 3);
+  const isCardioWex = (w: WorkoutExercise) => isCardioExercise(catalog?.byId.get(w.exercise_id));
+  const done = (w: WorkoutExercise) => (isCardioWex(w) ? cardioByWex.has(w.id) : working(w.id) >= (w.target_sets ?? 3));
+  const remaining = (w: WorkoutExercise) => !done(w);
 
   const [currentId, setCurrentId] = useState<string | null>(null);
-  const current = wexs?.find((w) => w.id === currentId) ?? wexs?.find(remaining) ?? wexs?.[wexs.length - 1] ?? null;
+  const timerWexId = timer && timer.workoutId === workout.id ? timer.wexId : null;
+  const current =
+    wexs?.find((w) => w.id === currentId) ?? wexs?.find((w) => w.id === timerWexId) ?? wexs?.find(remaining) ?? wexs?.[wexs.length - 1] ?? null;
 
   const [draft, setDraft] = useState<Draft>({ weight: null, reps: null, rpe: null, type: "working" });
   const [draftFor, setDraftFor] = useState<string | null>(null);
 
   // Prefill the next set: your last set of this exercise today, else the same set from last time.
   useEffect(() => {
-    if (!current || !history) return;
+    if (!current || !history || isCardioWex(current)) return;
     const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}`;
     if (draftFor === key) return;
     const done = setsBy.get(current.id) ?? [];
@@ -73,7 +92,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       type: done.length === 0 && src === undefined ? "working" : "working",
     });
     setDraftFor(key);
-  }, [current, history, setsBy, draftFor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, history, setsBy, draftFor, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [picker, setPicker] = useState<null | { mode: "add" } | { mode: "swap"; wex: WorkoutExercise }>(null);
   const [menuFor, setMenuFor] = useState<WorkoutExercise | null>(null);
@@ -84,6 +103,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [allDoneOpen, setAllDoneOpen] = useState(false);
   const [typing, setTyping] = useState<null | "weight" | "reps">(null);
   const [typeOpen, setTypeOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(false);
 
   if (!wexs || !sets || !catalog) return null;
 
@@ -93,6 +113,14 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const elapsed = (now - new Date(workout.started_at).getTime()) / 1000;
   const isBodyweight = current ? (catalog.needs.get(current.exercise_id) ?? []).length === 0 : false;
   const restLeft = rest ? Math.max(0, Math.round((rest.endsAt - now) / 1000)) : 0;
+  const isCardio = current ? isCardioWex(current) : false;
+  const cardioType = ex ? cardioTypeFor(ex) : "other";
+  const currentSession = current ? (cardioByWex.get(current.id) ?? null) : null;
+  const wexTimer = timer && current && timer.wexId === current.id ? timer : null;
+  const otherTimer = timer && !wexTimer ? timer : null;
+  const liveTimer: CardioTimer | null = timer && timer.workoutId === workout.id ? timer : null;
+  const liftCount = wexs.filter((w) => !isCardioWex(w)).length;
+  const cardioCount = wexs.length - liftCount + extraCardio.length;
 
   async function startRest(seconds: number, wexId: string) {
     if (seconds <= 0) return db.setMeta("rest", null);
@@ -108,7 +136,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const finishedAll =
       draft.type !== "warmup" &&
       remaining(current) &&
-      wexs!.every((w) => (w.id === current.id ? doneNow : working(w.id)) >= (w.target_sets ?? 3));
+      wexs!.every((w) => (w.id === current.id ? doneNow >= (w.target_sets ?? 3) : done(w)));
     if (finishedAll) {
       await db.setMeta("rest", null);
       if ("vibrate" in navigator) navigator.vibrate?.([80, 60, 80]);
@@ -161,14 +189,39 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
           </Link>
           <span className="display num text-sm font-bold tracking-[0.12em] text-[#DCE4FF]">
-            {wexs.length ? `LIFT ${index + 1}/${wexs.length} · ` : ""}{formatDuration(elapsed)}
+            {wexs.length ? `${isCardio ? "CARDIO" : "LIFT"} ${index + 1}/${wexs.length} · ` : ""}{formatDuration(elapsed)}
           </span>
           <button type="button" onClick={() => setFinishOpen(true)} className="display h-10 rounded-full bg-white px-4 text-base font-extrabold tracking-[0.08em] text-primary">
             Finish
           </button>
         </div>
 
-        {current && ex ? (
+        {current && ex && isCardio ? (
+          <CardioPanel
+            name={ex.name}
+            type={cardioType}
+            session={currentSession}
+            timer={wexTimer}
+            otherTimer={otherTimer}
+            now={now}
+            units={units}
+            warning={gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) ? `Heads up: ${gym.name} may not have the equipment for this. Swap?` : null}
+            onInfo={() => setInfoFor(current.exercise_id)}
+            onStart={() => void startTimer(cardioType, { workoutId: workout.id, wexId: current.id })}
+            onDone={async () => {
+              await stopTimer();
+              setResultsOpen(true);
+            }}
+            onEnterResults={() => setResultsOpen(true)}
+            onDiscardTimer={async () => {
+              if (confirm("Throw this cardio timer away?")) await clearTimer();
+            }}
+            onGoToOther={() => {
+              if (otherTimer?.wexId) setCurrentId(otherTimer.wexId);
+              else router.push("/cardio");
+            }}
+          />
+        ) : current && ex ? (
           <>
             <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-2 block text-left">
               <h1 className="display text-[40px] leading-[0.95] font-extrabold">{ex.name}</h1>
@@ -222,7 +275,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       </section>
 
       <div className="flex flex-col gap-3 px-5 pt-4">
-        {current && (
+        {current && !isCardio && (
           <>
             <SetTable
               done={doneSets}
@@ -244,19 +297,34 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           {wexs.map((w, i) => {
             const e = catalog.byId.get(w.exercise_id);
             const n = working(w.id);
+            const cardioWex = isCardioWex(w);
+            const cardioDone = cardioByWex.get(w.id);
+            const running = timer && timer.wexId === w.id ? timer : null;
             const linkedAbove = i > 0 && w.superset_group !== null && wexs[i - 1].superset_group === w.superset_group;
             return (
               <li key={w.id} className={linkedAbove ? "-mt-2" : ""}>
                 {linkedAbove && <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" />}
                 <div className={`flex min-h-16 items-center gap-2 rounded-2xl border-2 pr-1 ${w.id === current?.id ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}>
                   <button type="button" onClick={() => setCurrentId(w.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left">
-                    <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${n >= (w.target_sets ?? 3) ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
-                      {n >= (w.target_sets ?? 3) ? "✓" : i + 1}
+                    <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${done(w) ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
+                      {done(w) ? "✓" : i + 1}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-base font-bold">{e?.name ?? w.exercise_id}</span>
                       <span className="block truncate text-sm font-medium text-muted">
-                        {n}/{w.target_sets ?? 3} sets · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
+                        {cardioWex ? (
+                          cardioDone
+                            ? cardioSummary(cardioDone, units)
+                            : running
+                              ? running.stoppedAt
+                                ? `${formatDuration(cardioElapsedSec(running, now))} · enter results`
+                                : `Running ${formatDuration(cardioElapsedSec(running, now))}`
+                              : "Cardio · tap to start"
+                        ) : (
+                          <>
+                            {n}/{w.target_sets ?? 3} sets · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
+                          </>
+                        )}
                         {w.notes ? " · 📝" : ""}
                       </span>
                     </span>
@@ -268,6 +336,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               </li>
             );
           })}
+          {extraCardio.map((c) => (
+            <li key={c.id}>
+              <Link href={`/progress/session?cardio=${c.id}`} className="flex min-h-16 items-center gap-2 rounded-2xl border-2 border-line bg-card pr-4">
+                <span className="display ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-base font-extrabold text-white">✓</span>
+                <span className="min-w-0 py-2 pl-1">
+                  <span className="block truncate text-base font-bold">{cardioLabel(c.type)}</span>
+                  <span className="block truncate text-sm font-medium text-muted">{cardioSummary(c, units)}</span>
+                </span>
+              </Link>
+            </li>
+          ))}
         </ul>
         <div className="grid grid-cols-2 gap-2">
           <button type="button" className={btn.secondary} onClick={() => setPicker({ mode: "add" })}>+ Exercise</button>
@@ -314,6 +393,11 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             wex={menuFor}
             isLast={wexs[wexs.length - 1]?.id === menuFor.id}
             isFirst={wexs[0]?.id === menuFor.id}
+            isCardio={isCardioWex(menuFor)}
+            nextIsCardio={(() => {
+              const next = wexs[wexs.findIndex((w) => w.id === menuFor.id) + 1];
+              return next ? isCardioWex(next) : false;
+            })()}
             onClose={() => setMenuFor(null)}
             onSwap={() => {
               setPicker({ mode: "swap", wex: menuFor });
@@ -330,6 +414,60 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             actions={actions}
             workoutId={workout.id}
           />
+        )}
+      </Sheet>
+
+      <Sheet open={resultsOpen && isCardio} onClose={() => setResultsOpen(false)} title={`${cardioLabel(cardioType)} results`}>
+        {current && isCardio && (
+          <CardioResultsForm
+            key={`${current.id}:${currentSession?.id ?? (wexTimer?.stoppedAt ? "timer" : "new")}`}
+            type={cardioType}
+            units={units}
+            initial={
+              currentSession
+                ? resultsFromSession(currentSession)
+                : wexTimer?.stoppedAt
+                  ? { durationSec: cardioElapsedSec(wexTimer, now), startedAt: new Date(wexTimer.startedAt) }
+                  : undefined
+            }
+            submitLabel={currentSession ? "Save changes" : "Save cardio"}
+            onSubmit={async (r) => {
+              await actions.logCardio({
+                id: currentSession?.id ?? newId(),
+                workout_id: workout.id,
+                workout_exercise_id: current.id,
+                type: cardioType,
+                started_at: r.startedAt,
+                duration_sec: r.durationSec,
+                distance: r.distance,
+                avg_hr: r.avgHr,
+                rpe: r.rpe,
+                intervals: currentSession?.intervals ?? null,
+                notes: r.notes,
+              });
+              if (wexTimer) await clearTimer();
+              setResultsOpen(false);
+              if (currentSession) return;
+              // Same as finishing a set: on to the next thing, or say well done.
+              const next = wexs.slice(index + 1).find(remaining) ?? wexs.find((w) => w.id !== current.id && remaining(w));
+              if (next) setCurrentId(next.id);
+              else setAllDoneOpen(true);
+            }}
+          >
+            {wexTimer && (
+              <button
+                type="button"
+                className={`${btn.ghost} text-danger`}
+                onClick={async () => {
+                  if (!confirm("Throw this cardio away?")) return;
+                  await clearTimer();
+                  setResultsOpen(false);
+                }}
+              >
+                Discard
+              </button>
+            )}
+          </CardioResultsForm>
         )}
       </Sheet>
 
@@ -411,7 +549,14 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           </div>
           <h2 className="display text-3xl font-extrabold">Nice work!</h2>
           <p className="text-base font-medium text-muted">
-            Every planned set is done: {wexs.length} {wexs.length === 1 ? "lift" : "lifts"}, {[...setsBy.values()].flat().filter((x) => x.type !== "warmup").length} sets in {formatDuration(elapsed)}.
+            Everything planned is done:{" "}
+            {[
+              liftCount > 0 ? `${liftCount} ${liftCount === 1 ? "lift" : "lifts"} (${[...setsBy.values()].flat().filter((x) => x.type !== "warmup").length} sets)` : null,
+              cardioCount > 0 ? `${cardioCount} cardio` : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}{" "}
+            in {formatDuration(elapsed)}.
           </p>
         </div>
         <div className="mt-3 flex flex-col gap-2">
@@ -438,6 +583,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           setsBy={setsBy}
           units={units}
           elapsed={elapsed}
+          cardio={cardioRows ?? []}
+          timer={liveTimer}
           bestBefore={history}
           names={catalog.byId}
           onSave={async () => {
@@ -620,9 +767,9 @@ function SetTable({
 }
 
 function ExerciseMenu({
-  wex, isFirst, isLast, onClose, onSwap, onNotes, onInfo, actions, workoutId,
+  wex, isFirst, isLast, isCardio, nextIsCardio, onClose, onSwap, onNotes, onInfo, actions, workoutId,
 }: {
-  wex: WorkoutExercise; isFirst: boolean; isLast: boolean; onClose: () => void; onSwap: () => void; onNotes: () => void; onInfo: () => void;
+  wex: WorkoutExercise; isFirst: boolean; isLast: boolean; isCardio: boolean; nextIsCardio: boolean; onClose: () => void; onSwap: () => void; onNotes: () => void; onInfo: () => void;
   actions: ReturnType<typeof useWorkoutActions>; workoutId: string;
 }) {
   const [sets, setSets] = useState(wex.target_sets ?? 3);
@@ -642,6 +789,7 @@ function ExerciseMenu({
   );
   return (
     <div className="flex flex-col gap-2">
+      {!isCardio && (
       <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card-2 p-3">
         {small(sets, setSets, "SETS")}
         {small(rest, setRest, "REST", 15)}
@@ -658,10 +806,11 @@ function ExerciseMenu({
           Save targets
         </button>
       </div>
+      )}
       <button type="button" className={item} onClick={onSwap}>⇄ Swap exercise</button>
       <button type="button" className={item} onClick={onInfo}>ⓘ How to do it</button>
       <button type="button" className={item} onClick={onNotes}>📝 {wex.notes ? "Edit notes" : "Add notes"}</button>
-      {(!isLast || wex.superset_group !== null) && (
+      {!isCardio && ((!isLast && !nextIsCardio) || wex.superset_group !== null) && (
         <button type="button" className={item} onClick={async () => { await actions.toggleSuperset(workoutId, wex.id); onClose(); }}>
           🔗 {wex.superset_group !== null ? "Remove from superset" : "Superset with the next exercise"}
         </button>
@@ -670,7 +819,7 @@ function ExerciseMenu({
         <button type="button" disabled={isFirst} className={`${item} justify-center disabled:opacity-40`} onClick={async () => { await actions.move(workoutId, wex.id, -1); onClose(); }}>↑ Move up</button>
         <button type="button" disabled={isLast} className={`${item} justify-center disabled:opacity-40`} onClick={async () => { await actions.move(workoutId, wex.id, 1); onClose(); }}>↓ Move down</button>
       </div>
-      <button type="button" className={`${item} text-danger`} onClick={async () => { if (confirm("Remove this exercise and its sets?")) { await actions.removeWex(wex.id); onClose(); } }}>✕ Remove</button>
+      <button type="button" className={`${item} text-danger`} onClick={async () => { if (confirm(isCardio ? "Remove this cardio and its results?" : "Remove this exercise and its sets?")) { await actions.removeWex(wex.id); onClose(); } }}>✕ Remove</button>
     </div>
   );
 }
@@ -732,9 +881,10 @@ function NumberForm({ initial, decimal, allowBlank, blankLabel, onSave }: { init
 }
 
 function FinishSummary({
-  workout, wexs, setsBy, units, elapsed, bestBefore, names, onSave, onDiscard, onClose,
+  workout, wexs, setsBy, units, elapsed, cardio, timer, bestBefore, names, onSave, onDiscard, onClose,
 }: {
   workout: Workout; wexs: WorkoutExercise[]; setsBy: Map<string, WorkoutSet[]>; units: Units; elapsed: number;
+  cardio: CardioSession[]; timer: CardioTimer | null;
   bestBefore: Map<string, { bestWeight: number; best1RM: number }> | undefined; names: Map<string, { name: string }>;
   onSave: () => void; onDiscard: () => void; onClose: () => void;
 }) {
@@ -770,7 +920,22 @@ function FinishSummary({
           <ul className="mt-1 text-sm font-semibold">{prs.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
       )}
-      {workingSets === 0 && <p className="text-sm font-semibold text-warn">No sets logged yet. Exercises without sets are left out when you save.</p>}
+      {cardio.length > 0 && (
+        <ul className="rounded-2xl bg-card-2 px-3 py-2 text-sm font-semibold">
+          {cardio.map((c) => (
+            <li key={c.id} className="flex justify-between gap-3 py-1">
+              <span>{cardioLabel(c.type)}</span>
+              <span className="num text-muted">{cardioSummary(c, units)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {timer && (
+        <p className="text-sm font-semibold text-warn">
+          Your {cardioLabel(timer.type).toLowerCase()} timer {timer.stoppedAt ? "has no results yet" : "is still running"}. Tap Keep going to finish it, or it won&apos;t be saved.
+        </p>
+      )}
+      {workingSets === 0 && cardio.length === 0 && <p className="text-sm font-semibold text-warn">Nothing logged yet. Exercises without sets or results are left out when you save.</p>}
       <button type="button" className={btn.primary} onClick={onSave}>Save workout</button>
       <button type="button" className={btn.secondary} onClick={onClose}>Keep going</button>
       <button type="button" className={`${btn.ghost} text-danger`} onClick={onDiscard}>Discard workout</button>
