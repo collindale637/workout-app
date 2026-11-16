@@ -22,8 +22,10 @@ export function MoreMenu() {
   }
 
   return (
-    <main className="mt-4 flex flex-col gap-4">
-      <h1 className="display text-4xl font-extrabold">More</h1>
+    <main className="mt-2 flex flex-col gap-4">
+      <header className="flex h-11 items-center">
+        <h1 className="display text-4xl font-extrabold">More</h1>
+      </header>
       <Card className="divide-y divide-line overflow-hidden">
         <RowLink href="/more/profile" title="Profile & settings" detail={`${profile?.display_name ?? "You"} · ${profile ? GOAL_LABELS[profile.goal] : ""} · RPE ${profile?.default_rpe ?? 8} default`} />
         <RowLink href="/more/gyms" title="Gyms" detail={`${gymCount ?? 0} gym${gymCount === 1 ? "" : "s"} · equipment checklists`} />
