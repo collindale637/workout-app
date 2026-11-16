@@ -266,7 +266,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <button type="button" onClick={log} className={`${btn.primary} h-16 text-2xl`}>
               Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
             </button>
-            <LastTime history={history?.get(current.exercise_id)} units={units} defaultRpe={defaultRpe} nextSet={working(current.id)} />
+            <LastTime history={history?.get(current.exercise_id)} units={units} nextSet={working(current.id)} />
           </>
         )}
 
@@ -513,37 +513,33 @@ function lastTimeLabel(iso: string) {
   const days = Math.round((day(new Date()) - day(new Date(iso))) / 86_400_000);
   if (days <= 0) return "Today";
   if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
+  if (days < 7) return `${days}d ago`;
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-/** Last session's working sets for this lift, one tile per set; the set you're about to do is highlighted. */
-function LastTime({ history, units, defaultRpe, nextSet }: { history?: { last: WorkoutSet[]; lastDate: string | null }; units: Units; defaultRpe: number; nextSet: number }) {
+/** Last session's working sets as one compact row of chips; the set you're about to do is outlined. */
+function LastTime({ history, units, nextSet }: { history?: { last: WorkoutSet[]; lastDate: string | null }; units: Units; nextSet: number }) {
   const sets = history?.last.filter((s) => s.type !== "warmup") ?? [];
   if (!history?.lastDate || !sets.length) return <p className="text-center text-sm font-medium text-muted">First time logging this one.</p>;
   return (
-    <section className="rounded-3xl border border-line bg-card p-4" aria-label="Last time">
-      <div className="mb-3 flex items-baseline justify-between">
-        <span className="text-xs font-bold tracking-[0.12em] text-muted">LAST TIME</span>
-        <span className="text-sm font-semibold text-muted">{lastTimeLabel(history.lastDate)}</span>
+    <section className="flex items-center gap-3" aria-label="Last time">
+      <div className="w-[4.5rem] shrink-0 leading-tight">
+        <div className="text-xs font-bold tracking-[0.12em] text-muted">LAST</div>
+        <div className="text-sm font-medium text-muted">{lastTimeLabel(history.lastDate)}</div>
       </div>
-      <ol className="grid grid-cols-[repeat(auto-fill,minmax(5.25rem,1fr))] gap-2">
+      <ol className="flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {sets.map((s, i) => {
           const isNext = i === Math.min(nextSet, sets.length - 1);
-          const w = s.weight === null ? "BW" : formatWeight(s.weight, units);
-          // Heavier lifts like 225 × 10 get slightly smaller numbers so the tile never crowds.
-          const long = w.length + String(s.reps ?? "—").length > 4;
           return (
-            <li key={s.id} className={`flex flex-col items-center rounded-2xl border-2 px-2 py-2 ${isNext ? "border-accent-strong bg-primary/15" : "border-transparent bg-card-2"}`}>
-              <span className={`text-[11px] font-bold tracking-[0.1em] ${isNext ? "text-accent-soft" : "text-muted"}`}>{s.type === "drop" ? "DROP" : `SET ${i + 1}`}</span>
-              <span className={`display num leading-tight font-extrabold whitespace-nowrap text-ink ${long ? "text-xl" : "text-2xl"}`}>
-                {w}
-                <span className={`text-muted ${long ? "text-base" : "text-lg"}`}> × </span>
-                {s.reps ?? "—"}
-              </span>
-              <span className="text-xs font-semibold text-muted">
-                {s.weight === null ? "" : `${weightUnit(units)} · `}RPE {s.rpe ?? defaultRpe}
-              </span>
+            <li
+              key={s.id}
+              aria-current={isNext ? "step" : undefined}
+              className={`num flex h-9 shrink-0 items-center rounded-xl px-3 text-sm font-bold whitespace-nowrap ${
+                isNext ? "bg-primary/20 text-accent-soft ring-2 ring-accent-strong ring-inset" : "bg-card-2 text-ink"
+              }`}
+            >
+              {s.type === "drop" && <span className="mr-1 text-muted">D</span>}
+              {s.weight === null ? "BW" : formatWeight(s.weight, units)}×{s.reps ?? "—"}
             </li>
           );
         })}
