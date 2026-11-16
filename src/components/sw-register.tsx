@@ -9,6 +9,12 @@ export function ServiceWorkerRegister() {
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker
       .register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .then(async (reg) => {
+        // Refresh the saved copies of every screen so offline matches the latest version.
+        if (!navigator.onLine) return;
+        const sw = reg.active ?? (await navigator.serviceWorker.ready).active;
+        sw?.postMessage("warm");
+      })
       .catch(() => undefined);
   }, []);
   return null;

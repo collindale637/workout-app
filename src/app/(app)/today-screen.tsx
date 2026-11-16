@@ -2,145 +2,181 @@
 
 import Link from "next/link";
 import { useMemo, useSyncExternalStore } from "react";
-import { useProfile } from "@/lib/profile";
+import { useLiveQuery } from "dexie-react-hooks";
+import { useData, useProfile } from "@/lib/db/provider";
+import { useActiveGym, useCatalog, useOpenWorkout } from "@/lib/hooks";
+import { useHistory } from "@/lib/history";
+import { useNow } from "@/lib/use-now";
+import { formatDuration, formatWeight } from "@/lib/units";
+import { GymSwitcher } from "@/components/gym-switcher";
+import { SyncBadge } from "@/components/sync-badge";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
-
 const noop = () => () => {};
+
 /** Today's date as a stable string; null while prerendering so the shell stays static. */
 function useTodayKey() {
   return useSyncExternalStore(noop, () => new Date().toDateString(), () => null);
 }
 
-function useThisWeek() {
+export function TodayScreen() {
+  const { profile } = useProfile();
   const todayKey = useTodayKey();
-  return useMemo(() => {
-    if (!todayKey) {
-      return { days: DAY_LETTERS.map((letter) => ({ letter, date: "", isToday: false })), label: "" };
-    }
+  const open = useOpenWorkout();
+  const history = useHistory(60);
+  const { gyms } = useActiveGym();
+  const firstName = profile?.display_name?.split(" ")[0];
+
+  const week = useMemo(() => {
+    if (!todayKey) return { days: DAY_LETTERS.map((letter) => ({ letter, date: "", isToday: false, done: false })), label: "", doneCount: 0 };
     const today = new Date(todayKey);
     const start = new Date(today);
     start.setDate(today.getDate() - today.getDay());
+    const doneDays = new Set((history ?? []).map((h) => new Date(h.at).toDateString()));
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
-      return { date: String(d.getDate()), isToday: d.toDateString() === todayKey, letter: DAY_LETTERS[i] };
+      return { date: String(d.getDate()), isToday: d.toDateString() === todayKey, letter: DAY_LETTERS[i], done: doneDays.has(d.toDateString()) };
     });
-    const label = today
-      .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-      .replace(",", " ·")
-      .toUpperCase();
-    return { days, label };
-  }, [todayKey]);
-}
+    const label = today.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).replace(",", " ·").toUpperCase();
+    return { days, label, doneCount: days.filter((d) => d.done).length };
+  }, [todayKey, history]);
 
-export function TodayScreen() {
-  const { state } = useProfile();
-  const { days, label } = useThisWeek();
-  const profile = state.status === "ready" ? state.profile : null;
-  const firstName = profile?.display_name?.split(" ")[0];
-  const hasProfile = Boolean(profile?.display_name);
+  const lastWorkout = history?.find((h) => h.kind === "workout");
 
   return (
     <main className="flex flex-col gap-4 pt-2">
-      <header className="flex h-11 items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-xs font-bold tracking-[0.1em] text-muted">
-            {label}
-          </span>
-          <span className="display text-2xl font-extrabold leading-none">
-            {firstName ? `Hey, ${firstName}` : "Hey there"}
-          </span>
+      <header className="flex h-11 items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col">
+          <span className="text-xs font-bold tracking-[0.1em] text-muted">{week.label}</span>
+          <span className="display truncate text-2xl leading-none font-extrabold">{firstName ? `Hey, ${firstName}` : "Hey there"}</span>
         </div>
-        <span className="display flex h-10 items-center gap-1.5 rounded-full border-2 border-accent-strong/70 bg-card px-3.5 text-[15px] font-bold tracking-[0.06em] text-accent-soft">
-          No gym yet
-        </span>
+        <GymSwitcher />
       </header>
+
+      <SyncBadge />
 
       <section aria-label="This week" className="flex flex-col gap-2">
         <div className="flex justify-between text-xs font-bold tracking-[0.1em] text-muted">
           <span>THIS WEEK</span>
-          <span>0 DONE</span>
+          <span>
+            {week.doneCount} OF {profile?.days_per_week ?? 4} DONE
+          </span>
         </div>
         <div className="grid grid-cols-7 gap-1.5">
-          {days.map((d, i) => (
+          {week.days.map((d, i) => (
             <div key={i} className="flex flex-col items-center gap-1">
               <span className={`text-xs font-bold ${d.isToday ? "text-accent" : "text-muted"}`}>{d.letter}</span>
               <span
-               
                 className={`display flex h-10 w-10 items-center justify-center rounded-full text-base ${
-                  d.isToday ? "border-[3px] border-accent-strong font-extrabold text-accent-soft" : "bg-card-2 font-bold text-muted"
-                }`}
+                  d.done ? "bg-primary font-extrabold text-white" : d.isToday ? "border-[3px] border-accent-strong font-extrabold text-accent-soft" : "bg-card-2 font-bold text-muted"
+                } ${d.done && d.isToday ? "ring-[3px] ring-accent-strong ring-offset-2 ring-offset-bg" : ""}`}
+                aria-label={d.done ? "Trained" : undefined}
               >
-                {d.date}
+                {d.done ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>
+                ) : (
+                  d.date
+                )}
               </span>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">UP NEXT</span>
-          <span className="text-[13px] font-semibold text-[#DCE4FF]">Phase 0 · foundation</span>
-        </div>
-        <h1 className="display text-[64px] font-extrabold leading-[0.85] tracking-[-0.02em]">No plan yet</h1>
-        <p className="text-[15px] font-medium text-[#DCE4FF]">
-          Set up your gym and pick a split, and your first workout shows up here.
-        </p>
-        <div className="mt-1 flex gap-2">
-          <button
-            disabled
-            className="display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full bg-white text-xl font-extrabold tracking-[0.08em] text-primary opacity-60"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
-            Start
-          </button>
-          <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/60" aria-label="Customize with AI (coming in Phase 3)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.25" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>
-          </span>
-        </div>
-      </section>
+      {open ? <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} /> : <StartCard hasGym={gyms.length > 0} />}
 
-      <section className="flex flex-col">
-        <div className="flex items-baseline justify-between pb-2">
-          <h2 className="display text-xl font-extrabold">Getting set up</h2>
-        </div>
-        <ul className="flex flex-col divide-y divide-line rounded-3xl border border-line bg-card">
-          <SetupRow done label="Signed in" detail="Invite-only family account" />
-          <SetupRow done={hasProfile} label="Your profile" detail="Name, goal, units, default RPE, password" href="/more" />
-          <SetupRow label="Your gyms" detail="Home, main gym, travel — with equipment" phase="Phase 1" />
-          <SetupRow label="Your plan" detail="Pick a split and goal" phase="Phase 2" />
-        </ul>
-        {state.status === "error" && (
-          <p className="mt-3 text-sm font-semibold text-warn">Couldn&apos;t load your profile: {state.message}</p>
-        )}
-      </section>
+      {lastWorkout?.kind === "workout" && !open && <LastWorkout item={lastWorkout} />}
+
+      {gyms.length === 0 && (
+        <Link href="/more/gyms/edit?new=1" className="rounded-3xl border-2 border-dashed border-accent-strong/60 p-4 text-base font-bold text-accent">
+          + Set up your gym so exercise lists match your equipment
+        </Link>
+      )}
     </main>
   );
 }
 
-function SetupRow({ label, detail, done, href, phase }: { label: string; detail: string; done?: boolean; href?: string; phase?: string }) {
-  const body = (
-    <div className="flex min-h-16 items-center gap-3 px-4 py-3">
-      <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${done ? "bg-primary" : "border-2 border-line"}`}
-        aria-label={done ? "Done" : "Not done"}
-      >
-        {done && (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>
-        )}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-base font-bold">{label}</div>
-        <div className="text-sm font-medium text-muted">{detail}</div>
+function InProgressCard({ workoutId, name, startedAt }: { workoutId: string; name: string | null; startedAt: string }) {
+  const { db } = useData();
+  const now = useNow(1000);
+  const count = useLiveQuery(async () => {
+    const wexs = await db.workout_exercises.where("workout_id").equals(workoutId).toArray();
+    const sets = await db.sets.where("workout_exercise_id").anyOf(wexs.map((w) => w.id)).count();
+    return { exercises: wexs.length, sets };
+  }, [db, workoutId]);
+  return (
+    <section className="flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">IN PROGRESS</span>
+        <span className="display num text-lg font-extrabold">{formatDuration((now - new Date(startedAt).getTime()) / 1000)}</span>
       </div>
-      {phase ? (
-        <span className="display text-xs font-bold tracking-[0.08em] text-muted">{phase}</span>
-      ) : href && !done ? (
-        <span className="display text-sm font-extrabold tracking-[0.06em] text-accent">Set up →</span>
-      ) : null}
-    </div>
+      <h1 className="display text-[56px] leading-[0.85] font-extrabold tracking-[-0.02em]">{name ?? "Workout"}</h1>
+      <p className="text-[15px] font-semibold text-[#DCE4FF]">{count ? `${count.exercises} exercises · ${count.sets} sets logged` : " "}</p>
+      <Link href="/workout" className="display flex h-[52px] items-center justify-center gap-2.5 rounded-full bg-white text-xl font-extrabold tracking-[0.08em] text-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
+        Resume
+      </Link>
+    </section>
   );
-  return <li>{href ? <Link href={href}>{body}</Link> : body}</li>;
+}
+
+function StartCard({ hasGym }: { hasGym: boolean }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">UP NEXT</span>
+        <span className="text-[13px] font-semibold text-[#DCE4FF]">Smart plans arrive in Phase 2</span>
+      </div>
+      <h1 className="display text-[64px] leading-[0.85] font-extrabold tracking-[-0.02em]">Your call</h1>
+      <p className="text-[15px] font-medium text-[#DCE4FF]">
+        Build a workout from {hasGym ? "what your gym has" : "the exercise library"}, repeat a past one, or log cardio.
+      </p>
+      <div className="mt-1 flex gap-2">
+        <Link href="/workout" className="display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full bg-white text-xl font-extrabold tracking-[0.08em] text-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
+          Start
+        </Link>
+        <Link href="/cardio" className="display flex h-[52px] items-center justify-center rounded-full border-2 border-white px-5 text-lg font-extrabold tracking-[0.08em]">
+          Cardio
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function LastWorkout({ item }: { item: Extract<NonNullable<ReturnType<typeof useHistory>>[number], { kind: "workout" }> }) {
+  const { db } = useData();
+  const { profile } = useProfile();
+  const catalog = useCatalog();
+  const units = profile?.units ?? "lb";
+  const rows = useLiveQuery(async () => {
+    const wexs = await db.workout_exercises.where("workout_id").equals(item.workout.id).sortBy("sort_order");
+    const sets = await db.sets.where("workout_exercise_id").anyOf(wexs.map((w) => w.id)).toArray();
+    return wexs.map((w) => {
+      const ws = sets.filter((s) => s.workout_exercise_id === w.id && s.type !== "warmup");
+      const top = ws.reduce<number | null>((m, s) => (s.weight !== null && (m === null || s.weight > m) ? s.weight : m), null);
+      const reps = ws.map((s) => s.reps ?? 0);
+      return { id: w.id, exerciseId: w.exercise_id, sets: ws.length, reps: reps.length ? `${Math.min(...reps)}${Math.min(...reps) !== Math.max(...reps) ? `–${Math.max(...reps)}` : ""}` : "—", top };
+    });
+  }, [db, item.workout.id]);
+  if (!rows || !catalog) return null;
+  return (
+    <section className="flex flex-col">
+      <div className="flex items-baseline justify-between pb-2">
+        <h2 className="display text-xl font-extrabold">Last time · {item.workout.name ?? new Date(item.at).toLocaleDateString([], { weekday: "short" })}</h2>
+        <Link href={`/workout?repeat=${item.workout.id}`} className="display text-sm font-extrabold tracking-[0.06em] text-accent">Repeat →</Link>
+      </div>
+      <ul className="divide-y divide-line">
+        {rows.map((r) => (
+          <li key={r.id} className="flex min-h-13 items-center justify-between gap-3">
+            <span className="truncate text-base font-bold">{catalog.byId.get(r.exerciseId)?.name ?? r.exerciseId}</span>
+            <span className="display num shrink-0 text-base font-bold text-muted">
+              {r.sets}×{r.reps} · <span className="text-ink">{formatWeight(r.top, units)}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }

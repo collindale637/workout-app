@@ -18,18 +18,42 @@ and arrives in Phase 3.
 > `src/proxy.ts`, Cache Components is on). Check `node_modules/next/dist/docs/` before changing
 > framework-level code.
 
-## Phase 0 status
+## What's built
 
-| Item | Where |
+**Phase 0 (live):** app shell, dark theme, PWA, email + password sign-in, profile, 20-table schema with RLS,
+exercise catalog (19 muscles, 86 equipment items, 889 exercises, 9 splits).
+
+**Phase 1 (log it):**
+
+| Feature | Where |
 |---|---|
-| App shell, dark theme tokens, 5-tab nav | `src/app/(app)/`, `src/app/globals.css` |
-| PWA: manifest, icons, service worker | `src/app/manifest.ts`, `public/icons/`, `public/sw.js` |
-| Email + password sign-in (family creates accounts, then sign-ups close) | `src/app/login/`, `src/proxy.ts` |
-| Profile (name, goal, units, default RPE…) and change password | More tab, `src/lib/profile.ts` |
-| Schema: 20 tables, RLS on every personal table | `supabase/migrations/20261115000100_schema.sql` |
-| Catalog: 19 muscles, 86 equipment items, 889 exercises, 9 splits | `supabase/migrations/20261115000200_catalog_seed.sql` (generated) |
-| Spot-check of the ~200 common lifts | `supabase/catalog-report.md` |
-| DB tests (RLS with two users) | `npm run test:db` |
+| Welcome flow (name, goal, experience, days, session length, units, first gym) | `src/app/(focus)/welcome/` |
+| Gyms: templates, categorized equipment checklist, dumbbell/plate/stack details | More → Gyms, `src/lib/gyms.ts` |
+| Active gym switcher (header pill on Today and Progress) | `src/components/gym-switcher.tsx` |
+| Workout builder: search + muscle filters, defaults to what the active gym has | `src/components/exercise-picker.tsx` |
+| Live workout: big weight/reps steppers, RPE on every set (blank = your default), warm-up/working/drop sets, rest timer, supersets, notes, swap/add/reorder/remove, finish summary with PRs | `src/app/(focus)/workout/` |
+| Cardio logging (run, walk, bike, row, elliptical, stairs, swim, HIIT, other) | `src/app/(focus)/cardio/` |
+| History list and detail; repeat or delete a workout | Progress tab |
+| Exercise library + custom exercises | More → Exercise library |
+| Offline: every screen saved by the service worker; all data in IndexedDB, synced to Supabase | `src/lib/db/`, `public/sw.js` |
+
+### How offline sync works
+
+The phone keeps its own database (IndexedDB, via Dexie), one per signed-in person. Every change is written there first
+and added to an "outbox"; deletes leave a "tombstone". Sync runs on open, a few seconds after changes, when the signal
+returns and every minute: it uploads the outbox (parents before children), sends deletes, then downloads anything
+changed on the server since the last sync. Changes still waiting to upload win over server copies.
+More → Sync shows the status. The exercise library downloads once (about 1 MB) and again only when
+`CATALOG_VERSION` changes.
+
+## Database updates
+
+| Migration | What | Applied to Supabase |
+|---|---|---|
+| `20261115000100_schema.sql` | Phase 0 schema + RLS | ✓ |
+| `20261115000200_catalog_seed.sql` | Exercise catalog (generated) | ✓ |
+| `20261115000300_lock_trigger_functions.sql` | Security advisor fix | ✓ |
+| `20261116000100_phase1_logging.sql` | Workout name; per-exercise targets, rest, notes; onboarding flag; cardio notes | ✓ |
 
 ## One-time setup
 
@@ -69,6 +93,7 @@ Open the Vercel URL in Safari → Share → **Add to Home Screen**.
 | `npm run dev` | Local dev server |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint |
+| `npm test` | Unit tests (units, equipment matching, sync) |
 | `npm run test:db` | Applies the migrations to an in-memory Postgres and checks RLS |
 | `npm run seed:build` | Regenerates the catalog seed from free-exercise-db + `scripts/catalog-data.mjs` |
 | `npm run images:upload` | Copies exercise pictures into Supabase Storage |

@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
