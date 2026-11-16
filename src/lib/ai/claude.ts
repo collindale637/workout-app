@@ -46,10 +46,12 @@ export const callTool: CallFn = async (opts) => {
       body: JSON.stringify({
         model: AI_MODEL,
         max_tokens: opts.maxTokens,
-        system: opts.system,
+        // This model doesn't accept a forced tool_choice, so ask for the tool in the prompt instead. If it
+        // ever answers in plain text, the result has no tool call and run.ts sends it back once to fix.
+        system: `${opts.system}\n\nAnswer ONLY by calling the ${opts.tool.name} tool, with no other text.`,
         messages: opts.messages,
         tools: [opts.tool],
-        tool_choice: { type: "tool", name: opts.tool.name },
+        tool_choice: { type: "auto" },
       }),
       signal: AbortSignal.timeout(130_000),
     });

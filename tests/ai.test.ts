@@ -207,6 +207,17 @@ describe("the AI request pipeline", () => {
     expect(String(fix[0].content)).toContain("Invented_Press");
   });
 
+  it("asks again when Claude answers in plain text instead of calling the tool", async () => {
+    const answers = [
+      reply(null, { toolUseId: null, content: [{ type: "text", text: "Here's a workout..." }] }),
+      reply({ name: "Push", summary: "", exercises: [item("Barbell_Bench_Press_-_Medium_Grip")] }),
+    ];
+    const r = await runAi(base, async () => answers.shift()!);
+    expect(r.calls).toBe(2);
+    expect(r.errors).toEqual([]);
+    expect(r.empty).toBe(false);
+  });
+
   it("only retries once, then returns the cleaned answer with the problems listed", async () => {
     const bad = () => reply({ name: "Push", summary: "", exercises: [item("Invented_Press"), item("Side_Lateral_Raise")] });
     const r = await runAi(base, async () => bad());
