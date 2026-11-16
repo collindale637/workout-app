@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
+/*
+  Design tokens — "4B Cobalt", dark first.
+  The mockups are inspiration, not a spec: change these freely.
+  Light mode is a later setting; it will override these variables under [data-theme="light"].
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #0b0e1a;
+  --card: #121729;
+  --card-2: #171c30;
+  --border: #1c2238;
+  --text: #f2f4ff;
+  --muted: #a3abcb;
+  --primary: #1f4bff;
+  --primary-press: #1534b8;
+  --accent: #8fa6ff;
+  --accent-soft: #b5c4ff;
+  --accent-strong: #6b87ff;
+  --warn: #ff8a3d;
+  --good: #3ddc84;
+  --danger: #ff5a5f;
+}
+
+[data-theme="light"] {
+  --bg: #f2f4fa;
+  --card: #ffffff;
+  --card-2: #f7f8fc;
+  --border: #e1e5f2;
+  --text: #0e1330;
+  --muted: #4a5170;
+  --accent: #1f4bff;
+  --accent-soft: #1f4bff;
+  --accent-strong: #1f4bff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-press: var(--primary-press);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-strong: var(--accent-strong);
+  --color-warn: var(--warn);
+  --color-good: var(--good);
+  --color-danger: var(--danger);
+  --font-sans: "Barlow", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Headings, big numbers and buttons use the condensed face in caps. */
+.display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Home-screen app: respect the notch and home indicator. */
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 16px);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
 }
