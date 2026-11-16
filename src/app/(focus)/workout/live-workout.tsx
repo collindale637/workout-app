@@ -234,7 +234,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (!prev.length) return null;
     const sug = suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null));
     if (sug.change !== "up" || sug.weight === null || sug.from === null) return null;
-    return `▲ UP ${formatWeight(sug.weight - sug.from, units)} ${weightUnit(units).toUpperCase()}: YOU HIT THE TOP OF THE RANGE LAST TIME`;
+    return `▲ UP ${formatWeight(sug.weight - sug.from, units)} ${weightUnit(units).toUpperCase()}`;
   })();
 
   return (
@@ -352,7 +352,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <Stepper label="REPS" value={draft.reps === null ? "—" : String(draft.reps)} onMinus={() => bumpReps(-1)} onPlus={() => bumpReps(1)} onTap={() => setTyping("reps")} />
             </div>
 
-            <div className="mt-3">
+            <div className="mt-2.5">
               <div className="mb-1 text-[11px] leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
               <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
             </div>
