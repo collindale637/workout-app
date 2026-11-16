@@ -240,7 +240,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   return (
     <main className="flex min-h-dvh flex-col pb-10">
       {/* Current set panel */}
-      <section className="safe-top rounded-b-[28px] bg-primary px-5 pb-4 text-white">
+      <div className="safe-top px-5 text-white">
         <div className="flex h-11 items-center justify-between">
           <Link href="/" aria-label="Minimize workout" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
@@ -252,7 +252,9 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             Finish
           </button>
         </div>
+      </div>
 
+      <section className="mx-3 mt-1.5 rounded-[28px] bg-primary px-5 py-3.5 text-white shadow-[0_10px_30px_rgba(31,75,255,0.25)]">
         {extra ? (
           <CardioPanel
             name={cardioLabel(extra.type)}
@@ -336,12 +338,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <span>&nbsp;· TARGET {targetLabel.toUpperCase()}</span>
               {current.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
             </p>
-            {upHint && <p className="mt-1 text-sm font-bold text-[#C9F7DA]">{upHint}</p>}
             {gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) && (
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
             )}
 
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
+            {upHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-[13px] font-bold tracking-[0.08em] text-[#C9F7DA]">{upHint}</p>}
+            <div className="mt-2.5 grid grid-cols-2 gap-2.5">
               <Stepper
                 label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}
                 value={draft.weight === null ? (isBodyweight ? "BW" : "—") : formatWeight(draft.weight, units)}
