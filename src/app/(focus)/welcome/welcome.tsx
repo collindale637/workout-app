@@ -182,13 +182,13 @@ function Next({ onClick, children = "Next", disabled }: { onClick?: () => void; 
   );
 }
 
-function Option({ active, onClick, name, blurb, badge }: { active: boolean; onClick: () => void; name: string; blurb: string; badge?: string }) {
+function Option({ active, onClick, name, blurb, badge, joined }: { active: boolean; onClick: () => void; name: string; blurb: string; badge?: string; joined?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex min-h-16 flex-col items-start justify-center gap-0.5 rounded-2xl border-2 px-4 py-2.5 text-left ${active ? "border-accent-strong bg-primary/15" : "border-line bg-card"}`}
+      className={`flex min-h-16 flex-col items-start justify-center gap-0.5 border-2 px-4 py-2.5 text-left ${joined ? "rounded-t-2xl border-b-0" : "rounded-2xl"} ${active ? "border-accent-strong bg-primary/15" : "border-line bg-card"}`}
     >
       <span className="flex w-full items-center justify-between gap-2">
         <span className={`text-base font-bold ${active ? "text-accent-soft" : ""}`}>{name}</span>
@@ -289,9 +289,10 @@ function PlanStep({ days, goal, experience, cardio, onDone }: { days: number; go
                 name={`${s.name} · ${s.days_per_week} days`}
                 blurb={s.description}
                 badge={s.id === recommended ? "Best fit" : undefined}
+                joined={chosen?.id === s.id}
               />
               {chosen?.id === s.id && (
-                <ol className="mx-2 -mt-1 flex flex-col gap-2 rounded-b-2xl border-x-2 border-b-2 border-accent-strong/40 bg-card px-3 pt-3 pb-3">
+                <ol className="flex flex-col gap-2 rounded-b-2xl border-2 border-t-0 border-accent-strong bg-card px-4 pt-3 pb-3">
                   {daysOf(s.id).map((d) => (
                     <li key={d.id} className="flex flex-col gap-1">
                       <span className="text-sm font-bold"><span className="display num mr-2 text-muted">{d.day_order}</span>{d.name}</span>
