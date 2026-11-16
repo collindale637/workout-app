@@ -207,11 +207,21 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       }
       const first = members.find((w) => (w.id === current.id ? doneNow : filled(w)) < (w.target_sets ?? 3));
       await startRest(current.rest_sec ?? 90, current.id);
+      if (!first && draft.type !== "warmup" && nextAfter(current.id)) {
+        // Whole superset finished: show "Up next" from its last exercise instead of jumping ahead.
+        setCurrentId(current.id);
+        setUpNextFrom(current.id);
+        return;
+      }
       setCurrentId(first?.id ?? wexs!.find((w) => w.superset_group !== group && remaining(w))?.id ?? current.id);
       return;
     }
     await startRest(draft.type === "warmup" ? 60 : (current.rest_sec ?? 90), current.id);
-    if (doneNow >= (current.target_sets ?? 3) && draft.type !== "warmup" && nextAfter(current.id)) setUpNextFrom(current.id);
+    if (doneNow >= (current.target_sets ?? 3) && draft.type !== "warmup" && nextAfter(current.id)) {
+      // Keep the finished exercise as the current one so the blue card can show "Up next" (otherwise current jumps ahead).
+      setCurrentId(current.id);
+      setUpNextFrom(current.id);
+    }
   }
 
   /** Skips a planned set. Skipping the last one finishes the exercise, same as logging it. */
@@ -221,7 +231,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (filledSets(setsBy.get(w.id) ?? [], w.target_sets ?? 3, skipped) < (w.target_sets ?? 3)) return;
     await db.setMeta("rest", null);
     if (wexs!.every((x) => x.id === w.id || done(x))) setAllDoneOpen(true);
-    else if (nextAfter(w.id)) setUpNextFrom(w.id);
+    else if (nextAfter(w.id)) {
+      setCurrentId(w.id);
+      setUpNextFrom(w.id);
+    }
   }
 
   async function unskipSet(w: WorkoutExercise, slot: number) {
