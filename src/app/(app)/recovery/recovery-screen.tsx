@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { useCatalog } from "@/lib/hooks";
 import { useRecovery } from "@/lib/smart";
@@ -103,6 +103,9 @@ export const FEEL_PRESETS = [
   { label: "Fresh", score: 100 },
 ] as const;
 
+/** Width of the slider thumb (.feel-slider in globals.css), so a finger lines up with where the thumb lands. */
+const FEEL_THUMB = 32;
+
 /** Tell the app how this muscle really feels; it fades back to the automatic estimate on its own. */
 function FeelSlider({ r, onAdjust, onReset }: { r: MuscleRecovery; onAdjust: (score: number) => void; onReset: () => void }) {
   // While dragging the thumb shows the finger's position; once the real number changes (saved, a set gets
@@ -114,8 +117,27 @@ function FeelSlider({ r, onAdjust, onReset }: { r: MuscleRecovery; onAdjust: (sc
     setDrag(null);
   }
   const value = drag ?? r.score;
-  const commit = () => {
-    if (drag !== null && drag !== r.score) onAdjust(drag);
+  const commit = (v: number | null = drag) => {
+    if (v !== null && v !== r.score) onAdjust(v);
+  };
+
+  // The whole bar is the drag area (not just the small thumb), and touching it never scrolls the page.
+  // touch-none (CSS touch-action) tells the browser not to pan; iOS also needs touchmove cancelled to stay still.
+  const bar = useRef<HTMLDivElement>(null);
+  const gesture = useRef<{ id: number; x: number; y: number; sliding: boolean; ignored: boolean } | null>(null);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const hold = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    el.addEventListener("touchmove", hold, { passive: false });
+    return () => el.removeEventListener("touchmove", hold);
+  }, []);
+  const valueAt = (clientX: number) => {
+    const rect = bar.current!.getBoundingClientRect();
+    const t = (clientX - rect.left - FEEL_THUMB / 2) / Math.max(1, rect.width - FEEL_THUMB);
+    return Math.min(100, Math.max(0, Math.round(t * 20) * 5));
   };
   return (
     <section className="flex flex-col gap-1 rounded-2xl bg-card-2 p-4" aria-label="How does it feel">
@@ -123,20 +145,55 @@ function FeelSlider({ r, onAdjust, onReset }: { r: MuscleRecovery; onAdjust: (sc
         <h3 className="display text-base font-extrabold tracking-[0.08em] text-accent-soft uppercase">How does it feel?</h3>
         <span className="text-xs font-bold text-muted">{r.adjusted ? `You set it · auto was ${r.autoScore}%` : `Auto: ${r.autoScore}%`}</span>
       </div>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        step={5}
-        value={value}
-        onChange={(e) => setDrag(Number(e.target.value))}
-        onPointerUp={commit}
-        onKeyUp={commit}
-        onBlur={commit}
-        aria-label={`${value}% recovered`}
-        aria-valuetext={`${value}% recovered`}
-        className="feel-slider h-11 w-full"
-      />
+      <div
+        ref={bar}
+        className="touch-none select-none"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          gesture.current = { id: e.pointerId, x: e.clientX, y: e.clientY, sliding: false, ignored: false };
+        }}
+        onPointerMove={(e) => {
+          const g = gesture.current;
+          if (!g || g.id !== e.pointerId || g.ignored) return;
+          const dx = Math.abs(e.clientX - g.x);
+          const dy = Math.abs(e.clientY - g.y);
+          if (!g.sliding) {
+            // A mostly-vertical drag is a missed page scroll, not a slide: leave the value alone.
+            if (dy > 10 && dy > dx) g.ignored = true;
+            else if (dx >= 4) g.sliding = true;
+          }
+          if (g.sliding) setDrag(valueAt(e.clientX));
+        }}
+        onPointerUp={(e) => {
+          const g = gesture.current;
+          gesture.current = null;
+          if (!g || g.id !== e.pointerId || g.ignored) return;
+          // A slide, or a tap that jumps straight to that spot.
+          const v = valueAt(e.clientX);
+          setDrag(v);
+          commit(v);
+        }}
+        onPointerCancel={() => {
+          gesture.current = null;
+          commit();
+        }}
+      >
+        {/* The input draws the bar and handles the keyboard; finger and mouse go to the wrapper above. */}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={value}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onKeyUp={() => commit()}
+          onBlur={() => commit()}
+          aria-label={`${value}% recovered`}
+          aria-valuetext={`${value}% recovered`}
+          className="feel-slider pointer-events-none h-11 w-full"
+        />
+      </div>
       <div className="-mt-1 flex justify-between px-0.5 text-xs font-bold text-muted" aria-hidden="true">
         <span>Wrecked</span>
         <span>Sore</span>

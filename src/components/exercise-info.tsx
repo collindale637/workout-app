@@ -19,9 +19,10 @@ export function ExerciseInfo({ catalog, id, gymEquipment, gymName }: { catalog: 
     <div className="flex flex-col gap-4">
       {ex.images.length > 0 && (
         <div className="relative overflow-hidden rounded-3xl bg-white">
-          {/* Swipe carousel: native scroll-snap, one slide per image */}
+          {/* Swipe carousel: native scroll-snap, one slide per image. touch-pan-x keeps the page still while swiping
+              (same as the RPE strip); overscroll-x-contain stops the end of the row from tugging the page or going "back". */}
           <div
-            className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex touch-pan-x snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             onScroll={(e) => {
               const el = e.currentTarget;
               setFrame(Math.round(el.scrollLeft / el.clientWidth));
