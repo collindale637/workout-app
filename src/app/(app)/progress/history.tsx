@@ -22,7 +22,7 @@ export function History() {
   }
 
   return (
-    <main className="mt-2 flex flex-col gap-4">
+    <main className="mt-4 flex flex-col gap-4">
       <header className="flex h-11 items-center justify-between">
         <h1 className="display text-4xl font-extrabold">Progress</h1>
         <GymSwitcher />

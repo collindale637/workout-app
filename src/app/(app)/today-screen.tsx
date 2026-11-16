@@ -45,7 +45,7 @@ export function TodayScreen() {
   const lastWorkout = history?.find((h) => h.kind === "workout");
 
   return (
-    <main className="flex flex-col gap-4 pt-2">
+    <main className="mt-4 flex flex-col gap-4">
       <header className="flex h-11 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col">
           <span className="text-xs font-bold tracking-[0.1em] text-muted">{week.label}</span>
