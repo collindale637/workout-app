@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCatalog } from "@/lib/hooks";
 import { useData } from "@/lib/db/provider";
-import { markDirty } from "@/lib/db/sync";
-import { newId } from "@/lib/db/dexie";
+import { createCustomExercise } from "@/lib/custom-exercise";
 import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/defaults";
 import { Chip, PageHeader, btn, field, label } from "@/components/ui/kit";
 
@@ -29,21 +28,7 @@ export function NewExercise() {
     e.preventDefault();
     if (!name.trim() || (kind === "strength" && primary.length === 0)) return;
     setBusy(true);
-    const id = `custom_${newId().replace(/-/g, "")}`;
-    await db.transaction("rw", [db.exercises, db.exercise_muscles, db.exercise_equipment, db.outbox], async () => {
-      await db.exercises.put({
-        id, name: name.trim(), aliases: [], category: kind, movement_pattern: kind === "cardio" ? "cardio" : mechanic === "isolation" ? "isolation" : "other",
-        mechanic: kind === "cardio" ? null : mechanic, force: null, level: "beginner", instructions: [], images: [],
-        is_common: false, is_active: true, owner_id: userId, source: "custom",
-      });
-      await db.exercise_muscles.bulkPut([
-        ...primary.map((m) => ({ exercise_id: id, muscle_id: m, role: "primary" as const })),
-        ...secondary.filter((m) => !primary.includes(m)).map((m) => ({ exercise_id: id, muscle_id: m, role: "secondary" as const })),
-      ]);
-      await db.exercise_equipment.bulkPut(needs.map((eq, i) => ({ exercise_id: id, option_group: i + 1, equipment_id: eq })));
-      await markDirty(db, "exercises", id);
-      await markDirty(db, "exercise_tags", id);
-    });
+    const id = await createCustomExercise(db, userId, { name, kind, mechanic, primary, secondary, needs });
     requestSync();
     router.replace(`/more/library/exercise?id=${id}`);
   }

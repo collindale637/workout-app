@@ -11,7 +11,12 @@ import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { Card, Sheet, btn, field } from "@/components/ui/kit";
+import { Sparkle } from "@/components/ai";
 import type { Plan } from "@/lib/db/types";
+
+const Chevron = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 text-muted" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+);
 
 export function PlanScreen() {
   const active = useActivePlan();
@@ -33,15 +38,25 @@ export function PlanScreen() {
 
       <section className="flex flex-col gap-2">
         <h2 className="display text-xl font-extrabold">With AI</h2>
-        <Card className="divide-y divide-line overflow-hidden opacity-70">
-          <div className="flex min-h-16 flex-col justify-center px-4 py-3">
-            <span className="text-base font-bold">Build with AI</span>
-            <span className="text-sm font-medium text-muted">Describe what you want, get a full plan · coming in Phase 3</span>
-          </div>
-          <div className="flex min-h-16 flex-col justify-center px-4 py-3">
-            <span className="text-base font-bold">Import a plan</span>
-            <span className="text-sm font-medium text-muted">From pasted text or screenshots · coming in Phase 3</span>
-          </div>
+        <Card className="divide-y divide-line overflow-hidden">
+          <Link href="/plan/ai" className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
+            <Sparkle size={22} className="shrink-0 text-accent" />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-base font-bold">Build with AI</span>
+              <span className="text-sm font-medium text-muted">Describe what you want, get a full plan for your gym</span>
+            </span>
+            <Chevron />
+          </Link>
+          <Link href="/plan/import" className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-accent" aria-hidden="true">
+              <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+            </svg>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="text-base font-bold">Import a plan</span>
+              <span className="text-sm font-medium text-muted">From pasted text, screenshots or photos</span>
+            </span>
+            <Chevron />
+          </Link>
         </Card>
       </section>
 
@@ -96,6 +111,16 @@ function ActivePlanCard() {
         )}
       </div>
 
+      {p.notes && (
+        <details className="rounded-3xl border border-line bg-card px-4 py-1">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between text-base font-bold">
+            About this plan
+            <span className="text-xs font-bold tracking-[0.08em] text-muted">{p.source === "imported" ? "IMPORTED" : p.source === "ai" ? "BUILT WITH AI" : ""}</span>
+          </summary>
+          <p className="pb-3 text-[15px] font-medium leading-snug whitespace-pre-line text-muted">{p.notes}</p>
+        </details>
+      )}
+
       <ul className="flex flex-col gap-2">
         {days.map((d) => {
           const list = exercises.get(d.id) ?? [];
@@ -126,8 +151,15 @@ function ActivePlanCard() {
         })}
       </ul>
 
+      <Link href={`/plan/ai?edit=${p.id}`} className={btn.secondary}>
+        <Sparkle /> Change this plan with AI
+      </Link>
+
       <Sheet open={menu} onClose={() => setMenu(false)} title={p.name}>
         <div className="flex flex-col gap-2">
+          <Link href={`/plan/ai?edit=${p.id}`} className={btn.secondary} onClick={() => setMenu(false)}>
+            <Sparkle /> Change with AI
+          </Link>
           <button type="button" className={btn.secondary} onClick={() => { setRename(p.name); setMenu(false); }}>Rename</button>
           {days.length > 1 && (
             <div className="flex flex-col gap-2 rounded-2xl bg-card-2 p-3">

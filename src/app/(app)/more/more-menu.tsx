@@ -6,6 +6,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { useData, useProfile, usePendingCount } from "@/lib/db/provider";
 import { Card, RowLink, btn } from "@/components/ui/kit";
 import { GOAL_LABELS } from "@/lib/profile";
+import { useAiUsage } from "@/lib/ai/client";
 
 export function MoreMenu() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export function MoreMenu() {
   const pending = usePendingCount();
   const gymCount = useLiveQuery(() => db.gyms.count(), [db]);
   const lastSynced = useLiveQuery(() => db.getMeta<string>("lastSyncedAt"), [db]);
+  const { usage } = useAiUsage();
 
   async function signOut() {
     if (pending > 0 && !confirm(`${pending} change(s) haven't synced yet and will be lost if you sign out now. Sign out anyway?`)) return;
@@ -43,6 +45,27 @@ export function MoreMenu() {
         </div>
         <button type="button" className={btn.ghost} onClick={() => requestSync(0)}>Sync now</button>
       </Card>
+      {usage && (
+        <Card className="flex flex-col gap-2 p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-base font-bold">AI this month</span>
+            <span className="display num text-lg font-extrabold">
+              ${usage.household_usd.toFixed(2)} <span className="text-sm font-bold text-muted">of ${usage.cap_usd.toFixed(0)}</span>
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-card-2" aria-hidden="true">
+            <div
+              className={`h-full rounded-full ${usage.household_usd >= usage.cap_usd * 0.8 ? "bg-warn" : "bg-primary"}`}
+              style={{ width: `${Math.min(100, (usage.household_usd / Math.max(0.01, usage.cap_usd)) * 100)}%` }}
+            />
+          </div>
+          <div className="text-sm font-medium text-muted">
+            {usage.configured
+              ? `You: ${usage.my_requests} request${usage.my_requests === 1 ? "" : "s"}, $${usage.mine_usd.toFixed(2)}. The limit is shared by the family and resets on the 1st.`
+              : "AI isn't set up yet: it needs a Claude API key in Vercel."}
+          </div>
+        </Card>
+      )}
       <button type="button" onClick={signOut} className={btn.secondary}>Sign out</button>
     </main>
   );

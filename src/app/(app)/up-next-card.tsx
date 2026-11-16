@@ -11,6 +11,7 @@ import { useUpNext, useUpNextChoice } from "@/lib/up-next";
 import { doseLabel, MusclePills, suggestionLabel, supersetLetter } from "@/components/planned";
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { Sheet, btn } from "@/components/ui/kit";
+import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 
 /** Today's suggested workout: the next plan day, your freshest muscles, or muscles you picked. */
 export function UpNextCard({ hasGym }: { hasGym: boolean }) {
@@ -25,6 +26,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
   const [options, setOptions] = useState(false);
   const [pickMuscles, setPickMuscles] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   if (up === undefined || !catalog || !profile) {
     return <section className="h-[300px] animate-pulse rounded-[28px] bg-primary/40" aria-label="Loading today's workout" />;
@@ -51,7 +53,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
       <section className="flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">
-            UP NEXT{up.mode === "fresh" ? " · FRESH MUSCLES" : up.mode === "muscles" ? " · YOUR PICK" : ""}
+            UP NEXT{up.mode === "fresh" ? " · FRESH MUSCLES" : up.mode === "muscles" ? " · YOUR PICK" : up.mode === "ai" ? " · AI" : ""}
           </span>
           <button type="button" onClick={() => setOptions(true)} className="display -mr-1 min-h-11 rounded-full px-3 text-sm font-extrabold tracking-[0.08em] text-[#DCE4FF]">
             Change
@@ -77,16 +79,27 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
             {starting ? "Starting…" : "Start"}
           </button>
+          {up.mode !== "ai" && (
+            <button
+              type="button"
+              onClick={regenerate}
+              aria-label="Regenerate"
+              title="Regenerate"
+              className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
-            onClick={regenerate}
-            aria-label="Regenerate"
-            title="Regenerate"
-            className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70"
+            onClick={() => setAiOpen(true)}
+            aria-label="Customize with AI"
+            title="Customize with AI"
+            className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70 text-white"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
-            </svg>
+            <Sparkle size={22} />
           </button>
         </div>
       </section>
@@ -174,6 +187,9 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
           <button type="button" className={btn.secondary} onClick={() => { setOptions(false); setPickMuscles(true); }}>
             Pick muscles…
           </button>
+          <button type="button" className={btn.secondary} onClick={() => { setOptions(false); setAiOpen(true); }}>
+            <Sparkle /> Customize with AI…
+          </button>
           <div className="grid grid-cols-2 gap-2">
             <Link href="/workout" className={btn.secondary} onClick={() => setOptions(false)}>Build your own</Link>
             <Link href="/cardio" className={btn.secondary} onClick={() => setOptions(false)}>Log cardio</Link>
@@ -183,6 +199,34 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
           )}
         </div>
       </Sheet>
+
+      {aiOpen && (
+        <AiWorkoutSheet
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          kind="workout"
+          title="Customize with AI"
+          intro={`Tell Claude what you want today. It starts from "${up.title}" and only uses what ${gym?.name ?? "your gym"} has.`}
+          current={{ name: up.title, items: up.items }}
+          actions={[
+            {
+              label: "Use for today",
+              primary: true,
+              run: async (w) => {
+                await setChoice({ mode: "ai", seed: 0, ai: { name: w.name, summary: w.summary, items: w.items, planDayId: up.day?.id ?? null } });
+                setAiOpen(false);
+              },
+            },
+            {
+              label: "Start it now",
+              run: async (w) => {
+                await start({ items: w.items, name: w.name, gymId: gym?.id ?? null, planDayId: up.day?.id ?? null, source: "ai" });
+                router.push("/workout");
+              },
+            },
+          ]}
+        />
+      )}
 
       <Sheet open={pickMuscles} onClose={() => setPickMuscles(false)} title="Pick muscles">
         <MuscleChooser

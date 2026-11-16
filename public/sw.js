@@ -13,7 +13,7 @@ const ASSETS = `assets-${VERSION}`;
 const IMAGES = `images-${VERSION}`;
 const ROUTES = [
   "/", "/login", "/welcome", "/workout", "/cardio", "/plan", "/plan/new", "/plan/day", "/recovery", "/progress", "/progress/session",
-  "/more", "/more/profile", "/more/gyms", "/more/gyms/edit", "/more/library", "/more/library/exercise", "/more/library/new",
+  "/plan/ai", "/plan/import", "/more", "/more/profile", "/more/gyms", "/more/gyms/edit", "/more/library", "/more/library/exercise", "/more/library/new",
 ];
 
 async function warm() {

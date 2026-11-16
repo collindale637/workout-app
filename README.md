@@ -11,8 +11,8 @@ It's a Next.js web app installed to the iPhone home screen (PWA).
 ## Stack
 
 Next.js 16 (App Router, TypeScript, Tailwind 4) on Vercel · Supabase (Postgres + RLS, Auth, Storage)
-· PWA (manifest + service worker). Workout generation runs on the phone; AI (Claude API) is server-only
-and arrives in Phase 3.
+· PWA (manifest + service worker). Workout generation runs on the phone; AI (Claude API) runs only on the
+server (`/api/ai`), so the API key never reaches the phone.
 
 > This Next.js version has breaking changes from older docs (e.g. `middleware.ts` is now
 > `src/proxy.ts`, Cache Components is on). Check `node_modules/next/dist/docs/` before changing
@@ -55,6 +55,30 @@ Tuning knobs (all starting values): `F_MAX`, thresholds and fresh-day templates 
 `STAPLES`, scoring weights and `dose()` in `generator.ts`. Day names drive two extras: "Power" days use strength dosing,
 "+ Cardio" days get a cardio block, and "Cardio + Core" is mostly cardio.
 
+**Phase 3 (AI):**
+
+| Feature | Where |
+|---|---|
+| One server route for Claude: sign-in check, monthly cap, JSON tool answers, exercise-ID allowlist, problems sent back once to fix | `src/app/api/ai/route.ts`, `src/lib/ai/run.ts`, `src/lib/ai/validate.ts` |
+| Build a full plan with AI (goal, days, length, session time, free text), review, then "Use this plan"; ask for changes to the draft | Plan → Build with AI (`/plan/ai`) |
+| Plain-English plan edits ("make day 2 shorter"): shows what changed and keeps day links so history and "next day" survive | Plan → Change this plan with AI (`/plan/ai?edit=…`) |
+| Customize with AI: today's workout (sparkle button on Up next → use for today or start now) or one plan day (day editor) | `src/components/ai.tsx` |
+| Import from pasted text or up to 5 photos; review screen marks every line Matched / Unsure (top 3) / Not found (choose, create custom, or skip) | Plan → Import a plan (`/plan/import`), matching in `src/lib/ai/match.ts` |
+| AI usage log + family-wide monthly cap; spend shown under More and on AI screens | `ai_requests`, `ai_log_request()`, `ai_spend_this_month()` |
+
+What Claude sees: your profile, the active gym's equipment, recovery scores, the last two weeks of workouts, and the
+exercises that gym can do (id, name, main muscles, type). It must answer through a tool with a fixed JSON shape; every
+exercise id and number is checked before you see anything, and nothing is saved until you accept it. Prompts live in
+`src/lib/ai/prompts.ts`.
+
+AI settings (Vercel → Project → Settings → Environment Variables, server-only):
+
+| Variable | What |
+|---|---|
+| `ANTHROPIC_API_KEY` | Required for AI. Without it the AI buttons explain that AI isn't set up; everything else works. |
+| `AI_MONTHLY_CAP_USD` | Family-wide monthly spend limit (default `10`). |
+| `AI_MODEL` | Claude model (default `claude-sonnet-5-5`). |
+
 ### How offline sync works
 
 The phone keeps its own database (IndexedDB, via Dexie), one per signed-in person. Every change is written there first
@@ -74,6 +98,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261116000100_phase1_logging.sql` | Workout name; per-exercise targets, rest, notes; onboarding flag; cardio notes | ✓ |
 | `20261116000200_cardio_in_workouts.sql` | Cardio results link to the cardio exercise in a workout (Start / Done) | ✓ |
 | `20261116000300_phase2_plans.sql` | Plan days remember their target muscles; PHUL and Hybrid splits | ✓ |
+| `20261117000100_phase3_ai.sql` | Plan notes; AI usage log written through `ai_log_request()`, spend via `ai_spend_this_month()` | — |
 
 ## One-time setup
 
@@ -113,7 +138,7 @@ Open the Vercel URL in Safari → Share → **Add to Home Screen**.
 | `npm run dev` | Local dev server |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint |
-| `npm test` | Unit tests (units, equipment matching, sync, recovery, generator, weight suggestions) |
+| `npm test` | Unit tests (units, equipment matching, sync, recovery, generator, weight suggestions, AI checks and import matching) |
 | `npm run test:db` | Applies the migrations to an in-memory Postgres and checks RLS |
 | `npm run seed:build` | Regenerates the catalog seed from free-exercise-db + `scripts/catalog-data.mjs` |
 | `npm run images:upload` | Copies exercise pictures into Supabase Storage |

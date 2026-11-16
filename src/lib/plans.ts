@@ -22,10 +22,13 @@ export function usePlanActions() {
   const { db, requestSync } = useData();
 
   const create = useCallback(
-    async (opts: { name: string; goal: Goal; splitId: string | null; weeks: number; source?: PlanSource; days: { name: string; target_muscle_ids: string[]; items: GenItem[] }[] }) => {
+    async (opts: {
+      name: string; goal: Goal; splitId: string | null; weeks: number; source?: PlanSource; notes?: string | null;
+      days: { name: string; target_muscle_ids: string[]; items: GenItem[] }[];
+    }) => {
       const plan: Plan = {
         id: newId(), name: opts.name, goal: opts.goal, split_id: opts.splitId, start_date: todayIso(), weeks: opts.weeks,
-        source: opts.source ?? "generated", is_active: true, created_at: nowIso(),
+        source: opts.source ?? "generated", is_active: true, created_at: nowIso(), ...(opts.notes ? { notes: opts.notes } : {}),
       };
       const days: PlanDay[] = opts.days.map((d, i) => ({ id: newId(), plan_id: plan.id, day_order: i + 1, name: d.name, gym_id: null, target_muscle_ids: d.target_muscle_ids }));
       const rows = opts.days.flatMap((d, i) => d.items.map((item, k) => toRow(days[i].id, item, k)));
@@ -179,5 +182,45 @@ export function usePlanActions() {
     [db, requestSync],
   );
 
-  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise };
+  /**
+   * Applies a plain-English edit: days that came back with their id keep it (so "next day" and history
+   * stay linked), new days are added, and days left out are removed.
+   */
+  const applyEdit = useCallback(
+    async (
+      planId: string,
+      next: { name: string; goal: Goal; weeks: number; notes: string | null; days: { ref_day_id: string | null; name: string; target_muscle_ids: string[]; items: GenItem[] }[] },
+    ) => {
+      const oldDays = await db.plan_days.where("plan_id").equals(planId).toArray();
+      const oldRows = await db.plan_exercises.where("plan_day_id").anyOf(oldDays.map((d) => d.id)).toArray();
+      const kept = new Set(next.days.map((d) => d.ref_day_id).filter(Boolean));
+      await db.transaction("rw", [db.plans, db.plan_days, db.plan_exercises, db.outbox, db.tombstones], async () => {
+        await db.plans.update(planId, { name: next.name, goal: next.goal, weeks: next.weeks, notes: next.notes });
+        await markDirty(db, "plans", planId);
+        // Exercises are replaced wholesale; children go before parents for deletes.
+        for (const r of oldRows) {
+          await db.plan_exercises.delete(r.id);
+          await markDeleted(db, "plan_exercises", r.id);
+        }
+        for (const d of oldDays) {
+          if (kept.has(d.id)) continue;
+          await db.plan_days.delete(d.id);
+          await markDeleted(db, "plan_days", d.id);
+        }
+        for (const [i, d] of next.days.entries()) {
+          const id = d.ref_day_id && oldDays.some((o) => o.id === d.ref_day_id) ? d.ref_day_id : newId();
+          const old = oldDays.find((o) => o.id === id);
+          await db.plan_days.put({ id, plan_id: planId, day_order: i + 1, name: d.name, gym_id: old?.gym_id ?? null, target_muscle_ids: d.target_muscle_ids });
+          await markDirty(db, "plan_days", id);
+          const rows = d.items.map((item, k) => toRow(id, item, k));
+          await db.plan_exercises.bulkPut(rows);
+          for (const r of rows) await markDirty(db, "plan_exercises", r.id);
+        }
+      });
+      requestSync();
+    },
+    [db, requestSync],
+  );
+
+  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, applyEdit };
 }

@@ -16,7 +16,7 @@ const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "ex
   profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at"],
   exercises: ["id", "name", "aliases", "category", "movement_pattern", "mechanic", "force", "level", "instructions", "images", "is_common", "is_active", "owner_id", "source"],
   gyms: ["id", "name", "template", "is_default"],
-  plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active"],
+  plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active", "notes"],
   plan_days: ["id", "plan_id", "day_order", "name", "gym_id", "target_muscle_ids"],
   plan_exercises: ["id", "plan_day_id", "exercise_id", "sort_order", "sets", "rep_min", "rep_max", "rest_sec", "superset_group", "notes"],
   workouts: ["id", "name", "gym_id", "plan_day_id", "started_at", "ended_at", "notes", "source"],

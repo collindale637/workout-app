@@ -166,6 +166,8 @@ export type Plan = {
   weeks: number | null;
   source: PlanSource;
   is_active: boolean;
+  /** AI-built and imported plans: a short overview and how the plan progresses. */
+  notes?: string | null;
   created_at: string;
   updated_at?: string;
 };

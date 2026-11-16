@@ -14,10 +14,13 @@ import type { PlanDay } from "@/lib/db/types";
     plan    → the next plan day (or one you picked); Regenerate swaps in a fresh set for the same muscles
     fresh   → "target fresh muscles"
     muscles → muscles you picked
+    ai      → a workout you asked Claude for ("Customize with AI"); kept as-is until you change it
 */
 
-export type UpNextMode = "plan" | "fresh" | "muscles";
-export type UpNextChoice = { date: string; mode: UpNextMode; dayId?: string | null; muscles?: string[]; seed: number };
+export type UpNextMode = "plan" | "fresh" | "muscles" | "ai";
+/** A workout from "Customize with AI". planDayId is set when it replaces today's plan day, so the plan still moves on. */
+export type AiPick = { name: string; summary: string; items: GenItem[]; planDayId: string | null };
+export type UpNextChoice = { date: string; mode: UpNextMode; dayId?: string | null; muscles?: string[]; seed: number; ai?: AiPick };
 
 export type UpNext = {
   mode: UpNextMode;
@@ -29,7 +32,7 @@ export type UpNext = {
   day: PlanDay | null;
   plan: ActivePlan | null;
   seed: number;
-  source: "plan" | "generated";
+  source: "plan" | "generated" | "ai";
 };
 
 export function useUpNextChoice() {
@@ -64,6 +67,17 @@ export function useUpNext(): UpNext | null | undefined {
       prefs, recovery: scores, lastDone, seed,
     };
     const gen = { gymEquipment, experience: profile.experience, prefs };
+
+    if (mode === "ai" && choice?.ai) {
+      const ai = choice.ai;
+      const adapted = adaptToGym(catalog, ai.items, gen);
+      const day = plan?.days.find((d) => d.id === ai.planDayId) ?? null;
+      const hit = new Set(ai.items.flatMap((i) => (catalog.musclesOf.get(i.exercise_id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id)));
+      return {
+        mode, title: ai.name, subtitle: day ? `Customized with AI · ${plan!.plan.name} · Day ${day.day_order}` : "Customized with AI",
+        targets: catalog.muscles.map((m) => m.id).filter((id) => hit.has(id)), items: adapted.items, swaps: adapted.swaps, day, plan, seed, source: "ai",
+      };
+    }
 
     if (mode === "plan" && plan) {
       const day = plan.days.find((d) => d.id === choice?.dayId) ?? plan.nextDay;

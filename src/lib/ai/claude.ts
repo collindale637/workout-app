@@ -1,0 +1,86 @@
+import "server-only";
+import type { CallFn } from "./run";
+
+/*
+  Calls the Claude API (Messages API) from the server. The API key lives only in Vercel's environment
+  variables (ANTHROPIC_API_KEY) and never reaches the phone.
+*/
+
+export const AI_MODEL = process.env.AI_MODEL || "claude-sonnet-5-5";
+/** Shared by the whole family: once this month's spend reaches it, AI features pause until next month. */
+export const AI_MONTHLY_CAP_USD = Number(process.env.AI_MONTHLY_CAP_USD || 10);
+export const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+
+/** USD per million tokens [input, output]. Unknown models are priced like Opus to stay on the safe side. */
+const PRICES: Record<string, [number, number]> = {
+  "claude-sonnet-5-5": [2, 10],
+  "claude-sonnet-5": [2, 10],
+  "claude-haiku-5-5": [1, 5],
+  "claude-opus-5-5": [4, 20],
+};
+
+export type Usage = { input_tokens: number; output_tokens: number };
+
+export function costUsd(model: string, u: Usage) {
+  const [i, o] = PRICES[model] ?? [4, 20];
+  return (u.input_tokens * i + u.output_tokens * o) / 1_000_000;
+}
+
+type Block = Record<string, unknown>;
+
+export class AiError extends Error {
+  constructor(message: string, readonly status = 502) {
+    super(message);
+  }
+}
+
+/** One Claude call that must answer through `tool`. Returns the (unchecked) tool input and Claude's full reply. */
+export const callTool: CallFn = async (opts) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new AiError("AI isn't set up yet: add ANTHROPIC_API_KEY in Vercel.", 503);
+  let res: Response;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({
+        model: AI_MODEL,
+        max_tokens: opts.maxTokens,
+        system: opts.system,
+        messages: opts.messages,
+        tools: [opts.tool],
+        tool_choice: { type: "tool", name: opts.tool.name },
+      }),
+      signal: AbortSignal.timeout(130_000),
+    });
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    throw new AiError(timedOut ? "Claude took too long to answer. Try again, or ask for something smaller." : "Couldn't reach Claude. Try again in a minute.");
+  }
+  const data = (await res.json().catch(() => null)) as
+    | { content?: Block[]; usage?: Record<string, number>; stop_reason?: string; error?: { type?: string; message?: string } }
+    | null;
+  if (!res.ok || !data) {
+    const type = data?.error?.type;
+    if (res.status === 401) throw new AiError("The Claude API key was rejected. Check ANTHROPIC_API_KEY in Vercel.", 503);
+    if (res.status === 429 || type === "rate_limit_error") throw new AiError("Claude is busy right now. Try again in a minute.", 429);
+    if (res.status === 529 || type === "overloaded_error") throw new AiError("Claude is overloaded right now. Try again in a minute.", 503);
+    if (type === "invalid_request_error" && /credit|billing/i.test(data?.error?.message ?? "")) {
+      throw new AiError("The Claude API account is out of credit.", 503);
+    }
+    throw new AiError(`Claude returned an error (${res.status}). Try again.`);
+  }
+  const content = data.content ?? [];
+  const use = content.find((b) => b.type === "tool_use");
+  const u = data.usage ?? {};
+  return {
+    input: use?.input ?? null,
+    toolUseId: typeof use?.id === "string" ? use.id : null,
+    content,
+    usage: {
+      input_tokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
+      output_tokens: u.output_tokens ?? 0,
+    },
+    truncated: data.stop_reason === "max_tokens",
+  };
+};

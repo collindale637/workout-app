@@ -16,6 +16,8 @@ import { ExerciseInfo } from "@/components/exercise-info";
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { doseLabel, MusclePills, supersetLetter } from "@/components/planned";
 import { PageHeader, Sheet, btn, field, label } from "@/components/ui/kit";
+import { AiWorkoutSheet, Sparkle } from "@/components/ai";
+import { targetsFor } from "@/lib/ai/apply";
 import type { PlanExercise } from "@/lib/db/types";
 
 export function DayEditor() {
@@ -40,6 +42,7 @@ export function DayEditor() {
   const [rename, setRename] = useState<string | null>(null);
   const [musclesOpen, setMusclesOpen] = useState(false);
   const [regenSeed, setRegenSeed] = useState(1);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const { catalog, profile, gym, gymEquipment, prefs } = inputs;
   if (data === undefined || !catalog || !profile) return null;
@@ -146,9 +149,35 @@ export function DayEditor() {
           ⟳ Regenerate
         </button>
       </div>
+      <button type="button" className={btn.secondary} onClick={() => setAiOpen(true)}>
+        <Sparkle /> Customize with AI
+      </button>
       <button type="button" className={btn.primary} disabled={!list.length} onClick={startNow}>
         {open ? "Resume your open workout" : "Start this day now"}
       </button>
+
+      {aiOpen && (
+        <AiWorkoutSheet
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          kind="day"
+          title={`Change ${day.name} with AI`}
+          intro={`Say what to change. Claude reworks this day using what ${gym?.name ?? "your gym"} has; you'll see it before anything is saved.`}
+          current={{ name: day.name, items: list }}
+          actions={[
+            {
+              label: "Replace this day",
+              primary: true,
+              run: async (w) => {
+                await actions.replaceExercises(day.id, w.items);
+                const targets = targetsFor(catalog, w.items);
+                await actions.updateDay(day.id, { name: w.name || day.name, ...(targets.length ? { target_muscle_ids: targets } : {}) });
+                setAiOpen(false);
+              },
+            },
+          ]}
+        />
+      )}
 
       <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title={menuFor ? catalog.byId.get(menuFor.exercise_id)?.name : undefined}>
         {menuFor && (
