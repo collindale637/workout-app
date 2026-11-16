@@ -68,7 +68,7 @@ export function DayEditor() {
   async function regenerate() {
     const { items } = generateWorkout(catalog!, {
       targets: day.target_muscle_ids, gymEquipment, goal, experience: profile!.experience, sessionMinutes: profile!.session_minutes,
-      prefs, seed: regenSeed, cardio: style.cardio ?? undefined, focus: style.focus, avoid: new Set(list.map((e) => e.exercise_id)),
+      prefs, seed: regenSeed, cardioPref: profile!.cardio_pref, cardio: style.cardio ?? undefined, focus: style.focus, avoid: new Set(list.map((e) => e.exercise_id)),
     });
     setRegenSeed(regenSeed + 1);
     await actions.replaceExercises(day.id, items);

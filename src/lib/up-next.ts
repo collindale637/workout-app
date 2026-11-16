@@ -64,7 +64,7 @@ export function useUpNext(): UpNext | null | undefined {
     const scores = recoveryScores(recovery.map);
     const base = {
       gymEquipment, goal: profile.goal, experience: profile.experience, sessionMinutes: profile.session_minutes,
-      prefs, recovery: scores, lastDone, seed,
+      prefs, recovery: scores, lastDone, seed, cardioPref: profile.cardio_pref,
     };
     const gen = { gymEquipment, experience: profile.experience, prefs };
 

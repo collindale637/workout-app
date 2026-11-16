@@ -66,7 +66,7 @@ export function libraryForImport(catalog: Catalog, prefs: Map<string, ExercisePr
 }
 
 export const aiProfile = (p: Profile): AiProfile => ({
-  goal: p.goal, experience: p.experience, days_per_week: p.days_per_week, session_minutes: p.session_minutes, units: p.units, default_rpe: p.default_rpe,
+  goal: p.goal, experience: p.experience, days_per_week: p.days_per_week, session_minutes: p.session_minutes, units: p.units, default_rpe: p.default_rpe, cardio_pref: p.cardio_pref ?? "auto",
 });
 
 /** Muscles that aren't fully fresh, rounded. */

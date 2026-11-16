@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -27,6 +27,7 @@ await db.exec(readFileSync(root + "20261116000100_phase1_logging.sql", "utf8"));
 await db.exec(readFileSync(root + "20261116000200_cardio_in_workouts.sql", "utf8"));
 await db.exec(readFileSync(root + "20261116000300_phase2_plans.sql", "utf8"));
 await db.exec(readFileSync(root + "20261117000100_phase3_ai.sql", "utf8"));
+await db.exec(readFileSync(root + "20261118000100_phase4_progress.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -89,6 +90,16 @@ r.push(["A can't erase usage", await as(A, `delete from ai_requests returning id
 r.push(["household spend is shared", await as(A, `select household_usd::text, mine_usd::text, my_requests from ai_spend_this_month()`)]);
 r.push(["anon can't log AI", await (async () => { await db.exec("set role anon"); try { return { rows: (await db.query("select public.ai_log_request('plan','x',1,1,1)")).rows }; } catch (e) { return { error: e.message }; } finally { await db.exec("reset role"); } })()]);
 r.push(["A saves plan notes", await as(A, `update plans set notes = 'Add a rep each week' where id = '${P}' returning notes`)]);
+// Phase 4: bodyweight log, cardio preference, no-equipment exercises.
+r.push(["A logs bodyweight", await as(A, `insert into body_metrics (id, date, bodyweight) values ('ffffffff-0000-0000-0000-000000000001','2026-11-18',182.4) returning bodyweight::text`)]);
+r.push(["A edits today's weight", await as(A, `insert into body_metrics (id, date, bodyweight) values ('ffffffff-0000-0000-0000-000000000001','2026-11-18',181.9) on conflict (id) do update set bodyweight = excluded.bodyweight returning bodyweight::text`)]);
+r.push(["one entry per day", await as(A, `insert into body_metrics (date, bodyweight) values ('2026-11-18',180)`)]);
+r.push(["B sees none of A's weights", await as(B, `select count(*)::int n from body_metrics`)]);
+r.push(["B can't change A's weight", await as(B, `update body_metrics set bodyweight = 1 returning id`)]);
+r.push(["cardio pref defaults to auto", await as(A, `select cardio_pref from profiles`)]);
+r.push(["A sets cardio pref", await as(A, `update profiles set cardio_pref = 'more' returning cardio_pref`)]);
+r.push(["bad cardio pref rejected", await as(A, `update profiles set cardio_pref = 'lots' returning id`)]);
+r.push(["no-equipment exercises", await as(A, `select e.id, count(m.*)::int muscles, (select count(*) from exercise_equipment q where q.exercise_id = e.id)::int equipment from exercises e join exercise_muscles m on m.exercise_id = e.id where e.id in ('Doorframe_Row','Pike_Push_Up','Prone_Y_T_W_Raise') group by e.id order by e.id`)]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
 

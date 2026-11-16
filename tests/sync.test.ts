@@ -5,12 +5,12 @@ import { markDeleted, markDirty, syncNow } from "@/lib/db/sync";
 
 /** A tiny stand-in for the Supabase client that records writes and serves canned reads. */
 function fakeSupabase(server: Record<string, Record<string, unknown>[]>) {
-  const calls: { table: string; op: string; payload?: unknown; filter?: unknown }[] = [];
+  const calls: { table: string; op: string; payload?: unknown; filter?: unknown; options?: unknown }[] = [];
   const from = (table: string) => {
-    const state: { op: string; payload?: unknown; filters: [string, string, unknown][]; range?: [number, number] } = { op: "select", filters: [] };
+    const state: { op: string; payload?: unknown; options?: unknown; filters: [string, string, unknown][]; range?: [number, number] } = { op: "select", filters: [] };
     const exec = async () => {
       if (state.op !== "select") {
-        calls.push({ table, op: state.op, payload: state.payload, filter: state.filters });
+        calls.push({ table, op: state.op, payload: state.payload, filter: state.filters, options: state.options });
         return { data: null, error: null };
       }
       let rows = server[table] ?? [];
@@ -31,7 +31,7 @@ function fakeSupabase(server: Record<string, Record<string, unknown>[]>) {
       order: () => q,
       range: (a: number, b: number) => ((state.range = [a, b]), q),
       maybeSingle: async () => ({ data: (await exec()).data?.[0] ?? null, error: null }),
-      upsert: (p: unknown) => ((state.op = "upsert"), (state.payload = p), q),
+      upsert: (p: unknown, o?: unknown) => ((state.op = "upsert"), (state.payload = p), (state.options = o), q),
       insert: (p: unknown) => ((state.op = "insert"), (state.payload = p), q),
       update: (p: unknown) => ((state.op = "update"), (state.payload = p), q),
       delete: () => ((state.op = "delete"), q),
@@ -126,5 +126,19 @@ describe("sync", () => {
     expect(await db.outbox.count()).toBe(0);
     // Favorites from another device come down.
     expect((await db.exercise_prefs.get("Pullups"))?.favorite).toBe(true);
+  });
+  it("bodyweight: uploads one row per day (merging by date), and pulls entries with plain dates and numbers", async () => {
+    const { client, calls } = fakeSupabase({
+      profiles: [{ id: USER, default_rpe: 8, cardio_pref: "more" }],
+      body_metrics: [{ id: "bm-server", date: "2026-11-10", bodyweight: "184.2", updated_at: "2026-11-10T12:00:00Z" }],
+    });
+    await db.body_metrics.put({ id: "bm1", date: "2026-11-18", bodyweight: 182.4 });
+    await markDirty(db, "body_metrics", "bm1");
+    await syncNow(db, client, USER);
+    const up = calls.find((c) => c.table === "body_metrics" && c.op === "upsert")!;
+    expect(up.payload).toEqual([{ id: "bm1", date: "2026-11-18", bodyweight: 182.4 }]);
+    expect(up.options).toEqual({ onConflict: "owner_id,date" });
+    expect(await db.body_metrics.get("bm-server")).toMatchObject({ date: "2026-11-10", bodyweight: 184.2 });
+    expect((await db.profile.get(USER))?.cardio_pref).toBe("more");
   });
 });

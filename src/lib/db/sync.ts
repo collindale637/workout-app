@@ -13,7 +13,7 @@ import type { OutboxEntry, SyncTable } from "./types";
 
 /** Columns sent to the server for each table (anything else is local-only). */
 const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "exercise_prefs">, string[]> = {
-  profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at"],
+  profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at", "cardio_pref"],
   exercises: ["id", "name", "aliases", "category", "movement_pattern", "mechanic", "force", "level", "instructions", "images", "is_common", "is_active", "owner_id", "source"],
   gyms: ["id", "name", "template", "is_default"],
   plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active", "notes"],
@@ -23,18 +23,19 @@ const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "ex
   workout_exercises: ["id", "workout_id", "exercise_id", "sort_order", "superset_group", "notes", "target_sets", "rep_min", "rep_max", "rest_sec"],
   sets: ["id", "workout_exercise_id", "set_no", "type", "weight", "reps", "rpe", "completed_at"],
   cardio_sessions: ["id", "workout_id", "workout_exercise_id", "type", "started_at", "duration_sec", "distance", "avg_hr", "rpe", "intervals", "notes"],
+  body_metrics: ["id", "date", "bodyweight"],
 };
 
 /** Upload order: parents first. Deletes run in reverse. */
 const PUSH_ORDER: SyncTable[] = [
   "exercises", "exercise_tags", "exercise_prefs", "gyms", "gym_equipment", "profiles",
   "plans", "plan_days", "plan_exercises",
-  "workouts", "workout_exercises", "sets", "cardio_sessions",
+  "workouts", "workout_exercises", "sets", "cardio_sessions", "body_metrics",
 ];
 
 /** Tables pulled incrementally by updated_at. */
-const INCREMENTAL: Array<"gyms" | "plans" | "plan_days" | "plan_exercises" | "workouts" | "workout_exercises" | "sets" | "cardio_sessions"> = [
-  "gyms", "plans", "plan_days", "plan_exercises", "workouts", "workout_exercises", "sets", "cardio_sessions",
+const INCREMENTAL: Array<"gyms" | "plans" | "plan_days" | "plan_exercises" | "workouts" | "workout_exercises" | "sets" | "cardio_sessions" | "body_metrics"> = [
+  "gyms", "plans", "plan_days", "plan_exercises", "workouts", "workout_exercises", "sets", "cardio_sessions", "body_metrics",
 ];
 
 const pick = (row: Record<string, unknown>, cols: string[]) =>
@@ -128,7 +129,10 @@ async function push(db: LocalDB, sb: SupabaseClient, userId: string) {
         const { error } =
           table === "profiles"
             ? await sb.from("profiles").update(rows[0]).eq("id", userId)
-            : await sb.from(table).upsert(rows);
+            : table === "body_metrics"
+              ? // One entry per day: two phones logging the same day offline merge into one row.
+                await sb.from(table).upsert(rows, { onConflict: "owner_id,date" })
+              : await sb.from(table).upsert(rows);
         if (error) throw new Error(`${table}: ${error.message}`);
       }
     }
@@ -206,8 +210,12 @@ async function pull(db: LocalDB, sb: SupabaseClient, userId: string) {
 /** Numbers come back from Postgres numeric columns as strings. */
 function normalize(row: Record<string, unknown>) {
   const out = { ...row };
-  for (const k of ["weight", "rpe", "distance"]) {
+  for (const k of ["weight", "rpe", "distance", "bodyweight"]) {
     if (typeof out[k] === "string") out[k] = Number(out[k]);
+  }
+  // Date columns are plain days ("2026-11-18"), compared as text.
+  for (const k of ["date", "start_date"]) {
+    if (typeof out[k] === "string" && (out[k] as string).length > 10) out[k] = (out[k] as string).slice(0, 10);
   }
   return out;
 }

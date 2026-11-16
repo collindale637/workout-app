@@ -7,12 +7,12 @@
   - Supabase calls are never cached here; workout data lives in the app's own offline database and syncs.
   Bump VERSION to force every phone to drop old caches.
 */
-const VERSION = "v4";
+const VERSION = "v5";
 const PAGES = `pages-${VERSION}`;
 const ASSETS = `assets-${VERSION}`;
 const IMAGES = `images-${VERSION}`;
 const ROUTES = [
-  "/", "/login", "/welcome", "/workout", "/cardio", "/plan", "/plan/new", "/plan/day", "/recovery", "/progress", "/progress/session",
+  "/", "/login", "/welcome", "/workout", "/cardio", "/plan", "/plan/new", "/plan/day", "/recovery", "/progress", "/progress/session", "/progress/history", "/progress/lift", "/progress/bodyweight",
   "/plan/ai", "/plan/import", "/more", "/more/profile", "/more/gyms", "/more/gyms/edit", "/more/library", "/more/library/exercise", "/more/library/new",
 ];
 

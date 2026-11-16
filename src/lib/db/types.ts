@@ -50,6 +50,8 @@ export type ExerciseEquipment = { exercise_id: string; option_group: number; equ
 export type Goal = "strength" | "hypertrophy" | "fat_loss" | "general";
 export type Experience = "beginner" | "intermediate" | "advanced";
 export type Units = "lb" | "kg";
+/** How much cardio to add on its own: none = only on days that ask for it, auto = what the goal calls for, more = every lifting day. */
+export type CardioPref = "none" | "auto" | "more";
 
 export type Profile = {
   id: string;
@@ -62,6 +64,7 @@ export type Profile = {
   default_rpe: number;
   active_gym_id: string | null;
   onboarded_at: string | null;
+  cardio_pref: CardioPref;
 };
 
 export type GymTemplate = "commercial" | "home" | "hotel" | "bodyweight" | "custom";
@@ -197,6 +200,9 @@ export type PlanExercise = {
   updated_at?: string;
 };
 
+/** One bodyweight entry per day. Pounds. */
+export type BodyMetric = { id: string; date: string; bodyweight: number | null; updated_at?: string };
+
 /** Favorites get picked more often; excluded exercises are never suggested. Keyed by exercise. */
 export type ExercisePref = { exercise_id: string; favorite: boolean; excluded: boolean };
 
@@ -214,7 +220,8 @@ export type SyncTable =
   | "workouts"
   | "workout_exercises"
   | "sets"
-  | "cardio_sessions";
+  | "cardio_sessions"
+  | "body_metrics";
 
 export type OutboxEntry = { table: SyncTable; id: string; rev: number };
 export type Tombstone = { table: SyncTable; id: string };

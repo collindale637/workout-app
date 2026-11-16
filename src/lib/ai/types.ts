@@ -25,6 +25,8 @@ export type AiProfile = {
   session_minutes: number;
   units: "lb" | "kg";
   default_rpe: number;
+  /** none = only when asked, auto = what the goal calls for, more = cardio most sessions. */
+  cardio_pref?: "none" | "auto" | "more";
 };
 
 /** An exercise as Claude returns it (and as the phone saves it). Cardio uses minutes instead of sets × reps. */

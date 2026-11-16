@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile";
 import { RPE_CHOICES } from "@/lib/defaults";
+import { CARDIO_PREF_LABELS } from "@/lib/onboarding";
 import { Card, Chip, btn, field, label } from "@/components/ui/kit";
-import type { Experience, Goal, Profile, Units } from "@/lib/db/types";
+import type { CardioPref, Experience, Goal, Profile, Units } from "@/lib/db/types";
 
 export function ProfileForm() {
   const { profile, save } = useProfile();
@@ -35,6 +36,7 @@ export function ProfileForm() {
           days_per_week: draft.days_per_week,
           session_minutes: draft.session_minutes,
           default_rpe: draft.default_rpe,
+          cardio_pref: draft.cardio_pref ?? "auto",
         });
         setMessage("Saved");
       }}
@@ -69,6 +71,17 @@ export function ProfileForm() {
               {[30, 45, 60, 75, 90].map((n) => <option key={n} value={n}>{n} min</option>)}
             </select>
           </label>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className={label}>CARDIO</span>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(CARDIO_PREF_LABELS) as CardioPref[]).map((c) => (
+              <Chip key={c} active={(draft.cardio_pref ?? "auto") === c} onClick={() => set("cardio_pref", c)}>
+                {c === "none" ? "Lifting only" : c === "auto" ? "For my goal" : "Lots"}
+              </Chip>
+            ))}
+          </div>
+          <p className="text-sm font-medium text-muted">{CARDIO_PREF_LABELS[draft.cardio_pref ?? "auto"].blurb}</p>
         </div>
         <div className="flex flex-col gap-2">
           <span className={label}>UNITS</span>

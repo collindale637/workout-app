@@ -1,5 +1,5 @@
 import { isAvailable } from "./availability";
-import type { Exercise, ExerciseEquipment, ExerciseMuscle, ExercisePref, Experience, Goal } from "./db/types";
+import type { CardioPref, Exercise, ExerciseEquipment, ExerciseMuscle, ExercisePref, Experience, Goal } from "./db/types";
 
 /*
   Rules-based workout generator (plan doc → "Workout generator"). No AI: it runs on the phone, works
@@ -50,6 +50,8 @@ export type GenOptions = {
   now?: number;
   cardio?: CardioMode;
   focus?: DayFocus;
+  /** The person's cardio setting; days that name cardio ("+ Cardio", "Cardio + Core") always get it. */
+  cardioPref?: CardioPref;
 };
 
 /** How much each muscle wants per session when it's a target (roughly "exercises' worth"). */
@@ -123,8 +125,13 @@ export function cardioMinutes(mode: CardioMode, goal: Goal, sessionMinutes: numb
   return 0;
 }
 
-/** Cardio the goal calls for when the day doesn't say: fat loss most days, general fitness on longer sessions. */
-export function defaultCardio(goal: Goal, sessionMinutes: number): CardioMode {
+/**
+ * Cardio when the day doesn't say. "auto" follows the goal (fat loss most days, general fitness on longer
+ * sessions); "more" adds a block every time; "none" leaves it to days that ask for it.
+ */
+export function defaultCardio(goal: Goal, sessionMinutes: number, pref: CardioPref = "auto"): CardioMode {
+  if (pref === "none") return "none";
+  if (pref === "more") return "block";
   if (goal === "fat_loss") return "block";
   if (goal === "general" && sessionMinutes >= 50) return "block";
   return "none";
@@ -163,9 +170,22 @@ const UNLOADED = new Set([
   "gymnastic_rings", "suspension_trainer", "resistance_bands", "ab_wheel", "jump_rope", "power_rack", "squat_stand",
 ]);
 
-/** "Seated Dumbbell Shoulder Press" and "Dumbbell Shoulder Press" are the same exercise for variety purposes. */
+/**
+ * "Seated Dumbbell Shoulder Press" and "Dumbbell Shoulder Press" (or "Cable Lateral Raise" and "Machine Lateral
+ * Raise") are the same exercise for variety purposes: one per session is enough.
+ */
 export const baseName = (name: string) =>
-  name.toLowerCase().replace(/\b(seated|standing|alternating|alternate|single-arm|one-arm|single-leg|one-leg)\b/g, "").replace(/\s+/g, " ").trim();
+  name
+    .toLowerCase()
+    .replace(/\b(seated|standing|alternating|alternate|single-arm|one-arm|single-leg|one-leg|cable|machine|dumbbell|barbell|smith|kettlebell|band|lever|leverage|goblet|trap bar|ez-bar|ez bar)\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** Score penalty for the 2nd, 3rd, 4th… exercise with the same movement pattern on the same muscles. */
+const REPEAT_PENALTY = [0.6, 1.8, 3];
+
+/** Arms get plenty from presses and rows, but still want direct work: a compound only counts half for them. */
+const DIRECT_WORK = new Set(["biceps", "triceps"]);
 
 function primaries(cat: GenCatalog, id: string) {
   return (cat.musclesOf.get(id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id);
@@ -199,7 +219,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const now = opts.now ?? Date.now();
   const targets = [...new Set(opts.targets)];
   const targetSet = new Set(targets);
-  const mode = opts.cardio ?? defaultCardio(opts.goal, opts.sessionMinutes);
+  const mode = opts.cardio ?? defaultCardio(opts.goal, opts.sessionMinutes, opts.cardioPref);
   const cMin = cardioMinutes(mode, opts.goal, opts.sessionMinutes);
   const liftMinutes = Math.max(10, opts.sessionMinutes - cMin - 5);
   const n = mode === "main" ? Math.min(3, Math.max(2, targets.length)) : exerciseCount(opts.goal, liftMinutes, targets.length);
@@ -235,11 +255,17 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     const last = opts.lastDone?.get(c.ex.id);
     if (last && now - last < 3 * 86_400_000) s -= 0.2;
     if (bigGym && !c.equipment && !isCore(c)) s -= 0.5;
+    let samePattern = 0;
     for (const o of chosen) {
       const overlap = c.primary.some((m) => o.primary.includes(m));
-      if (!overlap) continue;
-      if (o.base === c.base || (o.equipment === c.equipment && o.primary.join() === c.primary.join() && o.ex.mechanic === c.ex.mechanic)) s -= 1.5;
-      else if (o.ex.movement_pattern === c.ex.movement_pattern) s -= 0.6;
+      // Compound movements of one kind count as repeats when they share any muscle ("Machine Row" is
+      // tagged lats-first, a T-bar row upper-back-first: still two rows). Isolation needs the same main muscle.
+      const compoundPattern = c.ex.movement_pattern !== "isolation" && c.ex.movement_pattern !== "core";
+      const related = overlap || (compoundPattern && [...c.primary, ...c.secondary].some((m) => o.primary.includes(m) || o.secondary.includes(m)));
+      if (!related) continue;
+      if (overlap && (o.base === c.base || (o.equipment === c.equipment && o.primary.join() === c.primary.join() && o.ex.mechanic === c.ex.mechanic))) s -= 1.5;
+      // A second row is fine; a third is too many. The penalty grows with each repeat of the movement.
+      else if (o.ex.movement_pattern === c.ex.movement_pattern) s -= REPEAT_PENALTY[Math.min(samePattern++, REPEAT_PENALTY.length - 1)];
     }
     return s + 0.35 * (jitter.get(c.ex.id) ?? 0);
   };
@@ -257,7 +283,8 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     }
     if (!best || bestScore < (chosen.length >= 3 ? 0.15 : -0.5)) break;
     chosen.push(best);
-    for (const m of best.primary) if (need.has(m)) need.set(m, Math.max(0, need.get(m)! - 1));
+    const compound = best.ex.mechanic === "compound";
+    for (const m of best.primary) if (need.has(m)) need.set(m, Math.max(0, need.get(m)! - (compound && DIRECT_WORK.has(m) ? 0.5 : 1)));
     for (const m of best.secondary) if (need.has(m)) need.set(m, Math.max(0, need.get(m)! - 0.3));
   }
 
