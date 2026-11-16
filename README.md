@@ -118,6 +118,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261117000100_phase3_ai.sql` | Plan notes; AI usage log written through `ai_log_request()`, spend via `ai_spend_this_month()` | ✓ |
 | `20261118000100_phase4_progress.sql` | `profiles.cardio_pref`; three no-equipment exercises | ✓ |
 | `20261119000100_outdoor_cardio_gear.sql` | Outdoor Bike Ride needs a bike, Skating needs skates (new equipment items) | ✓ |
+| `20261119000200_skipped_sets.sql` | `workout_exercises.skipped_sets`: which planned sets were skipped | ✓ |
 
 ## One-time setup
 

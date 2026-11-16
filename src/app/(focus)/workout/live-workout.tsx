@@ -20,6 +20,8 @@ import { ExercisePicker } from "@/components/exercise-picker";
 import { ExerciseInfo } from "@/components/exercise-info";
 import { Sheet, btn, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
+import { ReorderList, type ReorderItem } from "@/components/reorder-list";
+import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
 import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
@@ -63,9 +65,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   }, [cardioRows]);
   const extraCardio = (cardioRows ?? []).filter((c) => !c.workout_exercise_id).sort((a, b) => a.started_at.localeCompare(b.started_at));
 
-  const working = (id: string) => (setsBy.get(id) ?? []).filter((s) => s.type !== "warmup").length;
   const isCardioWex = (w: WorkoutExercise) => isCardioExercise(catalog?.byId.get(w.exercise_id));
-  const done = (w: WorkoutExercise) => (isCardioWex(w) ? cardioByWex.has(w.id) : working(w.id) >= (w.target_sets ?? 3));
+  /** Planned sets that are finished: logged, or skipped. */
+  const filled = (w: WorkoutExercise) => filledSets(setsBy.get(w.id) ?? [], w.target_sets ?? 3, w.skipped_sets);
+  const done = (w: WorkoutExercise) => (isCardioWex(w) ? cardioByWex.has(w.id) : filled(w) >= (w.target_sets ?? 3));
   const remaining = (w: WorkoutExercise) => !done(w);
 
   const [currentId, setCurrentId] = useState<string | null>(null);
@@ -96,7 +99,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const done = setsBy.get(current.id) ?? [];
     const lastToday = [...done].reverse().find((s) => s.type !== "warmup") ?? done[done.length - 1];
     const prev = history.get(current.exercise_id)?.last.filter((s) => s.type !== "warmup") ?? [];
-    const sameSetLastTime = prev[working(current.id)] ?? prev[prev.length - 1];
+    const sameSetLastTime = prev[nextSlot(done, current.target_sets ?? 3, current.skipped_sets) - 1] ?? prev[prev.length - 1];
     // First set of an exercise: double progression from last time (more weight once you hit the top of the range).
     const suggestion = !lastToday && prev.length ? suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog?.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null)) : null;
     const src = lastToday ?? sameSetLastTime;
@@ -121,6 +124,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [typeOpen, setTypeOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [addCardioOpen, setAddCardioOpen] = useState(false);
+  // After the last set of an exercise, the blue card shows "Up next" (set to that exercise's id) until you start the next one.
+  const [upNextFrom, setUpNextFrom] = useState<string | null>(null);
 
   if (!wexs || !sets || !catalog) return null;
 
@@ -179,7 +184,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (!current) return;
     await actions.logSet(current.id, draft);
     const group = current.superset_group;
-    const doneNow = working(current.id) + (draft.type === "warmup" ? 0 : 1);
+    const doneNow = filled(current) + (draft.type === "warmup" ? 0 : 1);
     // This set finished the last planned set of the whole workout: no rest, say well done.
     const finishedAll =
       draft.type !== "warmup" &&
@@ -194,22 +199,34 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (group !== null) {
       const members = wexs!.filter((w) => w.superset_group === group);
       const pos = members.findIndex((w) => w.id === current.id);
-      const nextInRound = members.slice(pos + 1).find((w) => working(w.id) < (w.target_sets ?? 3));
+      const nextInRound = members.slice(pos + 1).find((w) => filled(w) < (w.target_sets ?? 3));
       if (nextInRound && draft.type !== "warmup") {
         setCurrentId(nextInRound.id); // superset: go straight to the partner, no rest
         await db.setMeta("rest", null);
         return;
       }
-      const first = members.find((w) => (w.id === current.id ? doneNow : working(w.id)) < (w.target_sets ?? 3));
+      const first = members.find((w) => (w.id === current.id ? doneNow : filled(w)) < (w.target_sets ?? 3));
       await startRest(current.rest_sec ?? 90, current.id);
       setCurrentId(first?.id ?? wexs!.find((w) => w.superset_group !== group && remaining(w))?.id ?? current.id);
       return;
     }
     await startRest(draft.type === "warmup" ? 60 : (current.rest_sec ?? 90), current.id);
-    if (doneNow >= (current.target_sets ?? 3) && draft.type !== "warmup") {
-      const next = wexs!.slice(index + 1).find(remaining) ?? wexs!.find((w) => w.id !== current.id && remaining(w));
-      if (next) setCurrentId(next.id);
-    }
+    if (doneNow >= (current.target_sets ?? 3) && draft.type !== "warmup" && nextAfter(current.id)) setUpNextFrom(current.id);
+  }
+
+  /** Skips a planned set. Skipping the last one finishes the exercise, same as logging it. */
+  async function skipSet(w: WorkoutExercise, slot: number) {
+    const skipped = [...new Set([...(w.skipped_sets ?? []), slot])].sort((a, b) => a - b);
+    await actions.updateWex(w.id, { skipped_sets: skipped });
+    if (filledSets(setsBy.get(w.id) ?? [], w.target_sets ?? 3, skipped) < (w.target_sets ?? 3)) return;
+    await db.setMeta("rest", null);
+    if (wexs!.every((x) => x.id === w.id || done(x))) setAllDoneOpen(true);
+    else if (nextAfter(w.id)) setUpNextFrom(w.id);
+  }
+
+  async function unskipSet(w: WorkoutExercise, slot: number) {
+    await actions.updateWex(w.id, { skipped_sets: (w.skipped_sets ?? []).filter((n) => n !== slot) });
+    if (upNextFrom === w.id) setUpNextFrom(null);
   }
 
   const step = weightStep(units);
@@ -226,7 +243,16 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       ? `${current.rep_min}–${current.rep_max} reps`
       : `${current.rep_max ?? current.rep_min ?? "?"} reps`
     : "";
-  const setNumber = working(current?.id ?? "") + (draft.type === "warmup" ? 0 : 1);
+  const setNumber = current ? nextSlot(doneSets, current.target_sets ?? 3, current.skipped_sets) : 1;
+  const upNextWex = upNextFrom && current && current.id === upNextFrom && done(current) ? current : null;
+  const upNextTarget = upNextWex ? nextAfter(upNextWex.id) : null;
+  const upNextEx = upNextTarget ? catalog.byId.get(upNextTarget.exercise_id) : undefined;
+  const upNextLast = upNextTarget ? history?.get(upNextTarget.exercise_id)?.last.find((x) => x.type !== "warmup") : undefined;
+  const upNextDetail = upNextTarget
+    ? isCardioWex(upNextTarget)
+      ? "Cardio"
+      : `${upNextTarget.target_sets ?? 3} sets · ${upNextTarget.rep_min ?? "?"}–${upNextTarget.rep_max ?? "?"} reps${upNextLast && upNextLast.weight !== null ? ` · last time ${formatWeight(upNextLast.weight, units)} ${weightUnit(units)} × ${upNextLast.reps ?? "?"}` : ""}`
+    : "";
   // "Up 5 lb from last time" when double progression added weight for today.
   const upHint = (() => {
     if (!current || isCardio || doneSets.length || !history) return null;
@@ -236,6 +262,70 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (sug.change !== "up" || sug.weight === null || sug.from === null) return null;
     return `▲ UP ${formatWeight(sug.weight - sug.from, units)} ${weightUnit(units).toUpperCase()}`;
   })();
+
+  const listItems: ReorderItem[] = wexs.map((w, i) => {
+    const e = catalog.byId.get(w.exercise_id);
+    const cardioWex = isCardioWex(w);
+    const cardioDone = cardioByWex.get(w.id);
+    const running = timer && timer.wexId === w.id ? timer : null;
+    const linkedAbove = i > 0 && w.superset_group !== null && wexs[i - 1].superset_group === w.superset_group;
+    const skippedN = (w.skipped_sets ?? []).filter((n) => n <= (w.target_sets ?? 3)).length;
+    const isCur = !extra && w.id === current?.id;
+    return {
+      id: w.id,
+      ariaLabel: `${e?.name ?? w.exercise_id}. Tap to open. Swipe left for options. Hold to drag.`,
+      liClassName: linkedAbove ? "-mt-2" : "",
+      before: linkedAbove ? <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" /> : undefined,
+      faceClassName: `flex min-h-16 items-center rounded-2xl border-2 py-2 pr-3 pl-4 ${isCur ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`,
+      onTap: () => {
+        setUpNextFrom(null);
+        setCurrentId(w.id);
+      },
+      face: (
+        <>
+          <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${done(w) ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
+            {done(w) ? "✓" : i + 1}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-base font-bold">{e?.name ?? w.exercise_id}</span>
+            <span className="block truncate text-sm font-medium text-muted">
+              {cardioWex ? (
+                cardioDone
+                  ? cardioSummary(cardioDone, units)
+                  : running
+                    ? running.stoppedAt
+                      ? `${formatDuration(cardioElapsedSec(running, now))} · enter results`
+                      : `Running ${formatDuration(cardioElapsedSec(running, now))}`
+                    : "Cardio · tap to start"
+              ) : (
+                <>
+                  {filled(w)}/{w.target_sets ?? 3} sets{skippedN ? ` (${skippedN} skipped)` : ""} · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
+                </>
+              )}
+              {w.notes ? <span className="text-accent-soft"> · {w.notes}</span> : null}
+            </span>
+          </span>
+          <svg className="shrink-0 text-[#454d6e]" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+          </svg>
+        </>
+      ),
+      actions: [
+        { key: "swap", label: "Swap", icon: <RowIcon name="swap" />, className: "bg-primary text-white", onPress: () => setPicker({ mode: "swap", wex: w }) },
+        { key: "how", label: "How-to", icon: <RowIcon name="how" />, className: "bg-[#2a3150] text-white", onPress: () => setInfoFor(w.exercise_id) },
+        { key: "notes", label: "Notes", icon: <RowIcon name="notes" />, className: "bg-[#3b4a8c] text-white", onPress: () => setNotesFor(w) },
+        {
+          key: "remove",
+          label: "Remove",
+          icon: <RowIcon name="remove" />,
+          className: "bg-danger text-white",
+          onPress: async () => {
+            if (confirm(cardioWex ? "Remove this cardio and its results?" : "Remove this exercise and its sets?")) await actions.removeWex(w.id);
+          },
+        },
+      ],
+    };
+  });
 
   return (
     <main className="flex min-h-dvh flex-col pb-10">
@@ -289,6 +379,29 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             }}
             onGoToOther={() => setCurrentId(otherTimer?.wexId ?? null)}
           />
+        ) : upNextWex && upNextTarget ? (
+          <>
+            <p className="display mt-1 text-sm font-extrabold tracking-[0.1em] text-[#C9F7DA]">✓ {ex?.name} DONE</p>
+            <p className="display mt-3.5 text-[13px] font-bold tracking-[0.14em] text-[#DCE4FF]">UP NEXT</p>
+            <h1 className="display mt-1 text-[34px] leading-[0.95] font-extrabold">{upNextEx?.name ?? upNextTarget.exercise_id}</h1>
+            <p className="mt-1.5 text-[15px] font-semibold text-[#DCE4FF]">{upNextDetail}</p>
+            {rest && restLeft > 0 && (
+              <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
+            )}
+            <div className="mt-3.5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentId(upNextTarget.id);
+                  setUpNextFrom(null);
+                }}
+                className="display flex h-15 flex-1 items-center justify-center rounded-2xl bg-white text-xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-4px_0_#C9D3FF] active:translate-y-px"
+              >
+                Start {isCardioWex(upNextTarget) ? "cardio" : "exercise"}
+              </button>
+              <button type="button" onClick={() => setInfoFor(upNextTarget.exercise_id)} aria-label="How to do it" className="flex h-15 w-15 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-2xl active:bg-white/25">ⓘ</button>
+            </div>
+          </>
         ) : current && ex && isCardio ? (
           <CardioPanel
             name={ex.name}
@@ -335,7 +448,14 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
                 {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
               </button>
-              <span>&nbsp;· TARGET {targetLabel.toUpperCase()}</span>
+              <button
+                type="button"
+                onClick={() => setMenuFor(current)}
+                className="relative ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-white/45 px-3 after:absolute after:-inset-1 after:content-[''] active:bg-white/15"
+                aria-label="Edit sets, reps and rest"
+              >
+                TARGET {targetLabel.toUpperCase()} ✎
+              </button>
               {current.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
             </p>
             {gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) && (
@@ -388,7 +508,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               units={units}
               defaultRpe={defaultRpe}
               nextType={draft.type}
+              target={current.target_sets ?? 3}
+              skipped={current.skipped_sets ?? []}
+              hideNext={upNextWex !== null}
               onEdit={setEditSet}
+              onSkip={(slot) => void skipSet(current, slot)}
+              onUnskip={(slot) => void unskipSet(current, slot)}
             />
 
           </>
@@ -398,49 +523,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           <h2 className="display text-xl font-extrabold">This workout</h2>
           <button type="button" className="h-10 text-sm font-bold text-accent" onClick={() => setNotesFor("workout")}>{workout.notes ? "Edit notes" : "+ Notes"}</button>
         </div>
-        <ul className="flex flex-col gap-2">
-          {wexs.map((w, i) => {
-            const e = catalog.byId.get(w.exercise_id);
-            const n = working(w.id);
-            const cardioWex = isCardioWex(w);
-            const cardioDone = cardioByWex.get(w.id);
-            const running = timer && timer.wexId === w.id ? timer : null;
-            const linkedAbove = i > 0 && w.superset_group !== null && wexs[i - 1].superset_group === w.superset_group;
-            return (
-              <li key={w.id} className={linkedAbove ? "-mt-2" : ""}>
-                {linkedAbove && <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" />}
-                <div className={`flex min-h-16 items-center gap-2 rounded-2xl border-2 pr-1 ${!extra && w.id === current?.id ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}>
-                  <button type="button" onClick={() => setCurrentId(w.id)} className="flex min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left">
-                    <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${done(w) ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
-                      {done(w) ? "✓" : i + 1}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-base font-bold">{e?.name ?? w.exercise_id}</span>
-                      <span className="block truncate text-sm font-medium text-muted">
-                        {cardioWex ? (
-                          cardioDone
-                            ? cardioSummary(cardioDone, units)
-                            : running
-                              ? running.stoppedAt
-                                ? `${formatDuration(cardioElapsedSec(running, now))} · enter results`
-                                : `Running ${formatDuration(cardioElapsedSec(running, now))}`
-                              : "Cardio · tap to start"
-                        ) : (
-                          <>
-                            {n}/{w.target_sets ?? 3} sets · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
-                          </>
-                        )}
-                        {w.notes ? <span className="text-accent-soft"> · {w.notes}</span> : null}
-                      </span>
-                    </span>
-                  </button>
-                  <button type="button" aria-label={`Options for ${e?.name}`} onClick={() => setMenuFor(w)} className="flex h-11 w-11 items-center justify-center rounded-xl text-muted">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" /></svg>
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+        <ReorderList items={listItems} onReorder={(ids) => void actions.reorder(workout.id, ids)} />
+        <ul className="-mt-1 flex flex-col gap-2">
           {[
             ...extraCardio.map((c) => ({ key: `cardio:${c.id}`, type: c.type, session: c as CardioSession | null })),
             ...(extraTimer && !extraTimer.sessionId ? [{ key: "cardio:timer", type: extraTimer.type, session: null }] : []),
@@ -512,25 +596,11 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           <ExerciseMenu
             wex={menuFor}
             isLast={wexs[wexs.length - 1]?.id === menuFor.id}
-            isFirst={wexs[0]?.id === menuFor.id}
-            isCardio={isCardioWex(menuFor)}
             nextIsCardio={(() => {
               const next = wexs[wexs.findIndex((w) => w.id === menuFor.id) + 1];
               return next ? isCardioWex(next) : false;
             })()}
             onClose={() => setMenuFor(null)}
-            onSwap={() => {
-              setPicker({ mode: "swap", wex: menuFor });
-              setMenuFor(null);
-            }}
-            onNotes={() => {
-              setNotesFor(menuFor);
-              setMenuFor(null);
-            }}
-            onInfo={() => {
-              setInfoFor(menuFor.exercise_id);
-              setMenuFor(null);
-            }}
             actions={actions}
             workoutId={workout.id}
           />
@@ -725,24 +795,29 @@ function lastTimeLabel(iso: string) {
 }
 
 /**
- * Today vs last time, one row per set. Tap a row you've logged to edit it.
- * Numbers count working sets only: warm-ups are "W" and drop sets are "D", so they don't use up a number.
- * Last time is paired by order (warm-ups skipped), so a drop set lines up with whatever you did in that position.
+ * Every planned set, one row each: logged sets (tap to edit), skipped sets (Undo), the next one, and the rest still to come
+ * (Skip). Warm-ups are "W" and drop sets are "D"; drop sets still use up a planned set. Last time is paired by set number.
  */
 function SetTable({
-  done, history, units, defaultRpe, nextType, onEdit,
+  done, history, units, defaultRpe, nextType, target, skipped, hideNext, onEdit, onSkip, onUnskip,
 }: {
   done: WorkoutSet[];
   history?: { last: WorkoutSet[]; lastDate: string | null };
   units: Units;
   defaultRpe: number;
   nextType: SetType;
+  target: number;
+  skipped: number[];
+  hideNext: boolean;
   onEdit: (s: WorkoutSet) => void;
+  onSkip: (slot: number) => void;
+  onUnskip: (slot: number) => void;
 }) {
   const last = history?.last.filter((s) => s.type !== "warmup") ?? [];
   const u = weightUnit(units) === "kg" ? "kg" : "lbs";
-  const cols = "grid grid-cols-[2.75rem_1.15fr_1fr] items-center";
+  const cols = "grid grid-cols-[2.75rem_1.15fr_1fr_4.25rem] items-center";
   const badge = "display flex h-8 w-8 items-center justify-center rounded-lg text-base font-extrabold";
+  const skipBtn = "display relative h-9 min-w-14 justify-self-end rounded-[10px] bg-card-2 px-2.5 text-sm font-extrabold tracking-[0.08em] text-muted after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] active:bg-line";
 
   const amount = (s: WorkoutSet) => (
     <>
@@ -752,18 +827,8 @@ function SetTable({
       <span className="text-sm font-semibold text-muted"> reps</span>
     </>
   );
-  const lastCell = (i: number) => (last[i] ? amount(last[i]) : "—");
-
-  let paired = 0; // working + drop sets so far (to pair with last time)
-  let numbered = 0; // working sets so far (to number the rows)
-  const rows = done.map((s) => {
-    const isWarm = s.type === "warmup";
-    const i = isWarm ? -1 : paired++;
-    if (s.type === "working") numbered++;
-    return { s, i, tag: isWarm ? "W" : s.type === "drop" ? "D" : String(numbered) };
-  });
-  const nextTag = nextType === "warmup" ? "W" : nextType === "drop" ? "D" : String(numbered + 1);
-  const later = last.slice(paired + 1).map((_, k) => paired + 1 + k); // last time went further than you have
+  const lastCell = (slot: number) => (last[slot - 1] ? amount(last[slot - 1]) : "—");
+  const lastClass = "display num text-[22px] leading-none font-extrabold text-muted";
 
   return (
     <section aria-label="Sets" className="flex flex-col">
@@ -771,42 +836,83 @@ function SetTable({
         <span>SET</span>
         <span>TODAY</span>
         <span>LAST{history?.lastDate && last.length ? ` · ${lastTimeLabel(history.lastDate).toUpperCase()}` : ""}</span>
+        <span />
       </div>
-      {rows.map(({ s, i, tag }) => (
-        <button key={s.id} type="button" onClick={() => onEdit(s)} className={`${cols} min-h-14 border-t border-line py-2 text-left active:bg-card`} aria-label={`Edit set ${tag}`}>
-          <span className={`${badge} text-muted`}>{tag}</span>
-          <span className="flex flex-col items-start gap-0.5">
-            <span className={`display num text-[22px] leading-none font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>{amount(s)}</span>
-            <span className="display flex gap-1 text-[11px] font-semibold tracking-[0.08em]">
-              <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>
-              {s.type === "drop" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">DROP</span>}
-              {s.type === "warmup" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">WARM-UP</span>}
-            </span>
-          </span>
-          <span className="display num text-[22px] leading-none font-extrabold text-muted">{i >= 0 ? lastCell(i) : ""}</span>
-        </button>
-      ))}
-      <div className={`${cols} min-h-14 border-t border-line py-2`} aria-current="step">
-        <span className={`${badge} bg-primary/20 text-accent-soft`}>{nextTag}</span>
-        <span className="display text-[22px] font-extrabold text-accent-soft">NEXT</span>
-        <span className="display num text-[22px] leading-none font-extrabold text-muted">{nextType === "warmup" ? "" : lastCell(paired)}</span>
-      </div>
-      {later.map((i) => (
-        <div key={i} className={`${cols} min-h-14 border-t border-line py-2 opacity-60`}>
-          <span className={`${badge} text-muted`}>·</span>
-          <span className="display text-[22px] font-extrabold text-muted">—</span>
-          <span className="display num text-[22px] leading-none font-extrabold text-muted">{lastCell(i)}</span>
-        </div>
-      ))}
+      {slotRows(done, target, skipped).map((r) => {
+        if (r.kind === "logged") {
+          const s = r.set;
+          const tag = s.type === "warmup" ? "W" : s.type === "drop" ? "D" : String(r.slot);
+          return (
+            <button key={s.id} type="button" onClick={() => onEdit(s)} className={`${cols} min-h-14 border-t border-line py-2 text-left active:bg-card`} aria-label={`Edit set ${tag}`}>
+              <span className={`${badge} text-muted`}>{tag}</span>
+              <span className="flex flex-col items-start gap-0.5">
+                <span className={`display num text-[22px] leading-none font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>{amount(s)}</span>
+                <span className="display flex gap-1 text-[11px] font-semibold tracking-[0.08em]">
+                  <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>
+                  {s.type === "drop" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">DROP</span>}
+                  {s.type === "warmup" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">WARM-UP</span>}
+                </span>
+              </span>
+              <span className={lastClass}>{r.slot !== null ? lastCell(r.slot) : ""}</span>
+              <span />
+            </button>
+          );
+        }
+        if (r.kind === "skipped") {
+          return (
+            <div key={`s${r.slot}`} className={`${cols} min-h-14 border-t border-line py-2`}>
+              <span className={`${badge} text-muted`}>{r.slot}</span>
+              <span className="display text-[22px] font-extrabold text-muted line-through decoration-2">SKIPPED</span>
+              <span className={`${lastClass} opacity-60`}>{lastCell(r.slot)}</span>
+              <button type="button" onClick={() => onUnskip(r.slot)} className={skipBtn} aria-label={`Undo skipping set ${r.slot}`}>UNDO</button>
+            </div>
+          );
+        }
+        if (r.kind === "next") {
+          if (hideNext) return null;
+          const tag = nextType === "warmup" ? "W" : nextType === "drop" ? "D" : String(r.slot);
+          return (
+            <div key={`n${r.slot}`} className={`${cols} min-h-14 border-t border-line py-2`} aria-current="step">
+              <span className={`${badge} bg-primary/20 text-accent-soft`}>{tag}</span>
+              <span className="display text-[22px] font-extrabold text-accent-soft">{r.extra ? "EXTRA" : "NEXT"}</span>
+              <span className={lastClass}>{nextType === "warmup" ? "" : lastCell(r.slot)}</span>
+              {!r.extra && nextType === "working" ? <button type="button" onClick={() => onSkip(r.slot)} className={skipBtn} aria-label={`Skip set ${r.slot}`}>SKIP</button> : <span />}
+            </div>
+          );
+        }
+        return (
+          <div key={`p${r.slot}`} className={`${cols} min-h-14 border-t border-line py-2 opacity-60`}>
+            <span className={`${badge} text-muted`}>{r.slot}</span>
+            <span className="display text-[22px] font-extrabold text-muted">—</span>
+            <span className={lastClass}>{lastCell(r.slot)}</span>
+            <button type="button" onClick={() => onSkip(r.slot)} className={skipBtn} aria-label={`Skip set ${r.slot}`}>SKIP</button>
+          </div>
+        );
+      })}
       {!last.length && <p className="pt-1 text-sm font-medium text-muted">First time logging this one.</p>}
     </section>
   );
 }
 
+function RowIcon({ name }: { name: "swap" | "how" | "notes" | "remove" }) {
+  const d = {
+    swap: "M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7",
+    how: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v6M12 7.5v.01",
+    notes: "M5 4h14v16H5zM9 9h6M9 13h6M9 17h3",
+    remove: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+  }[name];
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+/** Sets, reps and rest for one exercise, plus linking it as a superset (opened from the target on the blue card). */
 function ExerciseMenu({
-  wex, isFirst, isLast, isCardio, nextIsCardio, onClose, onSwap, onNotes, onInfo, actions, workoutId,
+  wex, isLast, nextIsCardio, onClose, actions, workoutId,
 }: {
-  wex: WorkoutExercise; isFirst: boolean; isLast: boolean; isCardio: boolean; nextIsCardio: boolean; onClose: () => void; onSwap: () => void; onNotes: () => void; onInfo: () => void;
+  wex: WorkoutExercise; isLast: boolean; nextIsCardio: boolean; onClose: () => void;
   actions: ReturnType<typeof useWorkoutActions>; workoutId: string;
 }) {
   const [sets, setSets] = useState(wex.target_sets ?? 3);
@@ -826,7 +932,6 @@ function ExerciseMenu({
   );
   return (
     <div className="flex flex-col gap-2">
-      {!isCardio && (
       <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card-2 p-3">
         {small(sets, setSets, "SETS")}
         {small(rest, setRest, "REST", 15)}
@@ -843,20 +948,11 @@ function ExerciseMenu({
           Save targets
         </button>
       </div>
-      )}
-      <button type="button" className={item} onClick={onSwap}>⇄ Swap exercise</button>
-      <button type="button" className={item} onClick={onInfo}>ⓘ How to do it</button>
-      <button type="button" className={item} onClick={onNotes}>📝 {wex.notes ? "Edit notes" : "Add notes"}</button>
-      {!isCardio && ((!isLast && !nextIsCardio) || wex.superset_group !== null) && (
+      {((!isLast && !nextIsCardio) || wex.superset_group !== null) && (
         <button type="button" className={item} onClick={async () => { await actions.toggleSuperset(workoutId, wex.id); onClose(); }}>
           🔗 {wex.superset_group !== null ? "Remove from superset" : "Superset with the next exercise"}
         </button>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled={isFirst} className={`${item} justify-center disabled:opacity-40`} onClick={async () => { await actions.move(workoutId, wex.id, -1); onClose(); }}>↑ Move up</button>
-        <button type="button" disabled={isLast} className={`${item} justify-center disabled:opacity-40`} onClick={async () => { await actions.move(workoutId, wex.id, 1); onClose(); }}>↓ Move down</button>
-      </div>
-      <button type="button" className={`${item} text-danger`} onClick={async () => { if (confirm(isCardio ? "Remove this cardio and its results?" : "Remove this exercise and its sets?")) { await actions.removeWex(wex.id); onClose(); } }}>✕ Remove</button>
     </div>
   );
 }

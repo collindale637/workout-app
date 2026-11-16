@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -29,6 +29,7 @@ await db.exec(readFileSync(root + "20261116000300_phase2_plans.sql", "utf8"));
 await db.exec(readFileSync(root + "20261117000100_phase3_ai.sql", "utf8"));
 await db.exec(readFileSync(root + "20261118000100_phase4_progress.sql", "utf8"));
 await db.exec(readFileSync(root + "20261119000100_outdoor_cardio_gear.sql", "utf8"));
+await db.exec(readFileSync(root + "20261119000200_skipped_sets.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
