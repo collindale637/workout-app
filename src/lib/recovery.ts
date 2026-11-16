@@ -11,6 +11,10 @@ import type { CardioType, Muscle, SetType } from "./db/types";
   Calibrated (Batch 5 audit) so a hard session (~10 sets near failure) reads "fatigued" for about a day and
   "fresh" again after ~2 days for small muscles, ~2.5 for chest and shoulders, ~3 for legs and back: the usual
   48–72 hours. Lighter sessions recover sooner.
+
+  Manual adjustment: you can tell the app how a muscle really feels. That stores an offset to the muscle's
+  fatigue at that moment, which fades with the same τ as everything else, so it wears off by itself and sets
+  you log afterwards still count on top.
 */
 
 export const F_MAX = 12;
@@ -19,6 +23,8 @@ export const FRESH_AT = 85;
 export const RECOVERING_AT = 60;
 
 export type RecoveryState = "fresh" | "recovering" | "fatigued";
+
+export const scoreFor = (fatigue: number) => Math.round(100 * Math.min(1, Math.max(0, 1 - fatigue / F_MAX)));
 
 export const stateFor = (score: number): RecoveryState =>
   score >= FRESH_AT ? "fresh" : score >= RECOVERING_AT ? "recovering" : "fatigued";
@@ -35,11 +41,20 @@ export type FatigueSet = {
 
 export type FatigueCardio = { id: string; at: string; type: CardioType; durationSec: number; rpe: number | null };
 
+/** How a muscle feels, set by hand: fatigue units added at `at` (negative = fresher), fading like normal recovery. */
+export type FatigueAdjustment = { at: number; offset: number };
+export type FatigueAdjustments = Record<string, FatigueAdjustment>;
+
 export type MuscleRecovery = {
   muscleId: string;
   score: number;
   state: RecoveryState;
   fatigue: number;
+  /** What the app would say without a manual adjustment, and the raw fatigue behind it. */
+  autoScore: number;
+  autoFatigue: number;
+  /** True while a manual adjustment is still having an effect. */
+  adjusted: boolean;
   /** Most recent set (or cardio) that worked this muscle in the window. */
   lastTrained: string | null;
   /** Working sets in the window where this muscle was primary / secondary. */
@@ -73,18 +88,25 @@ export function cardioFatigue(c: FatigueCardio) {
 
 const HOUR = 3_600_000;
 
+/** The offset that makes a muscle read `desiredScore` right now, given its automatic fatigue. */
+export const adjustmentFor = (desiredScore: number, autoFatigue: number, now: number): FatigueAdjustment => ({
+  at: now,
+  offset: (1 - Math.min(100, Math.max(0, desiredScore)) / 100) * F_MAX - autoFatigue,
+});
+
 export function computeRecovery(opts: {
   muscles: Pick<Muscle, "id" | "recovery_tau_hours">[];
   sets: FatigueSet[];
   cardio: FatigueCardio[];
   now: number;
   defaultRpe: number;
+  adjustments?: FatigueAdjustments;
 }): Map<string, MuscleRecovery> {
-  const { muscles, sets, cardio, now, defaultRpe } = opts;
+  const { muscles, sets, cardio, now, defaultRpe, adjustments } = opts;
   const out = new Map<string, MuscleRecovery>();
   const tau = new Map(muscles.map((m) => [m.id, m.recovery_tau_hours]));
   for (const m of muscles) {
-    out.set(m.id, { muscleId: m.id, score: 100, state: "fresh", fatigue: 0, lastTrained: null, primarySets: 0, secondarySets: 0 });
+    out.set(m.id, { muscleId: m.id, score: 100, state: "fresh", fatigue: 0, autoScore: 100, autoFatigue: 0, adjusted: false, lastTrained: null, primarySets: 0, secondarySets: 0 });
   }
   const since = now - WINDOW_DAYS * 24 * HOUR;
   const add = (muscleId: string, f: number, at: string) => {
@@ -110,7 +132,15 @@ export function computeRecovery(opts: {
     for (const m of CARDIO_MUSCLES[c.type] ?? []) add(m, f, c.at);
   }
   for (const r of out.values()) {
-    r.score = Math.round(100 * Math.max(0, 1 - r.fatigue / F_MAX));
+    r.autoFatigue = r.fatigue;
+    r.autoScore = scoreFor(r.fatigue);
+    const adj = adjustments?.[r.muscleId];
+    // Adjustments older than the window have faded to nothing (and are ignored); one from the "future" is ignored too.
+    if (adj && adj.at >= since && adj.at <= now + HOUR) {
+      r.fatigue += adj.offset * Math.exp(-Math.max(0, now - adj.at) / HOUR / (tau.get(r.muscleId) ?? 48));
+      r.adjusted = true;
+    }
+    r.score = scoreFor(r.fatigue);
     r.state = stateFor(r.score);
   }
   return out;

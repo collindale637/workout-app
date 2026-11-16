@@ -5,6 +5,7 @@ import { useProfile } from "@/lib/db/provider";
 import { EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile";
 import { RPE_CHOICES } from "@/lib/defaults";
 import { CARDIO_PREF_LABELS } from "@/lib/onboarding";
+import { WEIGH_IN_LABELS, useWeighIn, type WeighInMode } from "@/lib/weigh-in";
 import { Card, Chip, btn, field, label } from "@/components/ui/kit";
 import type { CardioPref, Experience, Goal, Profile, Units } from "@/lib/db/types";
 
@@ -12,6 +13,7 @@ export function ProfileForm() {
   const { profile, save } = useProfile();
   const [draft, setDraft] = useState<Profile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const weighIn = useWeighIn(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- copy the saved profile into an editable draft once
@@ -82,6 +84,17 @@ export function ProfileForm() {
             ))}
           </div>
           <p className="text-sm font-medium text-muted">{CARDIO_PREF_LABELS[draft.cardio_pref ?? "auto"].blurb}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className={label}>WEIGH-IN REMINDER</span>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(WEIGH_IN_LABELS) as WeighInMode[]).map((m) => (
+              <Chip key={m} active={weighIn.mode === m} onClick={() => weighIn.setMode(m)}>
+                {WEIGH_IN_LABELS[m].name}
+              </Chip>
+            ))}
+          </div>
+          <p className="text-sm font-medium text-muted">{WEIGH_IN_LABELS[weighIn.mode].blurb} Applies right away on this phone.</p>
         </div>
         <div className="flex flex-col gap-2">
           <span className={label}>UNITS</span>

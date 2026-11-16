@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRecovery, pickFreshTargets, setFatigue, stateFor, type FatigueSet } from "@/lib/recovery";
+import { adjustmentFor, computeRecovery, pickFreshTargets, setFatigue, stateFor, type FatigueAdjustments, type FatigueSet, type MuscleRecovery } from "@/lib/recovery";
 import { muscles } from "./fixtures/catalog";
 
 const NOW = new Date("2026-11-16T18:00:00Z").getTime();
@@ -66,7 +66,12 @@ describe("recovery", () => {
 
 describe("target fresh muscles", () => {
   const rec = (scores: Record<string, number>) =>
-    new Map(muscles.map((m) => [m.id, { muscleId: m.id, score: scores[m.id] ?? 100, state: stateFor(scores[m.id] ?? 100), fatigue: 0, lastTrained: null, primarySets: 0, secondarySets: 0 }]));
+    new Map<string, MuscleRecovery>(
+      muscles.map((m) => {
+        const score = scores[m.id] ?? 100;
+        return [m.id, { muscleId: m.id, score, state: stateFor(score), fatigue: 0, autoScore: score, autoFatigue: 0, adjusted: false, lastTrained: null, primarySets: 0, secondarySets: 0 }];
+      }),
+    );
 
   it("everything fresh: a full-body day", () => {
     expect(pickFreshTargets(rec({}), muscles).template.id).toBe("full");
@@ -101,5 +106,60 @@ describe("recovery timing (Batch 5 calibration)", () => {
     expect(score("chest", 10, 48).state).toBe("recovering");
     expect(score("chest", 10, 60).state).toBe("fresh");
     expect(score("biceps", 9, 48).state).toBe("fresh");
+  });
+});
+
+describe("manual fatigue adjustment", () => {
+  const sets = [1, 2, 3, 4].map((i) => bench(`s${i}`, 2, 9)); // chest: 4 hard sets two hours ago
+  const run = (adjustments: FatigueAdjustments | undefined, now = NOW, extra: FatigueSet[] = []) =>
+    computeRecovery({ muscles, sets: [...sets, ...extra], cardio: [], now, defaultRpe: 8, adjustments }).get("chest")!;
+  const tauChest = muscles.find((m) => m.id === "chest")!.recovery_tau_hours;
+
+  it("with no adjustment the automatic score is the score", () => {
+    const r = run(undefined);
+    expect(r.adjusted).toBe(false);
+    expect(r.score).toBe(r.autoScore);
+  });
+
+  it("setting a muscle to a score makes it read exactly that, now", () => {
+    const auto = run(undefined);
+    for (const want of [0, 15, 45, 75, 100]) {
+      const r = run({ chest: adjustmentFor(want, auto.autoFatigue, NOW) });
+      expect(r.score, `want ${want}`).toBe(want);
+      expect(r.adjusted).toBe(true);
+      expect(r.autoScore).toBe(auto.autoScore);
+    }
+  });
+
+  it("the adjustment fades back toward the automatic number like normal recovery", () => {
+    const auto = run(undefined);
+    const adj = { chest: adjustmentFor(20, auto.autoFatigue, NOW) };
+    const later = (h: number) => run(adj, NOW + h * 3_600_000);
+    // Told "wrecked" (20%) while the app said ~75%: the gap closes over a couple of days.
+    expect(later(0).score).toBe(20);
+    expect(later(tauChest).score - later(tauChest).autoScore).toBeLessThan(0);
+    expect(Math.abs(later(3 * tauChest).score - later(3 * tauChest).autoScore)).toBeLessThanOrEqual(3);
+  });
+
+  it("sets logged after the adjustment still count", () => {
+    const auto = run(undefined);
+    const adj = { chest: adjustmentFor(100, auto.autoFatigue, NOW) };
+    const after = run(adj, NOW + 3_600_000, [bench("late", 0.5, 9), bench("late2", 0.5, 9)].map((s) => ({ ...s, at: new Date(NOW + 1_800_000).toISOString() })));
+    expect(after.score).toBeLessThan(100);
+  });
+
+  it("an old adjustment (past the 7-day window) is ignored", () => {
+    const auto = run(undefined);
+    const adj = { chest: adjustmentFor(100, auto.autoFatigue, NOW) };
+    const r = run(adj, NOW + 8 * 24 * 3_600_000);
+    expect(r.adjusted).toBe(false);
+    expect(r.score).toBe(100);
+  });
+
+  it("only the adjusted muscle changes", () => {
+    const auto = computeRecovery({ muscles, sets, cardio: [], now: NOW, defaultRpe: 8 });
+    const adjusted = computeRecovery({ muscles, sets, cardio: [], now: NOW, defaultRpe: 8, adjustments: { chest: adjustmentFor(0, auto.get("chest")!.autoFatigue, NOW) } });
+    expect(adjusted.get("chest")!.score).toBe(0);
+    expect(adjusted.get("triceps")!.score).toBe(auto.get("triceps")!.score);
   });
 });

@@ -75,7 +75,7 @@ function EditGym({ id }: { id: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState(0);
+  const [justSaved, setJustSaved] = useState(false);
   // Edits live here until Save; nothing touches the gym until then.
   const [draft, setDraft] = useState<Draft | null>(null);
   const units: Units = profile?.units ?? "lb";
@@ -102,7 +102,10 @@ function EditGym({ id }: { id: string }) {
     );
   }
 
-  const edit = (fn: (d: Draft) => Draft) => setDraft((d) => fn(d ?? { name: current.name, items: new Map(current.items) }));
+  const edit = (fn: (d: Draft) => Draft) => {
+    setJustSaved(false);
+    setDraft((d) => fn(d ?? { name: current.name, items: new Map(current.items) }));
+  };
   const toggle = (ids: string[], on: boolean) =>
     edit((d) => {
       const items = new Map(d.items);
@@ -121,7 +124,7 @@ function EditGym({ id }: { id: string }) {
     await saveEquipment(gym.id, [...draft.items].map(([equipment_id, details]) => ({ equipment_id, details })));
     setDraft(null);
     setSaving(false);
-    setSavedAt(Date.now());
+    setJustSaved(true);
   }
 
   const detailDetails = detailFor ? current.items.get(detailFor) : undefined;
@@ -136,6 +139,8 @@ function EditGym({ id }: { id: string }) {
             <button type="button" onClick={() => setConfirmLeave(true)} className="h-11 px-2 text-sm font-bold text-muted">
               Cancel
             </button>
+          ) : justSaved ? (
+            <span role="status" className="px-2 text-sm font-bold text-good">✓ Saved</span>
           ) : undefined
         }
       />
@@ -144,14 +149,22 @@ function EditGym({ id }: { id: string }) {
           <span className={label}>NAME</span>
           <input className={field} value={current.name} onChange={(e) => edit((d) => ({ ...d, name: e.target.value }))} />
         </label>
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" className={btn.primary} disabled={!dirty || saving} onClick={save}>
-            {saving ? "Saving…" : dirty ? "Save" : savedAt ? "Saved" : "No changes"}
-          </button>
-          <button type="button" className={btn.secondary} disabled={gym.is_default} onClick={() => makeDefault(gym.id)}>
-            {gym.is_default ? "Default gym" : "Make default"}
-          </button>
-        </div>
+        {/* Applies right away (it isn't part of the Save changes draft). The primary gym stays ticked: there's always one. */}
+        <label className={`flex min-h-14 items-center gap-3 px-1 py-1 ${gym.is_default ? "" : "cursor-pointer"}`}>
+          <input
+            type="checkbox"
+            checked={gym.is_default}
+            disabled={gym.is_default}
+            onChange={(ev) => ev.target.checked && makeDefault(gym.id)}
+            className="h-7 w-7 shrink-0 accent-[var(--primary)]"
+          />
+          <span className="flex min-w-0 flex-col">
+            <span className="text-base font-bold">Make this my primary gym</span>
+            <span className="text-sm font-medium text-muted">
+              {gym.is_default ? "This is your primary gym. Tick another gym to change it." : "The gym the app opens to. Saves right away."}
+            </span>
+          </span>
+        </label>
       </Card>
 
       <div className="flex items-baseline justify-between">

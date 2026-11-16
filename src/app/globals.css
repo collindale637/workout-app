@@ -89,3 +89,10 @@ body {
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 8px);
 }
+
+/* Recovery "How does it feel?" slider: red → orange → green track, big white thumb (44px touch height). */
+.feel-slider { -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
+.feel-slider::-webkit-slider-runnable-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #ff5a5f 0%, #ff8a3d 45%, #3ddc84 100%); }
+.feel-slider::-moz-range-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #ff5a5f 0%, #ff8a3d 45%, #3ddc84 100%); }
+.feel-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; margin-top: -10px; border-radius: 999px; background: #fff; border: 4px solid var(--primary); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+.feel-slider::-moz-range-thumb { width: 24px; height: 24px; border-radius: 999px; background: #fff; border: 4px solid var(--primary); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }

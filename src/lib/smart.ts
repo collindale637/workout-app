@@ -6,6 +6,7 @@ import { useData, useProfile } from "@/lib/db/provider";
 import { markDirty } from "@/lib/db/sync";
 import { useActiveGym, useCatalog, type Catalog } from "@/lib/hooks";
 import { useNow } from "@/lib/use-now";
+import { useFatigueAdjustments } from "@/lib/fatigue-adjust";
 import { computeRecovery, WINDOW_DAYS, type FatigueSet, type MuscleRecovery } from "@/lib/recovery";
 import { loadFor, suggestNext, type Suggestion } from "@/lib/progression";
 import type { ExercisePref, GymEquipment, Plan, PlanDay, PlanExercise, WorkoutSet } from "@/lib/db/types";
@@ -38,6 +39,7 @@ export function useRecovery() {
   const { db } = useData();
   const { profile } = useProfile();
   const catalog = useCatalog();
+  const { adjustments } = useFatigueAdjustments();
   // Re-read once a minute: recovery changes with the clock, not just with new sets.
   const minute = Math.floor(useNow(60_000) / 60_000);
   const raw = useLiveQuery(async () => {
@@ -49,7 +51,7 @@ export function useRecovery() {
   }, [db, minute]);
 
   return useMemo(() => {
-    if (!raw || !catalog || !profile) return undefined;
+    if (!raw || !catalog || !profile || !adjustments) return undefined;
     const wexById = new Map(raw.wexs.filter(Boolean).map((w) => [w!.id, w!]));
     const sets: RecoverySet[] = [];
     for (const s of raw.sets) {
@@ -61,9 +63,9 @@ export function useRecovery() {
       });
     }
     const cardio = raw.cardio.map((c) => ({ id: c.id, at: c.started_at, type: c.type, durationSec: c.duration_sec, rpe: c.rpe }));
-    const map = computeRecovery({ muscles: catalog.muscles, sets, cardio, now: minute * 60_000, defaultRpe: profile.default_rpe });
+    const map = computeRecovery({ muscles: catalog.muscles, sets, cardio, now: minute * 60_000, defaultRpe: profile.default_rpe, adjustments });
     return { map, sets, cardio: raw.cardio };
-  }, [raw, catalog, profile, minute]);
+  }, [raw, catalog, profile, minute, adjustments]);
 }
 
 export const recoveryScores = (map: Map<string, MuscleRecovery> | undefined) =>
