@@ -114,21 +114,31 @@ export function ExercisePicker({
         <section className="rounded-3xl border-2 border-accent-strong/55 bg-gradient-to-b from-primary/15 to-primary/5 px-3 pt-3 pb-1.5" aria-live="polite">
           <div className="flex items-center justify-between gap-2 px-1 pb-1.5">
             <h3 className="display text-[17px] font-extrabold tracking-[0.1em] text-accent-soft">{smart.title}</h3>
-            <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold tracking-[0.06em] whitespace-nowrap text-muted">
-              {picks.state === "loading" ? (
-                <>
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
-                  AI is checking…
-                </>
-              ) : picks.state === "ai" ? (
-                <>
-                  <span className="text-accent" aria-hidden="true">✦</span>
-                  Picked by AI
-                </>
-              ) : (
-                "Best matches"
-              )}
-            </span>
+            {picks.state === "ai" ? (
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold tracking-[0.06em] whitespace-nowrap text-muted">
+                <span className="text-accent" aria-hidden="true">✦</span>
+                Picked by AI
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={picks.askAi}
+                disabled={picks.state === "loading" || picks.offline}
+                className="display flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-2 border-accent-strong/60 bg-primary/15 px-3.5 text-[15px] font-extrabold tracking-[0.06em] whitespace-nowrap text-accent-soft active:bg-primary/30 disabled:opacity-60"
+              >
+                {picks.state === "loading" ? (
+                  <>
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+                    AI is checking…
+                  </>
+                ) : (
+                  <>
+                    <span aria-hidden="true">✦</span>
+                    AI Suggest
+                  </>
+                )}
+              </button>
+            )}
           </div>
           <ul className="flex flex-col divide-y divide-white/7">
             {picks.picks.map((p, i) => {
@@ -159,7 +169,9 @@ export function ExercisePicker({
               );
             })}
           </ul>
-          {picks.state === "local" && picks.note && <p className="px-2 pt-1 pb-2 text-[12.5px] font-semibold text-muted">{picks.note}</p>}
+          {picks.state === "local" && (picks.note || picks.offline) && (
+            <p className="px-2 pt-1 pb-2 text-[12.5px] font-semibold text-muted">{picks.note ?? "You're offline, so AI picks aren't available. These are matched by muscles and equipment."}</p>
+          )}
         </section>
       )}
       <div className="relative">
