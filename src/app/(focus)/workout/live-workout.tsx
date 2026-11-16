@@ -266,7 +266,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <button type="button" onClick={log} className={`${btn.primary} h-16 text-2xl`}>
               Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
             </button>
-            <LastTime history={history?.get(current.exercise_id)} units={units} defaultRpe={defaultRpe} />
+            <LastTime history={history?.get(current.exercise_id)} units={units} defaultRpe={defaultRpe} nextSet={working(current.id)} />
           </>
         )}
 
@@ -508,14 +508,47 @@ function RestCard({ left, total, onAdd, onSkip }: { left: number; total: number;
   );
 }
 
-function LastTime({ history, units, defaultRpe }: { history?: { last: WorkoutSet[]; lastDate: string | null }; units: Units; defaultRpe: number }) {
-  if (!history?.lastDate || !history.last.length) return <p className="text-center text-sm font-medium text-muted">First time logging this one.</p>;
-  const date = new Date(history.lastDate).toLocaleDateString([], { month: "short", day: "numeric" });
+function lastTimeLabel(iso: string) {
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(new Date()) - day(new Date(iso))) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+/** Last session's working sets for this lift, one tile per set; the set you're about to do is highlighted. */
+function LastTime({ history, units, defaultRpe, nextSet }: { history?: { last: WorkoutSet[]; lastDate: string | null }; units: Units; defaultRpe: number; nextSet: number }) {
+  const sets = history?.last.filter((s) => s.type !== "warmup") ?? [];
+  if (!history?.lastDate || !sets.length) return <p className="text-center text-sm font-medium text-muted">First time logging this one.</p>;
   return (
-    <p className="text-center text-sm font-medium text-muted">
-      Last time ({date}):{" "}
-      {history.last.filter((s) => s.type !== "warmup").map((s) => `${formatWeight(s.weight, units)}×${s.reps ?? "—"}@${s.rpe ?? defaultRpe}`).join(", ")}
-    </p>
+    <section className="rounded-3xl border border-line bg-card p-4" aria-label="Last time">
+      <div className="mb-3 flex items-baseline justify-between">
+        <span className="text-xs font-bold tracking-[0.12em] text-muted">LAST TIME</span>
+        <span className="text-sm font-semibold text-muted">{lastTimeLabel(history.lastDate)}</span>
+      </div>
+      <ol className="grid grid-cols-[repeat(auto-fill,minmax(5.25rem,1fr))] gap-2">
+        {sets.map((s, i) => {
+          const isNext = i === Math.min(nextSet, sets.length - 1);
+          const w = s.weight === null ? "BW" : formatWeight(s.weight, units);
+          // Heavier lifts like 225 × 10 get slightly smaller numbers so the tile never crowds.
+          const long = w.length + String(s.reps ?? "—").length > 4;
+          return (
+            <li key={s.id} className={`flex flex-col items-center rounded-2xl border-2 px-2 py-2 ${isNext ? "border-accent-strong bg-primary/15" : "border-transparent bg-card-2"}`}>
+              <span className={`text-[11px] font-bold tracking-[0.1em] ${isNext ? "text-accent-soft" : "text-muted"}`}>{s.type === "drop" ? "DROP" : `SET ${i + 1}`}</span>
+              <span className={`display num leading-tight font-extrabold whitespace-nowrap text-ink ${long ? "text-xl" : "text-2xl"}`}>
+                {w}
+                <span className={`text-muted ${long ? "text-base" : "text-lg"}`}> × </span>
+                {s.reps ?? "—"}
+              </span>
+              <span className="text-xs font-semibold text-muted">
+                {s.weight === null ? "" : `${weightUnit(units)} · `}RPE {s.rpe ?? defaultRpe}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
