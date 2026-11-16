@@ -31,7 +31,7 @@ export function RpeSlider({
       ref={strip}
       role="group"
       aria-label="RPE, slide for lower values"
-      className="-mx-5 flex touch-pan-x gap-1.5 overflow-x-auto overscroll-x-contain px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={`-mx-5 flex touch-pan-x overflow-x-auto overscroll-x-contain px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${blue ? "-my-1 gap-[5px] py-1" : "gap-1.5"}`}
     >
       {RPE_SCALE.map((r) => {
         const on = value === r;
@@ -48,7 +48,7 @@ export function RpeSlider({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : r)}
-            className={`display num h-12 w-[3.25rem] shrink-0 rounded-xl text-lg font-extrabold ${cls}`}
+            className={`display num relative shrink-0 font-extrabold ${blue ? "h-9 w-11 rounded-[10px] text-base after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']" : "h-12 w-[3.25rem] rounded-xl text-lg"} ${cls}`}
           >
             {r}
           </button>
