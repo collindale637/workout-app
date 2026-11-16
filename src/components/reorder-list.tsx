@@ -23,7 +23,9 @@ function setMotion(el: HTMLElement, motion: { transition?: string; transform?: s
   if (motion.transform !== undefined) el.style.transform = motion.transform;
 }
 
-const ACTION_W = 66;
+const ACTION_W = 60;
+/** How far you have to move (in px) to open or close a row. Small on purpose: a flick is enough. */
+const SNAP_PX = 36;
 const HOLD_MS = 350;
 const SLOP = 9;
 const GAP = 8;
@@ -191,7 +193,7 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
         }
       }
       if (s.mode === "swipe") {
-        s.dx = Math.max(-actionsWidth(it) - 30, Math.min(0, s.base + dx));
+        s.dx = Math.max(-actionsWidth(it), Math.min(0, s.base + dx));
         const face = e.currentTarget as HTMLElement;
         face.style.transition = "none";
         face.style.transform = `translateX(${s.dx}px)`;
@@ -213,7 +215,8 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
     if (s.mode === "swipe") {
       suppressTap.current = true;
       const it = items.find((i) => i.id === s.id);
-      settleSwipe(s.id, Boolean(it) && s.dx < -actionsWidth(it!) / 2.5);
+      const moved = s.dx - s.base; // negative = toward open
+      settleSwipe(s.id, Boolean(it) && (s.base === 0 ? moved <= -SNAP_PX : moved < SNAP_PX));
     } else if (s.mode === "drag") {
       suppressTap.current = true;
       endDrag(ok || s.to !== s.from);
@@ -251,7 +254,7 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
               <div
                 data-face
                 {...handlers(it)}
-                className={`relative touch-pan-y transition-transform duration-200 select-none [-webkit-touch-callout:none] ${draggingId === it.id ? "scale-[1.03] shadow-[0_14px_30px_rgba(0,0,0,0.55)]" : ""} ${it.faceClassName}`}
+                className={`relative touch-pan-y transition-transform duration-150 ease-out select-none [-webkit-touch-callout:none] ${draggingId === it.id ? "scale-[1.03] shadow-[0_14px_30px_rgba(0,0,0,0.55)]" : ""} ${it.faceClassName}`}
                 style={open ? { transform: `translateX(-${actionsWidth(it)}px)` } : undefined}
               >
                 <button
