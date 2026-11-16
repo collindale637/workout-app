@@ -77,8 +77,13 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   const [dragging, setDragging] = useState(false);
   if (!open) return null;
 
-  // Swipe down to close: only starts when the sheet's content is scrolled to the top.
+  // Swipe down to close: only starts when the sheet's content is scrolled to the top, and never from a control that
+  // drags sideways (sliders, RPE strip), which mark themselves with data-no-sheet-drag so the sheet holds still.
   const onTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as Element).closest?.("[data-no-sheet-drag]")) {
+      drag.current = null;
+      return;
+    }
     if ((panel.current?.scrollTop ?? 0) <= 0) drag.current = { y: e.touches[0].clientY, t: Date.now() };
   };
   const onTouchMove = (e: React.TouchEvent) => {

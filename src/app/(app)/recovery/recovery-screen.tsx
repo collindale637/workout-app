@@ -147,6 +147,7 @@ function FeelSlider({ r, onAdjust, onReset }: { r: MuscleRecovery; onAdjust: (sc
       </div>
       <div
         ref={bar}
+        data-no-sheet-drag
         className="touch-none select-none"
         onPointerDown={(e) => {
           if (e.button !== 0) return;

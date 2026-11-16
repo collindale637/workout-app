@@ -30,6 +30,7 @@ export function RpeSlider({
     <div
       ref={strip}
       role="group"
+      data-no-sheet-drag
       aria-label="RPE, slide for lower values"
       className={`-mx-5 flex touch-pan-x overflow-x-auto overscroll-x-contain px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${blue ? "-my-1 gap-[5px] py-1" : "gap-1.5"}`}
     >
