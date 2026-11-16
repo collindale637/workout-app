@@ -331,6 +331,25 @@ export const COMMON = {
 // Popular movements the dataset doesn't have. No pictures yet.
 // Each: id, name, category, mechanic, force, level, primary[], secondary[], equipment groups (array of arrays), instructions[]
 export const EXTRA_EXERCISES = [
+  // Phase 4: no-equipment pull and shoulder work, so a bodyweight-only gym can fill every day.
+  {
+    id: "Doorframe_Row", name: "Doorframe Row", mechanic: "compound", force: "pull", level: "beginner",
+    primary: ["upper_back", "lats"], secondary: ["biceps", "rear_delts"],
+    equipment: [],
+    instructions: ["Stand in a doorway and grip both sides of the frame at chest height, feet close to the threshold.", "Lean back with straight arms and a straight body.", "Pull your chest to the frame by squeezing your shoulder blades, then lower slowly. Walk your feet further in to make it harder."],
+  },
+  {
+    id: "Pike_Push_Up", name: "Pike Push-Up", mechanic: "compound", force: "push", level: "beginner",
+    primary: ["front_delts"], secondary: ["triceps", "side_delts"],
+    equipment: [],
+    instructions: ["Start in a push-up position, then walk your feet in and lift your hips so your body makes an upside-down V.", "Bend your elbows to lower the top of your head toward the floor just in front of your hands.", "Press back up. Raise your feet on a step or chair to make it harder."],
+  },
+  {
+    id: "Prone_Y_T_W_Raise", name: "Prone Y-T-W Raise", mechanic: "isolation", force: "pull", level: "beginner",
+    primary: ["rear_delts", "upper_back"], secondary: ["traps"],
+    equipment: [],
+    instructions: ["Lie face down with your arms overhead in a Y, thumbs up.", "Lift your arms off the floor by squeezing your shoulder blades, hold a second, and lower.", "Repeat with arms straight out to the sides (T), then elbows bent and pulled to your ribs (W). One Y, T and W is one rep."],
+  },
   {
     id: "Bulgarian_Split_Squat", name: "Bulgarian Split Squat", mechanic: "compound", force: "push", level: "intermediate",
     primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],

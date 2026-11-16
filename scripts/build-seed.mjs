@@ -251,7 +251,7 @@ function patternFor(ex, name, roles) {
   if (/pulldown|pull.?up|pullup|\bchin|muscle up/.test(name)) return "vertical_pull";
   if (/press/.test(name) && /incline|decline|bench|chest|floor/.test(name)) return "horizontal_push";
   if (/row/.test(name) && !/upright|throw/.test(name)) return "horizontal_pull";
-  if (/military|shoulder press|overhead press|push press|jerk|handstand|arnold|dumbbell press$|seated dumbbell press|standing dumbbell press|landmine linear jammer/.test(name)) return "vertical_push";
+  if (/military|shoulder press|overhead press|push press|jerk|handstand|pike push|arnold|dumbbell press$|seated dumbbell press|standing dumbbell press|landmine linear jammer/.test(name)) return "vertical_push";
   if (/bench press|push.?ups?|pushups|chest press|dip|floor press|svend/.test(name) && ex.mechanic !== "isolation") return "horizontal_push";
   const prim = [...roles].filter(([, r]) => r === "primary").map(([m]) => m);
   if (prim.some((m) => m === "abs" || m === "obliques")) return "core";

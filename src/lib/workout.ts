@@ -8,7 +8,7 @@ import { newId, nowIso, type LocalDB } from "@/lib/db/dexie";
 import { defaultTargets } from "@/lib/defaults";
 import { isCardioExercise } from "@/lib/cardio";
 import { clearCardioTimer } from "@/lib/cardio-timer";
-import { estimate1RM } from "@/lib/units";
+import { bestE1rm } from "@/lib/progress";
 import type { CardioSession, Exercise, SetType, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 export type RestState = { endsAt: number; total: number; wexId: string } | null;
@@ -335,11 +335,12 @@ export function useExerciseHistory(exerciseIds: string[], excludeWorkoutId?: str
       let bestWeight = 0;
       let best1RM = 0;
       for (const w of mine) {
-        for (const s of setsBy.get(w.id) ?? []) {
+        const list = setsBy.get(w.id) ?? [];
+        for (const s of list) {
           if (s.type === "warmup" || !s.weight || !s.reps) continue;
           bestWeight = Math.max(bestWeight, s.weight);
-          best1RM = Math.max(best1RM, estimate1RM(s.weight, s.reps));
         }
+        best1RM = Math.max(best1RM, bestE1rm(list));
       }
       const lastW = mine[0];
       out.set(exId, {

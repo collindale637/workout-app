@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
+  BodyMetric,
   CardioSession,
   Equipment,
   Exercise,
@@ -45,6 +46,7 @@ export class LocalDB extends Dexie {
   plan_days!: EntityTable<PlanDay, "id">;
   plan_exercises!: EntityTable<PlanExercise, "id">;
   exercise_prefs!: EntityTable<ExercisePref, "exercise_id">;
+  body_metrics!: EntityTable<BodyMetric, "id">;
   outbox!: Dexie.Table<OutboxEntry, [string, string]>;
   tombstones!: Dexie.Table<Tombstone, [string, string]>;
   meta!: Dexie.Table<{ key: string; value: unknown }, string>;
@@ -76,6 +78,10 @@ export class LocalDB extends Dexie {
       plan_days: "id, plan_id",
       plan_exercises: "id, plan_day_id",
       exercise_prefs: "exercise_id",
+    });
+    // Phase 4: bodyweight log; workout_exercises by exercise is already indexed for progress charts.
+    this.version(3).stores({
+      body_metrics: "id, date",
     });
   }
 

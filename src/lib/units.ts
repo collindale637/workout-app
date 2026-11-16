@@ -44,5 +44,9 @@ export function volumeLb(sets: { weight: number | null; reps: number | null; typ
   return sets.reduce((sum, s) => (s.type === "warmup" ? sum : sum + (s.weight ?? 0) * (s.reps ?? 0)), 0);
 }
 
+/** An estimated max, rounded to a whole pound (or half kilo): the decimals are noise. */
+export const formatMax = (lb: number, units: Units) =>
+  units === "kg" ? String(Math.round((lb / LB_PER_KG) * 2) / 2) : String(Math.round(lb));
+
 /** Epley estimated one-rep max. */
 export const estimate1RM = (weight: number, reps: number) => (reps <= 1 ? weight : weight * (1 + reps / 30));

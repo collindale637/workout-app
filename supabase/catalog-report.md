@@ -194,6 +194,9 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Outdoor Bike Ride | cardio | quads | calves, glutes, hamstrings | none |
 | Battle Ropes | other | front_delts | chest, forearms | battle_ropes |
 | Box Jump | other | hamstrings | abductors, adductors, calves, glutes, quads | plyo_box or flat_bench or adjustable_bench |
+| Doorframe Row | horizontal_pull | upper_back, lats | biceps, rear_delts | none |
+| Pike Push-Up | vertical_push | front_delts | triceps, side_delts | none |
+| Prone Y-T-W Raise | isolation | rear_delts, upper_back | traps | none |
 | Bulgarian Split Squat | lunge | quads, glutes | hamstrings, adductors | dumbbells or kettlebells or barbell + flat_bench or adjustable_bench or plyo_box |
 | Cable Lateral Raise | isolation | side_delts | traps | cable_crossover or cable_pulley |
 | Machine Lateral Raise | isolation | side_delts |  | lateral_raise_machine |

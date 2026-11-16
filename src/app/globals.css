@@ -20,6 +20,10 @@
   --warn: #ff8a3d;
   --good: #3ddc84;
   --danger: #ff5a5f;
+  /* Chart series, checked for color-blind separation and 3:1 contrast on the dark card:
+     1 = lifting (cobalt, a step lighter than --primary so thin marks read), 2 = cardio (teal). */
+  --chart-1: #4f74ff;
+  --chart-2: #14a3b8;
 }
 
 [data-theme="light"] {
@@ -49,6 +53,8 @@
   --color-warn: var(--warn);
   --color-good: var(--good);
   --color-danger: var(--danger);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
   --font-sans: "Barlow", system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptToGym, closestMatch, dayStyle, generateWorkout, type GenOptions } from "@/lib/generator";
+import { adaptToGym, baseName, closestMatch, dayStyle, generateWorkout, type GenOptions } from "@/lib/generator";
 import { isAvailable } from "@/lib/availability";
 import { loadFor, suggestNext } from "@/lib/progression";
 import { bodyweightGym, catalog, commercialGym, homeGym, hotelGym } from "./fixtures/catalog";
@@ -86,6 +86,47 @@ describe("generator", () => {
     }).items;
     const count = (list: typeof fresh) => list.filter((i) => primaryOf(i.exercise_id).includes("triceps")).length;
     expect(count(tired)).toBeLessThanOrEqual(count(fresh));
+  });
+});
+
+describe("generator tuning (Phase 4)", () => {
+  const PULL = ["lats", "upper_back", "rear_delts", "biceps", "traps"];
+  const UPPER = ["chest", "lats", "upper_back", "front_delts", "side_delts", "rear_delts", "biceps", "triceps"];
+  const names = (items: { exercise_id: string }[]) => items.map((i) => byId.get(i.exercise_id)!);
+
+  it("treats equipment variants as the same exercise", () => {
+    expect(baseName("Cable Lateral Raise")).toBe(baseName("Machine Lateral Raise"));
+    expect(baseName("Goblet Squat")).toBe(baseName("Dumbbell Squat"));
+    expect(baseName("Incline Dumbbell Press")).not.toBe(baseName("Dumbbell Bench Press"));
+  });
+
+  it("never doubles up the same exercise in another form (two lateral raises on push)", () => {
+    for (const gym of [commercialGym, homeGym, hotelGym]) {
+      for (const targets of [PUSH, PULL, UPPER, LEGS]) {
+        for (const seed of [0, 1, 2, 3, 4]) {
+          const bases = names(generateWorkout(catalog, { ...base, targets, gymEquipment: gym, seed }).items).filter((e) => e.category !== "cardio").map((e) => baseName(e.name));
+          expect(new Set(bases).size, bases.join(" · ")).toBe(bases.length);
+        }
+      }
+    }
+  });
+
+  it("pull days: at most two rows, a vertical pull, and direct biceps work", () => {
+    for (const gym of [commercialGym, homeGym]) {
+      for (const seed of [0, 1, 2, 3, 4]) {
+        const exs = names(generateWorkout(catalog, { ...base, targets: PULL, gymEquipment: gym, seed }).items);
+        expect(exs.filter((e) => e.movement_pattern === "horizontal_pull").length, exs.map((e) => e.name).join(" · ")).toBeLessThanOrEqual(2);
+        expect(exs.some((e) => e.movement_pattern === "vertical_pull")).toBe(true);
+        expect(exs.some((e) => e.mechanic === "isolation" && primaryOf(e.id).includes("biceps")), exs.map((e) => e.name).join(" · ")).toBe(true);
+      }
+    }
+  });
+
+  it("a bodyweight-only gym can still build pull and shoulder work", () => {
+    const pull = generateWorkout(catalog, { ...base, targets: PULL, gymEquipment: bodyweightGym }).items;
+    expect(pull.length).toBeGreaterThanOrEqual(2);
+    const push = generateWorkout(catalog, { ...base, targets: PUSH, gymEquipment: bodyweightGym }).items;
+    expect(push.some((i) => primaryOf(i.exercise_id).includes("front_delts"))).toBe(true);
   });
 });
 

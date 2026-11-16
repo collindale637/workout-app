@@ -41,7 +41,7 @@ export function PlanBuilder() {
   const days = useMemo(() => {
     if (!split || !catalog || !profile) return null;
     return buildPlanDays(catalog, split.days, {
-      gymEquipment, goal: chosenGoal, experience: profile.experience, sessionMinutes: profile.session_minutes, prefs, seed,
+      gymEquipment, goal: chosenGoal, experience: profile.experience, sessionMinutes: profile.session_minutes, prefs, seed, cardioPref: profile.cardio_pref,
     });
   }, [split, catalog, profile, gymEquipment, chosenGoal, prefs, seed]);
 

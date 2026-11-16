@@ -36,12 +36,18 @@ const GOAL_WORDS: Record<string, string> = {
   general: "general fitness",
 };
 
+const CARDIO_WORDS: Record<string, string> = {
+  none: " · cardio: only when asked for",
+  auto: "",
+  more: " · cardio: wants some in most sessions",
+};
+
 /** The person, their gym, their recent training and the exercise list. */
 export function contextBlock(req: AiRequest, opts: { gymFiltered: boolean }) {
   const p = req.profile;
   const lines = [
     "PROFILE",
-    `goal: ${GOAL_WORDS[p.goal] ?? p.goal} · experience: ${p.experience} · usually trains ${p.days_per_week} days a week · ${p.session_minutes}-minute sessions · default effort RPE ${p.default_rpe} · shows weights in ${p.units}`,
+    `goal: ${GOAL_WORDS[p.goal] ?? p.goal} · experience: ${p.experience} · usually trains ${p.days_per_week} days a week · ${p.session_minutes}-minute sessions · default effort RPE ${p.default_rpe} · shows weights in ${p.units}${CARDIO_WORDS[p.cardio_pref ?? "auto"] ?? ""}`,
   ];
   if (req.gym) lines.push("", `GYM: ${req.gym.name}`, `equipment: ${req.gym.equipment.join(", ") || "none (bodyweight only)"}`);
   if (req.recovery && Object.keys(req.recovery).length) {

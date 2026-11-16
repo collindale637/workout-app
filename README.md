@@ -21,13 +21,13 @@ server (`/api/ai`), so the API key never reaches the phone.
 ## What's built
 
 **Phase 0 (live):** app shell, dark theme, PWA, email + password sign-in, profile, 20-table schema with RLS,
-exercise catalog (19 muscles, 86 equipment items, 889 exercises, 9 splits; 11 from Phase 2).
+exercise catalog (19 muscles, 86 equipment items, 892 exercises, 9 splits; 11 from Phase 2).
 
 **Phase 1 (log it):**
 
 | Feature | Where |
 |---|---|
-| Welcome flow (name, goal, experience, days, session length, units, first gym) | `src/app/(focus)/welcome/` |
+| Welcome flow (name, goal, experience, days, session length, units, first gym; expanded in Phase 4) | `src/app/(focus)/welcome/` |
 | Gyms: templates, categorized equipment checklist, dumbbell/plate/stack details | More → Gyms, `src/lib/gyms.ts` |
 | Active gym switcher (header pill on Today and Progress) | `src/components/gym-switcher.tsx` |
 | Workout builder: search + muscle filters, defaults to what the active gym has | `src/components/exercise-picker.tsx` |
@@ -79,6 +79,23 @@ AI settings (Vercel → Project → Settings → Environment Variables, server-o
 | `AI_MONTHLY_CAP_USD` | Family-wide monthly spend limit (default `10`). |
 | `AI_MODEL` | Claude model (default `claude-sonnet-5-5`). |
 
+**Phase 4 (progress and polish):**
+
+| Feature | Where |
+|---|---|
+| Progress tab: this week (days vs your goal, hard sets, cardio minutes), consistency calendar (16 weeks, lifting and cardio days, weeks-in-a-row streak), recent PRs, top lifts with trend lines, sets per muscle this/last week against a target band, cardio totals and minutes per week, bodyweight trend | `src/app/(app)/progress/`, numbers in `src/lib/progress.ts` |
+| Lift detail: estimated 1-rep max / heaviest / volume over 3M–All, all-time records, every PR, every session's sets | Progress → a lift (`/progress/lift?id=…`); all lifts at `/progress/lift` |
+| Bodyweight log: one entry per day (logging again replaces it), 7-day average, 30-day change; edit or delete entries | Progress → Bodyweight, `src/lib/progress-data.ts` |
+| Full onboarding: name + units, goal + experience, days + session length, cardio preference, first gym, then a starter plan from the best-fit split | `src/app/(focus)/welcome/`, `src/lib/onboarding.ts` |
+| Cardio preference (lifting only / what my goal needs / lots) used by the generator, plan builder and AI | More → Profile; `defaultCardio()` in `generator.ts` |
+| Generator tuning: no doubled-up variants (two lateral raises), at most two rows, direct arm work on pull/upper days; three no-equipment moves (Doorframe Row, Pike Push-Up, Prone Y-T-W Raise) so bodyweight-only gyms can fill pull days | `src/lib/generator.ts`, `scripts/catalog-data.mjs` |
+| Charts: small hand-built SVG charts (no library), touch for values; series colors checked for color-blind separation | `src/components/charts.tsx`, `--chart-1/2` in `globals.css` |
+
+How the numbers work: estimated 1-rep max is Epley (weight × (1 + reps ÷ 30)) from working sets of 12 reps or fewer; a PR
+is a session that beats every earlier one (best estimated max, heaviest weight, or most reps for bodyweight moves), and
+the finish summary uses the same rule. Weekly sets count working and drop sets, primary muscle 1, secondary 0.5. Weeks
+run Sunday to Saturday, like Today's week strip.
+
 ### How offline sync works
 
 The phone keeps its own database (IndexedDB, via Dexie), one per signed-in person. Every change is written there first
@@ -99,6 +116,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261116000200_cardio_in_workouts.sql` | Cardio results link to the cardio exercise in a workout (Start / Done) | ✓ |
 | `20261116000300_phase2_plans.sql` | Plan days remember their target muscles; PHUL and Hybrid splits | ✓ |
 | `20261117000100_phase3_ai.sql` | Plan notes; AI usage log written through `ai_log_request()`, spend via `ai_spend_this_month()` | ✓ |
+| `20261118000100_phase4_progress.sql` | `profiles.cardio_pref`; three no-equipment exercises | ✓ |
 
 ## One-time setup
 
@@ -138,7 +156,7 @@ Open the Vercel URL in Safari → Share → **Add to Home Screen**.
 | `npm run dev` | Local dev server |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint |
-| `npm test` | Unit tests (units, equipment matching, sync, recovery, generator, weight suggestions, AI checks and import matching) |
+| `npm test` | Unit tests (units, equipment matching, sync, recovery, generator, weight suggestions, AI checks and import matching, progress numbers, onboarding) |
 | `npm run test:db` | Applies the migrations to an in-memory Postgres and checks RLS |
 | `npm run seed:build` | Regenerates the catalog seed from free-exercise-db + `scripts/catalog-data.mjs` |
 | `npm run images:upload` | Copies exercise pictures into Supabase Storage |

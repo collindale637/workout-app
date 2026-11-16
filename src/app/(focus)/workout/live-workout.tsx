@@ -14,7 +14,8 @@ import { loadFor, suggestNext } from "@/lib/progression";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
 import { RPE_SCALE } from "@/lib/defaults";
-import { estimate1RM, formatDuration, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
+import { formatDuration, formatMax, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
+import { bestE1rm } from "@/lib/progress";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { ExerciseInfo } from "@/components/exercise-info";
 import { Sheet, btn, field, label } from "@/components/ui/kit";
@@ -932,9 +933,9 @@ function FinishSummary({
     const sets = (setsBy.get(w.id) ?? []).filter((s) => s.type !== "warmup" && s.weight && s.reps);
     if (!prev || !sets.length || (prev.bestWeight === 0 && prev.best1RM === 0)) return [];
     const top = Math.max(...sets.map((s) => s.weight!));
-    const top1 = Math.max(...sets.map((s) => estimate1RM(s.weight!, s.reps!)));
+    const top1 = bestE1rm(sets);
     if (top > prev.bestWeight) return [`${names.get(w.exercise_id)?.name}: heaviest ever, ${formatWeight(top, units)} ${weightUnit(units)}`];
-    if (top1 > prev.best1RM + 0.5) return [`${names.get(w.exercise_id)?.name}: best estimated max, ${formatWeight(top1, units)} ${weightUnit(units)}`];
+    if (top1 > prev.best1RM + 0.5) return [`${names.get(w.exercise_id)?.name}: best estimated max, ${formatMax(top1, units)} ${weightUnit(units)}`];
     return [];
   });
   // Every logged set of each lift, in order (exercises without sets are dropped on save).
