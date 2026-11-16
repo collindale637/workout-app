@@ -11,6 +11,7 @@ import { useUpNext, useUpNextChoice } from "@/lib/up-next";
 import { doseLabel, MusclePills, suggestionLabel, supersetLetter } from "@/components/planned";
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { Sheet, btn } from "@/components/ui/kit";
+import { ExerciseInfo } from "@/components/exercise-info";
 import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 
 /** Today's suggested workout: the next plan day, your freshest muscles, or muscles you picked. */
@@ -19,7 +20,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
   const up = useUpNext();
   const catalog = useCatalog();
   const { profile } = useProfile();
-  const { gym, equipmentRows } = useActiveGym();
+  const { gym, equipment, equipmentRows } = useActiveGym();
   const { choice, setChoice } = useUpNextChoice();
   const { start } = useWorkoutActions();
   const lastSets = useLastSets((up?.items ?? []).map((i) => i.exercise_id));
@@ -27,6 +28,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
   const [pickMuscles, setPickMuscles] = useState(false);
   const [starting, setStarting] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [viewing, setViewing] = useState<string | null>(null);
 
   if (up === undefined || !catalog || !profile) {
     return <section className="h-[300px] animate-pulse rounded-[28px] bg-primary/40" aria-label="Loading today's workout" />;
@@ -134,7 +136,13 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
                   : suggestionFor(catalog, it.exercise_id, lastSets?.get(it.exercise_id), it.rep_min, it.rep_max, gym ? equipmentRows : null);
               const sLabel = suggestionLabel(s, units);
               return (
-                <li key={`${it.exercise_id}-${i}`} className="flex min-h-14 items-center justify-between gap-3 py-1.5">
+                <li key={`${it.exercise_id}-${i}`}>
+                  <button
+                    type="button"
+                    onClick={() => setViewing(it.exercise_id)}
+                    aria-label={`View ${name(it.exercise_id)}`}
+                    className="flex min-h-14 w-full items-center justify-between gap-3 py-1.5 text-left active:opacity-70"
+                  >
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-base font-bold">
                       {it.superset_group !== null && <span className="mr-1.5 text-accent">{supersetLetter(it.superset_group)}</span>}
@@ -148,12 +156,17 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
                     ) : (
                       <span className={`display num shrink-0 text-base font-extrabold ${s?.change === "up" ? "text-good" : "text-ink"}`}>{sLabel}</span>
                     ))}
+                  </button>
                 </li>
               );
             })}
           </ul>
         )}
       </section>
+
+      <Sheet open={viewing !== null} onClose={() => setViewing(null)} title={viewing ? name(viewing) : undefined}>
+        {viewing && <ExerciseInfo catalog={catalog} id={viewing} gymEquipment={gym ? equipment : null} gymName={gym?.name} />}
+      </Sheet>
 
       <Sheet open={options} onClose={() => setOptions(false)} title="What to train today">
         <div className="flex flex-col gap-2">
