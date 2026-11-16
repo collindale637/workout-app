@@ -5,11 +5,17 @@ import type {
   Exercise,
   ExerciseEquipment,
   ExerciseMuscle,
+  ExercisePref,
   Gym,
   GymEquipment,
   Muscle,
   OutboxEntry,
+  Plan,
+  PlanDay,
+  PlanExercise,
   Profile,
+  Split,
+  SplitDay,
   Tombstone,
   Workout,
   WorkoutExercise,
@@ -33,6 +39,12 @@ export class LocalDB extends Dexie {
   workout_exercises!: EntityTable<WorkoutExercise, "id">;
   sets!: EntityTable<WorkoutSet, "id">;
   cardio_sessions!: EntityTable<CardioSession, "id">;
+  splits!: EntityTable<Split, "id">;
+  split_days!: EntityTable<SplitDay, "id">;
+  plans!: EntityTable<Plan, "id">;
+  plan_days!: EntityTable<PlanDay, "id">;
+  plan_exercises!: EntityTable<PlanExercise, "id">;
+  exercise_prefs!: EntityTable<ExercisePref, "exercise_id">;
   outbox!: Dexie.Table<OutboxEntry, [string, string]>;
   tombstones!: Dexie.Table<Tombstone, [string, string]>;
   meta!: Dexie.Table<{ key: string; value: unknown }, string>;
@@ -55,6 +67,15 @@ export class LocalDB extends Dexie {
       outbox: "[table+id], table",
       tombstones: "[table+id], table",
       meta: "key",
+    });
+    // Phase 2: splits (catalog), plans, favorites/exclusions.
+    this.version(2).stores({
+      splits: "id",
+      split_days: "id, split_id",
+      plans: "id",
+      plan_days: "id, plan_id",
+      plan_exercises: "id, plan_day_id",
+      exercise_prefs: "exercise_id",
     });
   }
 

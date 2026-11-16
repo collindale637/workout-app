@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -25,6 +25,7 @@ await db.exec(readFileSync(root + "20261115000200_catalog_seed.sql", "utf8"));
 // ...and that the additive migrations are safe to run twice.
 await db.exec(readFileSync(root + "20261116000100_phase1_logging.sql", "utf8"));
 await db.exec(readFileSync(root + "20261116000200_cardio_in_workouts.sql", "utf8"));
+await db.exec(readFileSync(root + "20261116000300_phase2_plans.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -64,6 +65,20 @@ r.push(["A can't see B's custom", await as(A, `select count(*)::int n from exerc
 r.push(["A can't edit catalog", await as(A, `update exercises set name='x' where id='Pullups' returning id`)]);
 r.push(["catalog readable", await as(A, `select count(*)::int n from exercises where is_active`)]);
 r.push(["anon sees nothing", await (async () => { await db.exec("set role anon"); try { return { rows: (await db.query("select count(*) from exercises")).rows }; } catch (e) { return { error: e.message }; } finally { await db.exec("reset role"); } })()]);
+// Phase 2: plans, plan days with target muscles, favorites/exclusions.
+const P = "dddddddd-0000-0000-0000-000000000001", D = "eeeeeeee-0000-0000-0000-000000000001";
+r.push(["A creates active plan", await as(A, `insert into plans (id, name, goal, split_id, start_date, weeks, source, is_active) values ('${P}','PPL','hypertrophy','ppl_3','2026-11-16',8,'generated',true) returning id`)]);
+r.push(["A adds plan day with targets", await as(A, `insert into plan_days (id, plan_id, day_order, name, target_muscle_ids) values ('${D}','${P}',1,'Push',array['chest','triceps']) returning target_muscle_ids`)]);
+r.push(["A adds plan exercise", await as(A, `insert into plan_exercises (plan_day_id, exercise_id, sort_order, sets, rep_min, rep_max, rest_sec) values ('${D}','Barbell_Bench_Press_-_Medium_Grip',0,4,6,10,120) returning sets`)]);
+r.push(["A switches active plan in one upsert", await as(A, `insert into plans (id, name, is_active) values ('${P}','PPL',false), ('dddddddd-0000-0000-0000-000000000002','Upper/Lower',true) on conflict (id) do update set is_active = excluded.is_active returning id, is_active`)]);
+r.push(["A can't have two active plans", await as(A, `update plans set is_active = true returning id`)]);
+r.push(["workout links to plan day", await as(A, `update workouts set plan_day_id='${D}', source='plan' returning plan_day_id`)]);
+r.push(["B sees no plans", await as(B, `select (select count(*) from plans)::int plans, (select count(*) from plan_days)::int days, (select count(*) from plan_exercises)::int exs`)]);
+r.push(["B cannot add a day to A's plan", await as(B, `insert into plan_days (plan_id, day_order, name) values ('${P}',2,'Pull')`)]);
+r.push(["B cannot add to A's plan day", await as(B, `insert into plan_exercises (plan_day_id, exercise_id) values ('${D}','Pullups')`)]);
+r.push(["A favorites + excludes", await as(A, `insert into exercise_prefs (exercise_id, favorite, excluded) values ('Pullups', true, false), ('Barbell_Deadlift', false, true) on conflict (owner_id, exercise_id) do update set favorite = excluded.favorite returning exercise_id`)]);
+r.push(["B sees none of A's prefs", await as(B, `select count(*)::int n from exercise_prefs`)]);
+r.push(["new splits present", await as(A, `select s.id, count(d.*)::int days from splits s join split_days d on d.split_id = s.id where s.id in ('phul_4','hybrid_4') group by s.id order by s.id`)]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
 

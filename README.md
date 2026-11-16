@@ -21,7 +21,7 @@ and arrives in Phase 3.
 ## What's built
 
 **Phase 0 (live):** app shell, dark theme, PWA, email + password sign-in, profile, 20-table schema with RLS,
-exercise catalog (19 muscles, 86 equipment items, 889 exercises, 9 splits).
+exercise catalog (19 muscles, 86 equipment items, 889 exercises, 9 splits; 11 from Phase 2).
 
 **Phase 1 (log it):**
 
@@ -36,6 +36,24 @@ exercise catalog (19 muscles, 86 equipment items, 889 exercises, 9 splits).
 | History list and detail; repeat or delete a workout | Progress tab |
 | Exercise library + custom exercises | More → Exercise library |
 | Offline: every screen saved by the service worker; all data in IndexedDB, synced to Supabase | `src/lib/db/`, `public/sw.js` |
+
+**Phase 2 (smart workouts):**
+
+| Feature | Where |
+|---|---|
+| Recovery model: per-set fatigue (role × RPE), fading by muscle size; 0–100% per muscle | `src/lib/recovery.ts` |
+| Recovery tab: front/back body heat map, every muscle's score, tap for the sets that hit it | `src/app/(app)/recovery/`, `src/components/body-map.tsx` |
+| Rules-based generator: target muscles → exercises the active gym supports, scored on coverage, recovery, staples, favorites, variety; dosed by goal; cardio when the goal or day calls for it | `src/lib/generator.ts` |
+| Split library (11 splits incl. PHUL and Hybrid lifting + cardio) and plan builder: pick a split, goal and length; every day is filled for your gym | Plan tab, `src/app/(app)/plan/` |
+| Plan day editor: sets/reps/rest, swap, add, reorder, superset, regenerate, rename, change muscles, start now | `/plan/day` |
+| Today's "Up next": the next plan day, "target fresh muscles", or muscles you pick; Regenerate; suggested weights | `src/app/(app)/up-next-card.tsx`, `src/lib/up-next.ts` |
+| Weight suggestions (double progression), using the gym's plate/dumbbell steps; the live workout prefills them | `src/lib/progression.ts` |
+| Gym auto-swap: exercises the active gym can't do swap for the closest match (Up next, and an open workout when you switch gyms) | `closestMatch` / `adaptToGym` in `src/lib/generator.ts` |
+| Favorites and "never suggest" per exercise | More → Exercise library → an exercise |
+
+Tuning knobs (all starting values): `F_MAX`, thresholds and fresh-day templates in `recovery.ts`; `MUSCLE_PRIORITY`,
+`STAPLES`, scoring weights and `dose()` in `generator.ts`. Day names drive two extras: "Power" days use strength dosing,
+"+ Cardio" days get a cardio block, and "Cardio + Core" is mostly cardio.
 
 ### How offline sync works
 
@@ -55,6 +73,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261115000300_lock_trigger_functions.sql` | Security advisor fix | ✓ |
 | `20261116000100_phase1_logging.sql` | Workout name; per-exercise targets, rest, notes; onboarding flag; cardio notes | ✓ |
 | `20261116000200_cardio_in_workouts.sql` | Cardio results link to the cardio exercise in a workout (Start / Done) | ✓ |
+| `20261116000300_phase2_plans.sql` | Plan days remember their target muscles; PHUL and Hybrid splits | ✓ |
 
 ## One-time setup
 
@@ -94,7 +113,7 @@ Open the Vercel URL in Safari → Share → **Add to Home Screen**.
 | `npm run dev` | Local dev server |
 | `npm run build` | Production build |
 | `npm run lint` | ESLint |
-| `npm test` | Unit tests (units, equipment matching, sync) |
+| `npm test` | Unit tests (units, equipment matching, sync, recovery, generator, weight suggestions) |
 | `npm run test:db` | Applies the migrations to an in-memory Postgres and checks RLS |
 | `npm run seed:build` | Regenerates the catalog seed from free-exercise-db + `scripts/catalog-data.mjs` |
 | `npm run images:upload` | Copies exercise pictures into Supabase Storage |

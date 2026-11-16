@@ -443,6 +443,11 @@ export const SPLITS = [
               ["Limbs A", ["quads", "hamstrings", "glutes", "calves", "biceps", "triceps", "forearms"]],
               ["Torso B", ["chest", "lats", "upper_back", "front_delts", "side_delts", "rear_delts", "traps", "abs"]],
               ["Limbs B", ["quads", "hamstrings", "glutes", "calves", "biceps", "triceps", "forearms"]]] },
+  { id: "phul_4", name: "PHUL", days: 4, description: "Power and size: a heavy upper and lower day, then a higher-rep upper and lower day.",
+    dayList: [["Upper Power", UPPER], ["Lower Power", LOWER], ["Upper Hypertrophy", UPPER], ["Lower Hypertrophy", LOWER]] },
+  // Day names ending in "+ Cardio" get a cardio block from the generator; "Cardio + Core" is mostly cardio.
+  { id: "hybrid_4", name: "Hybrid: Lifting + Cardio", days: 4, description: "Three lifting days with cardio built in, plus a cardio and core day.",
+    dayList: [["Upper + Cardio", UPPER], ["Lower", LOWER], ["Full Body + Cardio", FULL], ["Cardio + Core", ["abs", "obliques"]]] },
   { id: "ul_ppl_5", name: "Upper / Lower + PPL", days: 5, description: "A hybrid: upper and lower, then push, pull and legs.",
     dayList: [["Upper", UPPER], ["Lower", LOWER], ["Push", PUSH], ["Pull", PULL], ["Legs", LEGS]] },
   { id: "bro_5", name: "Body Part Split", days: 5, description: "One main area per day: chest, back, shoulders, arms, legs.",

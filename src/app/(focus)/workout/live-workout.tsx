@@ -10,6 +10,7 @@ import { useActiveGym, useCatalog } from "@/lib/hooks";
 import { useCardioTimer } from "@/lib/cardio-timer";
 import { CARDIO_TYPES, cardioElapsedSec, cardioLabel, cardioSummary, cardioTypeFor, isCardioExercise, type CardioTimer } from "@/lib/cardio";
 import { useExerciseHistory, useWorkoutActions, type RestState } from "@/lib/workout";
+import { loadFor, suggestNext } from "@/lib/progression";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
 import { RPE_SCALE } from "@/lib/defaults";
@@ -30,7 +31,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const { db } = useData();
   const { profile } = useProfile();
   const catalog = useCatalog();
-  const { gym, equipment } = useActiveGym();
+  const { gym, equipment, equipmentRows } = useActiveGym();
   const actions = useWorkoutActions();
   const now = useNow(1000);
   const units: Units = profile?.units ?? "lb";
@@ -87,20 +88,23 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   // Prefill the next set: your last set of this exercise today, else the same set from last time.
   useEffect(() => {
-    if (!current || !history || isCardioWex(current)) return;
+    // Wait until this exercise's history has loaded, or the first set would prefill blank and never update.
+    if (!current || !history || !history.has(current.exercise_id) || isCardioWex(current)) return;
     const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}`;
     if (draftFor === key) return;
     const done = setsBy.get(current.id) ?? [];
     const lastToday = [...done].reverse().find((s) => s.type !== "warmup") ?? done[done.length - 1];
     const prev = history.get(current.exercise_id)?.last.filter((s) => s.type !== "warmup") ?? [];
     const sameSetLastTime = prev[working(current.id)] ?? prev[prev.length - 1];
+    // First set of an exercise: double progression from last time (more weight once you hit the top of the range).
+    const suggestion = !lastToday && prev.length ? suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog?.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null)) : null;
     const src = lastToday ?? sameSetLastTime;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill when the current exercise or set changes
     setDraft({
-      weight: src?.weight ?? null,
-      reps: src?.reps ?? current.rep_max ?? null,
+      weight: suggestion && suggestion.weight !== null ? suggestion.weight : (src?.weight ?? null),
+      reps: suggestion?.reps ?? src?.reps ?? current.rep_max ?? null,
       rpe: null,
-      type: done.length === 0 && src === undefined ? "working" : "working",
+      type: "working",
     });
     setDraftFor(key);
   }, [current, history, setsBy, draftFor, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -222,6 +226,15 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       : `${current.rep_max ?? current.rep_min ?? "?"} reps`
     : "";
   const setNumber = working(current?.id ?? "") + (draft.type === "warmup" ? 0 : 1);
+  // "Up 5 lb from last time" when double progression added weight for today.
+  const upHint = (() => {
+    if (!current || isCardio || doneSets.length || !history) return null;
+    const prev = history.get(current.exercise_id)?.last.filter((s) => s.type !== "warmup") ?? [];
+    if (!prev.length) return null;
+    const sug = suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null));
+    if (sug.change !== "up" || sug.weight === null || sug.from === null) return null;
+    return `▲ UP ${formatWeight(sug.weight - sug.from, units)} ${weightUnit(units).toUpperCase()}: YOU HIT THE TOP OF THE RANGE LAST TIME`;
+  })();
 
   return (
     <main className="flex min-h-dvh flex-col pb-10">
@@ -322,6 +335,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <span>&nbsp;· TARGET {targetLabel.toUpperCase()}</span>
               {current.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
             </p>
+            {upHint && <p className="mt-1 text-sm font-bold text-[#C9F7DA]">{upHint}</p>}
             {gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) && (
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
             )}
