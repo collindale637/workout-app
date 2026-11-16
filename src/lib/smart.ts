@@ -9,6 +9,7 @@ import { useNow } from "@/lib/use-now";
 import { useFatigueAdjustments } from "@/lib/fatigue-adjust";
 import { computeRecovery, WINDOW_DAYS, type FatigueSet, type MuscleRecovery } from "@/lib/recovery";
 import { loadFor, suggestNext, type Suggestion } from "@/lib/progression";
+import { estimateStartingWeight, type StartingProfile } from "@/lib/starting-weights";
 import type { ExercisePref, GymEquipment, Plan, PlanDay, PlanExercise, WorkoutSet } from "@/lib/db/types";
 
 /** Favorites and exclusions, keyed by exercise. */
@@ -146,7 +147,38 @@ export function useLastSets(exerciseIds: string[]) {
   }, [db, key]);
 }
 
-/** Next session's weight and reps for an exercise, from last time and this gym's equipment. */
+/** What the starting-weight estimates are based on: latest logged bodyweight, height, sex and experience. Null until there's a weight. */
+export function useStartingProfile(): StartingProfile | null {
+  const { db } = useData();
+  const { profile } = useProfile();
+  const latestLb = useLiveQuery(async () => {
+    const rows = (await db.body_metrics.toArray()).filter((r) => r.bodyweight !== null && Number(r.bodyweight) > 0);
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    const last = rows[rows.length - 1];
+    return last ? Number(last.bodyweight) : null;
+  }, [db]);
+  return useMemo(
+    () => (profile && latestLb ? { bodyweightLb: latestLb, heightIn: profile.height_in ?? null, sex: profile.sex ?? null, experience: profile.experience } : null),
+    [profile, latestLb],
+  );
+}
+
+/** A starting weight (lb) for a lift with no history, or null when there's no sensible guess. */
+export function startingWeightFor(
+  catalog: Catalog,
+  exerciseId: string,
+  who: StartingProfile | null,
+  repMin: number | null,
+  repMax: number | null,
+  gymRows: Pick<GymEquipment, "equipment_id" | "details">[] | null,
+): number | null {
+  const ex = catalog.byId.get(exerciseId);
+  if (!ex || !who) return null;
+  const primaryMuscles = (catalog.musclesOf.get(exerciseId) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id);
+  return estimateStartingWeight({ name: ex.name, pattern: ex.movement_pattern, primaryMuscles, needs: catalog.needs.get(exerciseId) ?? [], gymRows, repMin, repMax, who });
+}
+
+/** Next session's weight and reps for an exercise, from last time and this gym's equipment (or a starting-weight estimate for a new lift). */
 export function suggestionFor(
   catalog: Catalog,
   exerciseId: string,
@@ -154,8 +186,11 @@ export function suggestionFor(
   repMin: number | null,
   repMax: number | null,
   gymRows: Pick<GymEquipment, "equipment_id" | "details">[] | null,
+  who: StartingProfile | null = null,
 ): Suggestion {
-  return suggestNext(last ?? [], repMin, repMax, loadFor(catalog.needs.get(exerciseId) ?? [], gymRows));
+  const hasHistory = (last ?? []).some((s) => s.type === "working" && (s.reps ?? 0) > 0);
+  const estimate = hasHistory ? null : startingWeightFor(catalog, exerciseId, who, repMin, repMax, gymRows);
+  return suggestNext(last ?? [], repMin, repMax, loadFor(catalog.needs.get(exerciseId) ?? [], gymRows), estimate);
 }
 
 /** Everything the generator needs from the phone, in one place. */

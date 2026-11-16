@@ -50,6 +50,7 @@ export type ExerciseEquipment = { exercise_id: string; option_group: number; equ
 export type Goal = "strength" | "hypertrophy" | "fat_loss" | "general";
 export type Experience = "beginner" | "intermediate" | "advanced";
 export type Units = "lb" | "kg";
+export type Sex = "male" | "female";
 /** How much cardio to add on its own: none = only on days that ask for it, auto = what the goal calls for, more = every lifting day. */
 export type CardioPref = "none" | "auto" | "more";
 
@@ -65,6 +66,10 @@ export type Profile = {
   active_gym_id: string | null;
   onboarded_at: string | null;
   cardio_pref: CardioPref;
+  /** Inches (like weights in lb). Null until entered. */
+  height_in: number | null;
+  /** Optional; null = prefer not to say. Only used to tune starting-weight estimates. */
+  sex: Sex | null;
 };
 
 export type GymTemplate = "commercial" | "home" | "hotel" | "bodyweight" | "custom";

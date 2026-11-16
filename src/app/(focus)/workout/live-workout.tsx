@@ -11,6 +11,7 @@ import { useCardioTimer } from "@/lib/cardio-timer";
 import { CARDIO_TYPES, cardioElapsedSec, cardioLabel, cardioSummary, cardioTypeFor, isCardioExercise, type CardioTimer } from "@/lib/cardio";
 import { useExerciseHistory, useWorkoutActions, type RestState } from "@/lib/workout";
 import { loadFor, suggestNext } from "@/lib/progression";
+import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
 import { RPE_SCALE } from "@/lib/defaults";
@@ -37,6 +38,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const { profile } = useProfile();
   const catalog = useCatalog();
   const { gym, equipment, equipmentRows } = useActiveGym();
+  const who = useStartingProfile();
   const actions = useWorkoutActions();
   const now = useNow(1000);
   const units: Units = profile?.units ?? "lb";
@@ -96,7 +98,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   useEffect(() => {
     // Wait until this exercise's history has loaded, or the first set would prefill blank and never update.
     if (!current || !history || !history.has(current.exercise_id) || isCardioWex(current)) return;
-    const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}`;
+    // `who` is in the key so the starting-weight estimate fills in if your bodyweight finishes loading after the screen opens.
+    const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}:${who ? "w" : "n"}`;
     if (draftFor === key) return;
     const done = setsBy.get(current.id) ?? [];
     const lastToday = [...done].reverse().find((s) => s.type !== "warmup") ?? done[done.length - 1];
@@ -104,16 +107,18 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const sameSetLastTime = prev[nextSlot(done, current.target_sets ?? 3, current.skipped_sets) - 1] ?? prev[prev.length - 1];
     // First set of an exercise: double progression from last time (more weight once you hit the top of the range).
     const suggestion = !lastToday && prev.length ? suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog?.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null)) : null;
+    // A lift you've never logged: start from an estimate based on your bodyweight, height, sex and experience.
+    const estimate = catalog && !lastToday && !prev.length ? startingWeightFor(catalog, current.exercise_id, who, current.rep_min, current.rep_max, gym ? equipmentRows : null) : null;
     const src = lastToday ?? sameSetLastTime;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill when the current exercise or set changes
     setDraft({
-      weight: suggestion && suggestion.weight !== null ? suggestion.weight : (src?.weight ?? null),
+      weight: suggestion && suggestion.weight !== null ? suggestion.weight : (src?.weight ?? estimate ?? null),
       reps: suggestion?.reps ?? src?.reps ?? current.rep_max ?? null,
       rpe: null,
       type: "working",
     });
     setDraftFor(key);
-  }, [current, history, setsBy, draftFor, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, history, setsBy, draftFor, catalog, who]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [picker, setPicker] = useState<null | { mode: "add" } | { mode: "swap"; wex: WorkoutExercise }>(null);
   const [menuFor, setMenuFor] = useState<WorkoutExercise | null>(null);
@@ -277,6 +282,13 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const sug = suggestNext(prev, current.rep_min, current.rep_max, loadFor(catalog.needs.get(current.exercise_id) ?? [], gym ? equipmentRows : null));
     if ((sug.change !== "up" && sug.change !== "down") || sug.weight === null || sug.from === null) return null;
     return `${sug.change === "up" ? "▲ UP" : "▼ DOWN"} ${formatWeight(Math.abs(sug.weight - sug.from), units)} ${weightUnit(units).toUpperCase()}`;
+  })();
+
+  // Never logged this lift: the weight above is an estimate from your bodyweight, so say so.
+  const estHint = (() => {
+    if (!current || isCardio || doneSets.length || !history) return null;
+    if ((history.get(current.exercise_id)?.last ?? []).some((s) => s.type !== "warmup")) return null;
+    return startingWeightFor(catalog, current.exercise_id, who, current.rep_min, current.rep_max, gym ? equipmentRows : null) !== null ? "EST. START" : null;
   })();
 
   const listItems: ReorderItem[] = wexs.map((w, i) => {
@@ -479,6 +491,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             )}
 
             {upHint && <p className={`mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] ${upHint.startsWith("▼") ? "text-[#FFD2B3]" : "text-[#C9F7DA]"}`}>{upHint}</p>}
+            {!upHint && estHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">{estHint}</p>}
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <Stepper
                 label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}

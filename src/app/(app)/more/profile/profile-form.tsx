@@ -7,6 +7,7 @@ import { RPE_CHOICES } from "@/lib/defaults";
 import { CARDIO_PREF_LABELS } from "@/lib/onboarding";
 import { WEIGH_IN_LABELS, useWeighIn, type WeighInMode } from "@/lib/weigh-in";
 import { Card, Chip, btn, field, label } from "@/components/ui/kit";
+import { HeightField, SexField, validHeightIn } from "@/components/body-fields";
 import type { CardioPref, Experience, Goal, Profile, Units } from "@/lib/db/types";
 
 export function ProfileForm() {
@@ -30,6 +31,10 @@ export function ProfileForm() {
     <form
       onSubmit={async (e) => {
         e.preventDefault();
+        if (draft.height_in != null && !validHeightIn(draft.height_in)) {
+          setMessage("Check your height.");
+          return;
+        }
         await save({
           display_name: draft.display_name?.trim() || null,
           units: draft.units,
@@ -39,6 +44,8 @@ export function ProfileForm() {
           session_minutes: draft.session_minutes,
           default_rpe: draft.default_rpe,
           cardio_pref: draft.cardio_pref ?? "auto",
+          height_in: draft.height_in ?? null,
+          sex: draft.sex ?? null,
         });
         setMessage("Saved");
       }}
@@ -48,6 +55,9 @@ export function ProfileForm() {
           <span className={label}>NAME</span>
           <input className={field} value={draft.display_name ?? ""} onChange={(e) => set("display_name", e.target.value)} autoComplete="given-name" />
         </label>
+        <HeightField key={`h-${draft.units}`} units={draft.units} valueIn={draft.height_in ?? null} onChange={(v) => set("height_in", v)} />
+        <SexField value={draft.sex ?? null} onChange={(v) => set("sex", v)} />
+        <p className="-mt-2 text-sm font-medium text-muted">Height and sex tune the starting weights for lifts you haven&apos;t logged yet. Your weight comes from your latest weigh-in on Progress.</p>
         <div className="flex flex-col gap-2">
           <span className={label}>GOAL</span>
           <div className="grid grid-cols-2 gap-2">
