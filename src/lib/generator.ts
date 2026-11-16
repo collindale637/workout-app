@@ -138,6 +138,9 @@ export function defaultCardio(goal: Goal, sessionMinutes: number, pref: CardioPr
 }
 
 export type Dose = { sets: number; rep_min: number; rep_max: number; rest_sec: number };
+type Role = "main" | "compound" | "isolation" | "core";
+/** Seconds of work per set, for time estimates. */
+const WORK_SEC = 40;
 
 /** Sets, reps and rest (plan doc → "Starting dose by goal"). */
 export function dose(goal: Goal, role: "main" | "compound" | "isolation" | "core", experience: Experience, focus: DayFocus = null): Dose {
@@ -152,6 +155,8 @@ export function dose(goal: Goal, role: "main" | "compound" | "isolation" | "core
     d = role === "isolation" ? { sets: 3, rep_min: 12, rep_max: 15, rest_sec: 45 } : { sets: 3, rep_min: 10, rep_max: 12, rest_sec: 60 };
   else d = role === "isolation" ? { sets: 3, rep_min: 10, rep_max: 12, rest_sec: 60 } : { sets: 3, rep_min: 8, rep_max: 12, rest_sec: 90 };
   if (experience === "beginner") d = { ...d, sets: Math.min(d.sets, 3) };
+  // Beginners build strength fine on 5–8 reps, without grinding near-max sets while technique settles.
+  if (experience === "beginner" && g === "strength" && role === "main") d = { ...d, rep_min: 5, rep_max: 8, rest_sec: 150 };
   return d;
 }
 
@@ -181,6 +186,22 @@ const LOWER_BODY = new Set(["quads", "hamstrings", "glutes"]);
 const HEAVY_ONLY = new Set(["Barbell_Deadlift", "Sumo_Deadlift", "Deficit_Deadlift", "Rack_Pulls"]);
 /** Hinges usually done for 6–10 reps: an accessory to the main lifts, not a 3–5 rep main lift themselves. */
 const ACCESSORY_HINGE = /romanian|stiff-legged|good morning|single-leg deadlift/i;
+/** Loaded through the spine like a deadlift: one per session is plenty (trap bar + RDL is two). */
+const SPINAL_HINGE = /deadlift|good morning|rack pull/i;
+/** Never a heavy 3–5 rep lift: balance, grip or the dumbbell weight gives out before the muscles do. */
+const NOT_HEAVY = /goblet|dumbbell squat|kettlebell|swing|lunge|step-?up|split squat|single-leg|one-leg/i;
+/** Done one side at a time, so each set takes about twice as long. */
+export const isUnilateral = (name: string) => /bulgarian|split squat|lunge|step-?up|single-leg|one-leg|single-arm|one-arm|concentration|kickback/i.test(name) && !/swing/i.test(name);
+/** Squats you can't load heavily: fine for beginners and small gyms, a weak choice when a barbell or leg press is there. */
+const LIGHT_SQUAT = new Set(["Goblet_Squat", "Dumbbell_Squat"]);
+/** Free-weight lifts that take coaching to do safely: beginners get a machine or a simpler version first. */
+const TECHNICAL = new Set(["T-Bar_Row_with_Handle", "Lying_T-Bar_Row", "Bent_Over_Barbell_Row", "Good_Morning", "Barbell_Hip_Thrust"]);
+/** Pull-ups and chin-ups on your own bodyweight: most beginners can't do several yet. */
+export const isBodyweightPull = (ex: Pick<Exercise, "name" | "movement_pattern" | "mechanic">, loadable: boolean) =>
+  ex.movement_pattern === "vertical_pull" && ex.mechanic === "compound" && !loadable && !/assist|band|inverted/i.test(ex.name);
+const isSwing = (name: string) => /swing/i.test(name);
+/** Cardio that pounds the joints: fine in short bursts, a lot for a beginner or a 15–20 minute block. */
+const HIGH_IMPACT = /jump|rope|run|sprint|burpee/i;
 
 export function exerciseCount(goal: Goal, liftMinutes: number, targets: number) {
   const n = Math.round(liftMinutes / MINUTES_PER_EXERCISE[goal]);
@@ -249,8 +270,10 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const targetSet = new Set(targets);
   const mode = opts.cardio ?? defaultCardio(opts.goal, opts.sessionMinutes, opts.cardioPref);
   const cMin = cardioMinutes(mode, opts.goal, opts.sessionMinutes);
-  const liftMinutes = Math.max(10, opts.sessionMinutes - cMin - 5);
+  const liftMinutes = Math.max(10, opts.sessionMinutes - cMin - 3);
+  // n is a rough count used to size each muscle's "need"; the real stop is the clock (see below).
   const n = mode === "main" ? Math.min(3, Math.max(2, targets.length)) : exerciseCount(opts.goal, liftMinutes, targets.length);
+  const maxN = mode === "main" ? n : opts.experience === "advanced" ? 10 : 9;
   const rec = (m: string) => opts.recovery?.get(m) ?? 100;
   const bigGym = !opts.gymEquipment || opts.gymEquipment.size >= 6;
 
@@ -271,8 +294,31 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const hitDirect = new Set<string>();
   // Lower-body days want a knee-dominant lift (squat, leg press, lunge) AND a hip hinge for the hamstrings.
   const wantHinge = targetSet.has("hamstrings") && (targetSet.has("quads") || targetSet.has("glutes"));
-  const knee = (c: Candidate) => !c.iso && c.primary.includes("quads");
-  const hip = (c: Candidate) => !c.iso && c.primary.includes("hamstrings");
+  // Trap bar deadlifts work the quads but are a hinge: they don't count as the day's squat.
+  const knee = (c: Candidate) => !c.iso && (c.ex.movement_pattern === "squat" || c.ex.movement_pattern === "lunge");
+  const hip = (c: Candidate) => !c.iso && c.ex.movement_pattern === "hinge" && !/thrust|bridge/i.test(c.ex.name);
+  // On a full-body day a back exercise matters more than the hinge; on lower days the hinge is a must.
+  const upperToo = targets.some((m) => ["chest", "lats", "upper_back"].includes(m));
+  const bwPull = (c: Candidate) => isBodyweightPull(c.ex, c.loadable);
+  /** Barbell/dumbbell, machine/cable, or a bar you hang from: two rows or pulls should use different kinds. */
+  const gearKind = (c: Candidate) => {
+    const gear = c.equipment.split(",");
+    return gear.some((e) => FREE_WEIGHTS.has(e)) ? "free" : gear.some((e) => GUIDED.test(e)) ? "guided" : gear.includes("pull_up_bar") ? "bar" : "other";
+  };
+  const canMain = (c: Candidate) =>
+    c.loadable && !isSwing(c.ex.name) && (!heavy || ((c.free || !preferFree) && !ACCESSORY_HINGE.test(c.ex.name) && !NOT_HEAVY.test(c.ex.name) && !isUnilateral(c.ex.name)));
+  const roleOf = (c: Candidate, i: number): Role => (isCore(c) ? "core" : c.iso ? "isolation" : i < mains && canMain(c) ? "main" : "compound");
+  /** Minutes this exercise will take, rest included, before it's chosen. */
+  const estMinutes = (c: Candidate, i: number) => {
+    const d = dose(opts.goal, roleOf(c, i), opts.experience, opts.focus ?? null);
+    const rest = opts.goal === "fat_loss" && i > 0 ? d.rest_sec * 0.5 : d.rest_sec;
+    return (d.sets * (WORK_SEC * (isUnilateral(c.ex.name) ? 2 : 1) + rest)) / 60;
+  };
+  const easierPull = pool.some((c) => c.ex.movement_pattern === "vertical_pull" && !c.iso && !bwPull(c));
+  // Target muscles worth their own exercise (forearms get enough from gripping).
+  const coverable = targets.filter((m) => (MUSCLE_PRIORITY[m] ?? 0.8) >= 0.4);
+  const uncovered = () => coverable.filter((m) => !hitDirect.has(m));
+  let used = 0;
 
   const score = (c: Candidate) => {
     const prim = c.primary.map((m) => need.get(m) ?? 0).sort((a, b) => b - a);
@@ -281,7 +327,17 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     // Already near the per-session cap for one of its main muscles: pick something else.
     const i = chosen.length;
     if (c.primary.some((m) => targetSet.has(m) && (setsFor.get(m) ?? 0) + estSets(c, i) > setCap)) return -Infinity;
+    // Only one deadlift-type lift per session.
+    if (SPINAL_HINGE.test(c.ex.name) && chosen.some((o) => SPINAL_HINGE.test(o.ex.name))) return -Infinity;
     let s = prim[0] + 0.35 * prim.slice(1).reduce((a, b) => a + b, 0);
+    // Every target muscle gets an exercise before any muscle gets a second one, and a second row,
+    // press or pulldown waits until then too.
+    const open = uncovered();
+    if (open.length) {
+      if (c.primary.some((m) => open.includes(m))) s += 1;
+      else s -= 1;
+      if (!c.iso && !isCore(c) && c.ex.movement_pattern !== "other" && chosen.some((o) => o.ex.movement_pattern === c.ex.movement_pattern && !o.iso)) s -= 2;
+    }
     s += 0.2 * c.secondary.reduce((a, m) => a + (need.get(m) ?? 0), 0);
     const offTarget = c.primary.filter((m) => !targetSet.has(m)).length;
     s -= 0.6 * offTarget;
@@ -291,13 +347,30 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     if (wantHinge && !c.iso) {
       const hasKnee = chosen.some(knee);
       const hasHip = chosen.some(hip);
-      if (hasKnee && !hasHip) s += hip(c) ? 1.2 : knee(c) ? -1 : 0;
-      else if (hasHip && !hasKnee && knee(c) && !hip(c)) s += 0.6;
+      const w = upperToo ? 0.4 : 1;
+      if (hasKnee && !hasHip) s += hip(c) ? (1.2 + (c.primary.includes("hamstrings") ? 0.8 : 0)) * w : knee(c) ? -1 : 0;
+      else if (hasHip && !hasKnee) s += knee(c) ? 1.2 * w : hip(c) ? -1 : 0;
+      // Heavy lower days lead with a squat.
+      else if (!hasKnee && heavy && !upperToo && knee(c) && canMain(c)) s += 0.8;
     }
     // The first lifts of the day carry the heaviest loading: free weights for anyone past the beginner stage.
     // (Barbells load heaviest, so at a full gym they lead; dumbbells are next.)
     if (i < mains && !c.iso && c.loadable && preferFree) s += c.free ? (heavy ? 0.6 : 0.3) + (bigGym && c.barbell ? 0.3 : 0) : heavy ? -0.4 : 0;
     if (!heavy && HEAVY_ONLY.has(c.ex.id)) s -= 1;
+    // Heavy slots go to lifts that can actually be loaded heavy (not split squats, swings or goblet squats).
+    if (heavy && i < mains && !c.iso && !canMain(c)) s -= 0.8;
+    if (bigGym && LIGHT_SQUAT.has(c.ex.id) && opts.experience !== "beginner") s -= 0.6;
+    // TRX rows and push-ups are for home and hotel gyms; a full gym has loadable versions.
+    if (bigGym && !c.iso && !isCore(c) && !c.loadable && !bwPull(c)) s -= 0.5;
+    if (opts.experience === "beginner") {
+      // Beginners: machines and simple free-weight lifts first; pulldowns instead of pull-ups.
+      if (bigGym && !c.iso && !c.free && c.loadable && c.equipment) s += 0.4;
+      if (TECHNICAL.has(c.ex.id)) s -= 0.8;
+      if (bwPull(c)) {
+        if (easierPull) return -Infinity;
+        s -= 1.5;
+      }
+    } else if (opts.goal === "fat_loss" && bwPull(c)) s -= 0.8;
     const tier = STAPLES[c.ex.id];
     if (tier === 1) s += chosen.length < 2 && !offTarget ? 0.8 : 0.5;
     else if (tier === 2) s += 0.35;
@@ -315,19 +388,35 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
       // tagged lats-first, a T-bar row upper-back-first: still two rows). Isolation needs the same main muscle.
       const compoundPattern = c.ex.movement_pattern !== "isolation" && c.ex.movement_pattern !== "core";
       const related = overlap || (compoundPattern && [...c.primary, ...c.secondary].some((m) => o.primary.includes(m) || o.secondary.includes(m)));
+      // Same exercise in another form (Barbell Row and Machine Row) counts as a repeat even when the tags differ.
+      if (o.base === c.base && o.ex.movement_pattern === c.ex.movement_pattern) {
+        s -= 1.5;
+        continue;
+      }
       if (!related) continue;
       if (overlap && (o.base === c.base || (o.equipment === c.equipment && o.primary.join() === c.primary.join() && o.ex.mechanic === c.ex.mechanic))) s -= 1.5;
       // A second row is fine; a third is too many. The penalty grows with each repeat of the movement.
-      else if (o.ex.movement_pattern === c.ex.movement_pattern) s -= REPEAT_PENALTY[Math.min(samePattern++, REPEAT_PENALTY.length - 1)];
+      else if (o.ex.movement_pattern === c.ex.movement_pattern) {
+        s -= REPEAT_PENALTY[Math.min(samePattern++, REPEAT_PENALTY.length - 1)];
+        // A second row or pull should feel different: barbell then machine or cable, pull-up then pulldown.
+        if (!c.iso && gearKind(o) === gearKind(c)) s -= 3;
+      }
     }
     return s + 0.35 * (jitter.get(c.ex.id) ?? 0);
   };
 
-  while (chosen.length < n) {
+  // Keep adding exercises while they fit the time. Uncovered target muscles may run a little over: the
+  // sets get trimmed to fit afterwards.
+  while (chosen.length < maxN) {
     let best: Candidate | null = null;
     let bestScore = -Infinity;
+    const open = uncovered();
     for (const c of pool) {
       if (chosen.includes(c)) continue;
+      if (mode !== "main" && chosen.length >= 2) {
+        const slack = open.length && c.primary.some((m) => open.includes(m)) ? 1.25 : 1.05;
+        if (used + estMinutes(c, chosen.length) > liftMinutes * slack) continue;
+      }
       const s = score(c);
       if (s > bestScore) {
         best = c;
@@ -336,6 +425,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     }
     if (!best || bestScore < (chosen.length >= 3 ? 0.15 : -0.5)) break;
     for (const m of best.primary) setsFor.set(m, (setsFor.get(m) ?? 0) + estSets(best, chosen.length));
+    used += estMinutes(best, chosen.length);
     chosen.push(best);
     const compound = !best.iso;
     for (const m of best.primary) if (need.has(m)) need.set(m, Math.max(0, need.get(m)! - (compound && DIRECT_WORK.has(m) ? 0.5 : 1)));
@@ -349,19 +439,28 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const rank = (c: Candidate) =>
     isCore(c) ? 4 : c.iso ? 3 : !c.loadable ? 2 : STAPLES[c.ex.id] === 1 ? 0 : 1;
   const freeFirst = (c: Candidate) => (preferFree && c.free ? 0 : 1);
-  chosen.sort((a, b) => rank(a) - rank(b) || (rank(a) <= 1 ? freeFirst(a) - freeFirst(b) : 0) || weight(b) - weight(a));
+  const legOrder = (c: Candidate) => (knee(c) ? (isUnilateral(c.ex.name) ? 0.7 : 0) : hip(c) ? 1 : 0.5);
+  const uni = (c: Candidate) => (isUnilateral(c.ex.name) ? 1 : 0);
+  chosen.sort((a, b) => rank(a) - rank(b) || (rank(a) <= 1 ? legOrder(a) - legOrder(b) || uni(a) - uni(b) || freeFirst(a) - freeFirst(b) : 0) || weight(b) - weight(a));
 
   let mainLeft = mains;
   const items: GenItem[] = chosen.map((c) => {
     // Heavy 3–5 rep work belongs on free weights; a machine or cable lift gets the "compound" dose instead.
-    const canMain = c.loadable && (!heavy || ((c.free || !preferFree) && !ACCESSORY_HINGE.test(c.ex.name)));
-    const role = isCore(c) ? "core" : c.iso ? "isolation" : canMain && mainLeft-- > 0 ? "main" : "compound";
+    const role = isCore(c) ? "core" : c.iso ? "isolation" : canMain(c) && mainLeft-- > 0 ? "main" : "compound";
     const d = dose(opts.goal, role, opts.experience, opts.focus ?? null);
     const item: GenItem = { exercise_id: c.ex.id, ...d, superset_group: null, notes: null };
     if (isHold(c.ex.name)) return { ...item, rep_min: opts.experience === "beginner" ? 20 : 30, rep_max: opts.experience === "beginner" ? 30 : 45, notes: "seconds" };
     // Big leg lifts take longer to recover from between sets than presses and rows.
     if (role === "compound" && c.loadable && c.primary.some((m) => LOWER_BODY.has(m)) && !heavy) item.rest_sec = d.rest_sec + (opts.goal === "fat_loss" ? 15 : 30);
     if (role !== "main" && HEAVY_ONLY.has(c.ex.id)) return { ...item, rep_min: 5, rep_max: 8, rest_sec: Math.max(150, d.rest_sec), notes: "Stop each set with 2 reps in the tank" };
+    // Swings are a power move: quick reps, short rest.
+    if (isSwing(c.ex.name)) return { ...item, rep_min: 10, rep_max: 15, rest_sec: 60 };
+    if (bwPull(c)) {
+      if (opts.experience === "beginner") return { ...item, rep_min: 3, rep_max: 6, notes: "Use a band or a slow lowering if you can't do 3 yet" };
+      if (!heavy) return { ...item, rep_min: 5, rep_max: 10 };
+    }
+    // Low-rep rows turn into heaving: heavy rows stay at 5–8.
+    if (role === "main" && heavy && c.ex.movement_pattern === "horizontal_pull") { item.rep_min = 5; item.rep_max = 8; }
     if (role === "main") item.notes = heavy ? "Warm up: 2–3 lighter sets first" : "Warm up: 1–2 lighter sets first";
     return item;
   });
@@ -392,24 +491,71 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     items.sort((x, y) => anchor(x) - anchor(y) || order.get(x)! - order.get(y)!);
   }
 
+  if (mode !== "main") fitToTime(items, chosen, liftMinutes, opts.experience, setCap, heavy);
+
   if (cMin > 0) {
-    const cardio = pickCardio(cat, opts, random);
+    const cardio = pickCardio(cat, { ...opts, minutes: cMin }, random);
     if (cardio) items.push({ exercise_id: cardio, sets: 1, rep_min: null, rep_max: null, rest_sec: null, superset_group: null, notes: `${cMin} min` });
   }
   return { items, targets, cardioMinutes: cMin };
 }
 
-/** A cardio exercise this gym supports, favoring favorites and the common machines. */
-export function pickCardio(cat: GenCatalog, opts: Pick<GenOptions, "gymEquipment" | "prefs">, random: () => number = Math.random): string | null {
+/** Rough minutes one exercise takes: ~40 s per set (twice for one-side-at-a-time lifts) plus rest. The
+ *  first exercise of a superset has no rest: you go straight to its partner. */
+export function itemMinutes(it: GenItem, name: string, items: GenItem[]) {
+  const work = it.notes === "seconds" ? (it.rep_max ?? 40) : WORK_SEC;
+  const partners = it.superset_group == null ? [] : items.filter((x) => x.superset_group === it.superset_group);
+  const rest = partners.length > 1 && partners[0] !== it ? (it.rest_sec ?? 60) : partners.length > 1 ? 0 : (it.rest_sec ?? 60);
+  return (it.sets * (work * (isUnilateral(name) ? 2 : 1) + rest)) / 60;
+}
+
+/**
+ * Sets are adjusted to fill the session: too long and the biggest set counts come down (heavy lifts last);
+ * time to spare and non-beginners get a 4th set on their exercises, as long as no muscle passes its cap.
+ */
+function fitToTime(items: GenItem[], chosen: Candidate[], minutes: number, experience: Experience, setCap: number, heavy: boolean) {
+  const cand = new Map(chosen.map((c) => [c.ex.id, c]));
+  const total = () => items.reduce((a, it) => a + itemMinutes(it, cand.get(it.exercise_id)!.ex.name, items), 0);
+  const group = (it: GenItem) => (it.superset_group == null ? [it] : items.filter((x) => x.superset_group === it.superset_group));
+  const isMain = (it: GenItem) => !!it.notes?.startsWith("Warm up");
+  for (let guard = 0; guard < 30 && total() > minutes * 1.08; guard++) {
+    // Most sets first; among equals, trim from the end of the workout (isolation and core before compounds).
+    const it = [...items].filter((x) => x.sets > (isMain(x) ? 3 : 2)).sort((a, b) => b.sets - a.sets || items.indexOf(b) - items.indexOf(a))[0];
+    if (!it) break;
+    for (const x of group(it)) x.sets = Math.max(isMain(x) ? 3 : 2, x.sets - 1);
+  }
+  if (experience === "beginner") return;
+  const setsOn = (m: string) => items.reduce((a, it) => a + (cand.get(it.exercise_id)!.primary.includes(m) ? it.sets : 0), 0);
+  const fits = (x: GenItem) => cand.get(x.exercise_id)!.primary.every((m) => setsOn(m) + 1 <= setCap);
+  for (let guard = 0; guard < 30 && total() < minutes * 0.85; guard++) {
+    // Compounds before isolation, in workout order; heavy days keep their accessories at 3.
+    const it = items.find((x) => x.notes !== "seconds" && !isMain(x) && x.sets < 4 && !heavy && group(x).every((y) => y.sets < 4 && fits(y)));
+    if (!it) break;
+    for (const x of group(it)) x.sets++;
+  }
+}
+
+/** A cardio exercise this gym supports, favoring favorites and the common machines. High-impact options
+ *  (jump rope, running) are kept for short blocks and people past the beginner stage. */
+export function pickCardio(
+  cat: GenCatalog,
+  opts: Pick<GenOptions, "gymEquipment" | "prefs"> & { experience?: Experience; minutes?: number },
+  random: () => number = Math.random,
+): string | null {
   const options = cat.exercises.filter(
     (e) => e.is_active && e.category === "cardio" && !opts.prefs?.get(e.id)?.excluded &&
       (!opts.gymEquipment || isAvailable(cat.needs.get(e.id) ?? [], opts.gymEquipment)),
   );
-  const machines = options.filter((e) => (cat.needs.get(e.id) ?? []).length > 0);
+  const impact = (name: string) => HIGH_IMPACT.test(name) && !/walk/i.test(name);
+  // Beginners skip jump rope and treadmill running when there's anything gentler (even a walk outside).
+  const machines = options.filter((e) => (cat.needs.get(e.id) ?? []).length > 0 && !(opts.experience === "beginner" && impact(e.name)));
   const list = machines.length ? machines : options;
   if (!list.length) return null;
   const scored = list
-    .map((e) => ({ id: e.id, s: (e.is_common ? 1 : 0) + (opts.prefs?.get(e.id)?.favorite ? 2 : 0) + random() * 0.9 }))
+    .map((e) => {
+      const penalty = impact(e.name) ? (opts.experience === "beginner" ? 1.5 : (opts.minutes ?? 0) >= 15 ? 0.6 : 0) : 0;
+      return { id: e.id, s: (e.is_common ? 1 : 0) + (opts.prefs?.get(e.id)?.favorite ? 2 : 0) + random() * 0.9 - penalty };
+    })
     .sort((a, b) => b.s - a.s);
   return scored[0].id;
 }

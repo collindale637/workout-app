@@ -30,9 +30,13 @@ Dosing by goal (a starting point; follow the request when it says otherwise)
 
 Exercise choice
 - Order: main compound lifts first, then other compounds, then isolation, core last.
-- Heavy 3–5 rep main lifts use barbells or dumbbells (trap bar is fine), not machines or cables. Romanian deadlifts and good mornings are accessories (6–10 reps), not 3–5 rep main lifts.
-- A lower-body or full-body day that trains quads and hamstrings needs a knee-dominant lift (squat, leg press, lunge) AND a hip hinge for the hamstrings (Romanian deadlift, deadlift, good morning). A leg curl alone isn't enough.
-- Upper days balance pushing and pulling. Each target muscle on the day gets at least one exercise where it is a main muscle (e.g. rear delt work on a pull day, not just rows).
+- Heavy 3–5 rep main lifts are two-legged barbell, trap bar or dumbbell press lifts, not machines or cables. Never 3–5 reps on split squats, lunges, goblet or dumbbell squats, or kettlebell swings. Romanian deadlifts and good mornings are accessories (6–10 reps). Heavy rows are 5–8 reps. Beginners on a strength goal work at 5–8 reps.
+- A lower-body or full-body day that trains quads and hamstrings needs a knee-dominant lift (squat, leg press, lunge) AND a hip hinge (Romanian deadlift, deadlift, good morning). A trap bar deadlift is the hinge, not the squat. A leg curl alone isn't enough. Heavy lower days lead with a squat.
+- At most one deadlift-type lift per session (deadlift, trap bar deadlift, Romanian deadlift, good morning count; hip thrusts and swings don't).
+- Upper days balance pushing and pulling. Every target muscle on the day gets one exercise where it is a main muscle (e.g. rear delt work on a pull day, triceps on a push day, a row on a full-body day) before any muscle gets a second exercise.
+- A second row, press or pull on the same day uses different equipment (barbell row then cable row; pull-up then pulldown), never two near-identical versions.
+- Beginners: machines and simple lifts first; lat pulldowns or assisted pull-ups instead of pull-ups and chin-ups; low-impact cardio (bike, walk, elliptical) rather than jump rope or running.
+- Kettlebell swings are a power move: 10–15 reps, about 60 s rest. One-leg and one-arm lifts take about twice as long per set.
 - Conventional and sumo deadlifts: 5–8 reps at most outside strength days, never in a superset.
 - Supersets pair exercises that don't share a main muscle (a press with a row, a curl with a triceps move); never two heavy leg lifts.
 - Timed holds (planks, side planks, hollow holds): seconds, 30–45 (20–30 for beginners).

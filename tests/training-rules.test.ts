@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SESSION_SET_CAP, generateWorkout, setCapFor, isHold, isIsolation, type GenOptions } from "@/lib/generator";
+import { SESSION_SET_CAP, generateWorkout, isUnilateral, itemMinutes, setCapFor, isHold, isIsolation, type GenOptions } from "@/lib/generator";
 import { suggestNext } from "@/lib/progression";
 import { defaultTargets } from "@/lib/defaults";
 import { catalog, commercialGym, homeGym, hotelGym } from "./fixtures/catalog";
@@ -32,7 +32,8 @@ describe("training rules (Batch 5 audit)", () => {
           const ids = lifts(gen({ targets: [...targets], gymEquipment: gym, goal }, seed)).map((i) => i.exercise_id);
           const label = `${goal} ${targets.length} seed ${seed}: ${ids.join(", ")}`;
           expect(ids.some((id) => compound(id) && primaryOf(id).includes("quads")), label).toBe(true);
-          expect(ids.some((id) => compound(id) && primaryOf(id).includes("hamstrings")), label).toBe(true);
+          // A hip hinge: Romanian deadlift, trap bar deadlift, swing (hip thrusts don't count).
+          expect(ids.some((id) => compound(id) && byId.get(id)!.movement_pattern === "hinge" && !/thrust|bridge/i.test(byId.get(id)!.name)), label).toBe(true);
         }
       }
     }
@@ -173,5 +174,80 @@ describe("progression", () => {
   it("steps down a kettlebell ladder, and never below zero", () => {
     expect(suggestNext([w(35, 3), w(35, 3)], 8, 12, { increment: 5, ladder: [18, 26, 35, 44] })).toMatchObject({ weight: 26, change: "down" });
     expect(suggestNext([w(5, 3), w(5, 3)], 8, 12, load).change).toBe("same");
+  });
+
+  // Coach review (Batch 5): the 20-workout sheet.
+  const all = (o: Partial<GenOptions>) => SEEDS.map((seed) => lifts(gen(o, seed)));
+  const DAYS = { PUSH, PULL, LEGS, UPPER, LOWER, FULL };
+  const covered = (ids: string[], m: string) => ids.some((id) => primaryOf(id).includes(m));
+
+  it("every main target muscle gets its own exercise from 45 minutes up", () => {
+    for (const [name, targets] of Object.entries(DAYS)) {
+      for (const goal of ["hypertrophy", "fat_loss", "general"] as const) {
+        for (const ids of all({ targets, goal, sessionMinutes: 60 }).map((w) => w.map((i) => i.exercise_id))) {
+          for (const m of targets.filter((t) => !["forearms", "adductors", "abductors", "lower_back", "obliques", "traps", "rear_delts", "front_delts", "calves"].includes(t)))
+            expect(covered(ids, m), `${name} ${goal} missing ${m}: ${ids.join(", ")}`).toBe(true);
+        }
+      }
+    }
+    // Even a 45-minute strength full-body day at a hotel gym trains the back.
+    for (const ids of all({ targets: FULL, goal: "strength", sessionMinutes: 45, gymEquipment: hotelGym }).map((w) => w.map((i) => i.exercise_id)))
+      expect(covered(ids, "upper_back") || covered(ids, "lats"), ids.join(", ")).toBe(true);
+  });
+
+  it("beginners get pulldowns, not bodyweight pull-ups, when there's a machine", () => {
+    for (const targets of [PULL, UPPER, FULL])
+      for (const goal of ["hypertrophy", "strength", "fat_loss", "general"] as const)
+        for (const w of all({ targets, goal, experience: "beginner" }))
+          for (const i of w) expect(byId.get(i.exercise_id)!.name, i.exercise_id).not.toMatch(/^(pull-up|chin-up|wide-grip pull-up)$/i);
+  });
+
+  it("one deadlift-type lift per session, and the trap bar deadlift doesn't count as the squat", () => {
+    for (const targets of [LEGS, LOWER, FULL])
+      for (const goal of ["hypertrophy", "strength", "fat_loss", "general"] as const)
+        for (const w of all({ targets, goal, sessionMinutes: 90 })) {
+          const ids = w.map((i) => i.exercise_id);
+          expect(ids.filter((id) => /deadlift|good morning|rack pull/i.test(byId.get(id)!.name)).length, ids.join(", ")).toBeLessThanOrEqual(1);
+          expect(ids.some((id) => ["squat", "lunge"].includes(byId.get(id)!.movement_pattern ?? "")), ids.join(", ")).toBe(true);
+        }
+    // Heavy lower days lead with a squat.
+    for (const w of all({ targets: LOWER, goal: "strength" })) expect(byId.get(w[0].exercise_id)!.movement_pattern).toBe("squat");
+  });
+
+  it("heavy 3–5 rep work is never one-legged, a goblet squat or a swing; heavy rows are 5–8", () => {
+    for (const [, targets] of Object.entries(DAYS))
+      for (const gymEquipment of [commercialGym, homeGym, hotelGym])
+        for (const w of all({ targets, goal: "strength", gymEquipment }))
+          for (const i of w.filter((x) => x.rep_max === 5)) {
+            const ex = byId.get(i.exercise_id)!;
+            expect(isUnilateral(ex.name) || /goblet|dumbbell squat|swing|lunge/i.test(ex.name), ex.name).toBe(false);
+            expect(ex.movement_pattern, ex.name).not.toBe("horizontal_pull");
+          }
+    // Beginners on the strength goal work at 5–8, not 3–5.
+    for (const w of all({ targets: FULL, goal: "strength", experience: "beginner" })) expect(w.every((i) => i.rep_max !== 5)).toBe(true);
+  });
+
+  it("sessions fit the clock: not over by more than ~10%, and 45+ minute sessions use most of it", () => {
+    for (const [name, targets] of Object.entries(DAYS))
+      for (const goal of ["hypertrophy", "strength", "fat_loss", "general"] as const)
+        for (const experience of ["beginner", "intermediate", "advanced"] as const)
+          for (const sessionMinutes of [45, 60]) {
+            const r = generateWorkout(catalog, { ...base, targets, goal, experience, sessionMinutes, seed: 1 });
+            const ls = lifts(r.items);
+            const min = ls.reduce((a, i) => a + itemMinutes(i, byId.get(i.exercise_id)!.name, ls), 0);
+            const avail = sessionMinutes - r.cardioMinutes;
+            const label = `${name} ${goal} ${experience} ${sessionMinutes}: ${min.toFixed(0)} of ${avail}`;
+            expect(min, label).toBeLessThanOrEqual(avail * 1.12);
+            if (experience !== "beginner") expect(min, label).toBeGreaterThanOrEqual(avail * 0.6);
+          }
+  });
+
+  it("beginners don't get jump rope or running for their cardio block when something gentler exists", () => {
+    for (const gymEquipment of [commercialGym, homeGym, hotelGym])
+      for (const seed of SEEDS) {
+        const r = generateWorkout(catalog, { ...base, targets: FULL, goal: "fat_loss", experience: "beginner", gymEquipment, seed });
+        const cardio = r.items.find((i) => byId.get(i.exercise_id)?.category === "cardio");
+        if (cardio) expect(byId.get(cardio.exercise_id)!.name).not.toMatch(/jump|rope|treadmill run/i);
+      }
   });
 });
