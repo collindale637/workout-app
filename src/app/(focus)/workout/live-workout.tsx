@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -9,7 +9,7 @@ import { useActiveGym, useCatalog } from "@/lib/hooks";
 import { useExerciseHistory, useWorkoutActions, type RestState } from "@/lib/workout";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
-import { RPE_CHOICES } from "@/lib/defaults";
+import { RPE_SCALE } from "@/lib/defaults";
 import { estimate1RM, formatDuration, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { ExerciseInfo } from "@/components/exercise-info";
@@ -83,6 +83,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [finishOpen, setFinishOpen] = useState(false);
   const [allDoneOpen, setAllDoneOpen] = useState(false);
   const [typing, setTyping] = useState<null | "weight" | "reps">(null);
+  const [typeOpen, setTypeOpen] = useState(false);
 
   if (!wexs || !sets || !catalog) return null;
 
@@ -172,9 +173,13 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-2 block text-left">
               <h1 className="display text-[40px] leading-[0.95] font-extrabold">{ex.name}</h1>
             </button>
-            <p className="mt-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
-              {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`} · TARGET {targetLabel.toUpperCase()}
-              {current.superset_group !== null && " · SUPERSET"}
+            <p className="mt-1 flex flex-wrap items-center text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
+              <button type="button" onClick={() => setTypeOpen(true)} className="-my-3 -ml-1 inline-flex min-h-11 items-center gap-1 rounded-lg px-1" aria-label="Change set type">
+                {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+              <span>&nbsp;· TARGET {targetLabel.toUpperCase()}</span>
+              {current.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
             </p>
             {gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) && (
               <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
@@ -193,40 +198,20 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
             <div className="mt-4">
               <div className="mb-2 text-xs font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
-              <div className="grid grid-cols-7 gap-1.5" role="group" aria-label="RPE">
-                {RPE_CHOICES.map((r) => {
-                  const on = draft.rpe === r;
-                  const isDefault = r === defaultRpe && draft.rpe === null;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setDraft({ ...draft, rpe: on ? null : r })}
-                      className={`display num h-12 rounded-xl text-lg font-extrabold ${
-                        on ? "bg-white text-primary" : isDefault ? "border-2 border-dashed border-white/70 text-white" : "bg-white/15 text-white"
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  );
-                })}
-              </div>
+              <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
             </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-1.5" role="group" aria-label="Set type">
-              {(["warmup", "working", "drop"] as SetType[]).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  aria-pressed={draft.type === t}
-                  onClick={() => setDraft({ ...draft, type: t })}
-                  className={`display h-10 rounded-xl text-sm font-extrabold tracking-[0.08em] ${draft.type === t ? "bg-white/90 text-primary" : "bg-white/10 text-white/80"}`}
-                >
-                  {TYPE_LABEL[t]}
-                </button>
-              ))}
-            </div>
+            {rest && restLeft > 0 && (
+              <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
+            )}
+
+            <button
+              type="button"
+              onClick={log}
+              className="display mt-3 flex h-16 w-full items-center justify-center rounded-2xl bg-white text-2xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-5px_0_#C9D3FF] active:translate-y-px"
+            >
+              Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
+            </button>
           </>
         ) : (
           <div className="py-6">
@@ -248,13 +233,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               onEdit={setEditSet}
             />
 
-            {rest && restLeft > 0 && (
-              <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
-            )}
-
-            <button type="button" onClick={log} className={`${btn.primary} h-16 text-2xl`}>
-              Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
-            </button>
           </>
         )}
 
@@ -406,6 +384,26 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         )}
       </Sheet>
 
+      <Sheet open={typeOpen} onClose={() => setTypeOpen(false)} title="Set type">
+        <div className="flex flex-col gap-2">
+          {(["working", "warmup", "drop"] as SetType[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={draft.type === t}
+              onClick={() => {
+                setDraft({ ...draft, type: t });
+                setTypeOpen(false);
+              }}
+              className={`flex min-h-14 items-center justify-between rounded-2xl border-2 px-4 text-left ${draft.type === t ? "border-accent-strong bg-primary/15" : "border-line bg-card-2"}`}
+            >
+              <span className={`text-base font-bold ${draft.type === t ? "text-accent-soft" : ""}`}>{TYPE_LABEL[t]}</span>
+              <span className="text-sm font-medium text-muted">{t === "working" ? "Counts toward your sets" : t === "warmup" ? "Light, doesn't count" : "Lighter right after a set"}</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
+
       <Sheet open={allDoneOpen} onClose={() => setAllDoneOpen(false)}>
         <div className="flex flex-col items-center gap-2 pb-2 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white" aria-hidden="true">
@@ -473,21 +471,62 @@ function Stepper({ label: l, value, onMinus, onPlus, onTap }: { label: string; v
   );
 }
 
-/** Slim rest countdown that sits just above the Log button. */
+/** Slim rest countdown inside the blue card, just above Log. */
 function RestBar({ left, total, onAdd, onSkip }: { left: number; total: number; onAdd: () => void; onSkip: () => void }) {
   const pct = Math.min(1, left / Math.max(1, total));
   useEffect(() => {
     if (left === 1 && "vibrate" in navigator) navigator.vibrate?.([200, 100, 200]);
   }, [left]);
   return (
-    <div className="flex h-11 items-center gap-3" role="timer" aria-label={`Rest ${formatDuration(left)} left`}>
-      <span className="display w-10 shrink-0 text-sm font-extrabold tracking-[0.1em] text-muted">REST</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-        <div className="h-full rounded-full bg-accent-strong transition-[width] duration-1000 ease-linear" style={{ width: `${pct * 100}%` }} />
+    <div className="mt-2 flex h-11 items-center gap-3" role="timer" aria-label={`Rest ${formatDuration(left)} left`}>
+      <span className="display w-10 shrink-0 text-sm font-extrabold tracking-[0.1em] text-[#DCE4FF]">REST</span>
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
+        <div className="h-full rounded-full bg-white transition-[width] duration-1000 ease-linear" style={{ width: `${pct * 100}%` }} />
       </div>
       <span className="display num w-12 shrink-0 text-right text-2xl font-extrabold">{formatDuration(left)}</span>
-      <button type="button" onClick={onAdd} className="display -mr-1 h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-muted">+15</button>
-      <button type="button" onClick={onSkip} className="display h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-accent">Skip</button>
+      <button type="button" onClick={onAdd} className="display -mr-1 h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-[#DCE4FF]">+15</button>
+      <button type="button" onClick={onSkip} className="display h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-white">Skip</button>
+    </div>
+  );
+}
+
+/**
+ * RPE picker that slides sideways from 1 to 10. Opens centred on the chosen (or default) value.
+ * Sideways swipes stay inside the strip: they don't scroll the page or trigger the browser's back gesture.
+ */
+function RpeSlider({ value, defaultRpe, resetKey, onChange }: { value: number | null; defaultRpe: number; resetKey: string; onChange: (v: number | null) => void }) {
+  const strip = useRef<HTMLDivElement>(null);
+  const shown = value ?? defaultRpe;
+  useEffect(() => {
+    const el = strip.current;
+    const target = el?.querySelector<HTMLElement>(`[data-rpe="${shown}"]`);
+    if (el && target) el.scrollLeft = target.offsetLeft - (el.clientWidth - target.offsetWidth) / 2;
+  }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps -- recentre only when the exercise changes, not while sliding
+  return (
+    <div
+      ref={strip}
+      role="group"
+      aria-label="RPE, slide for lower values"
+      className="-mx-5 flex touch-pan-x gap-1.5 overflow-x-auto overscroll-x-contain px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      {RPE_SCALE.map((r) => {
+        const on = value === r;
+        const isDefault = r === defaultRpe && value === null;
+        return (
+          <button
+            key={r}
+            data-rpe={r}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? null : r)}
+            className={`display num h-12 w-[3.25rem] shrink-0 rounded-xl text-lg font-extrabold ${
+              on ? "bg-white text-primary" : isDefault ? "border-2 border-dashed border-white/70 text-white" : "bg-white/15 text-white"
+            }`}
+          >
+            {r}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -639,7 +678,7 @@ function EditSetForm({ set, units, defaultRpe, onSave, onDelete }: { set: Workou
       </div>
       <span className={label}>RPE (BLANK = {defaultRpe})</span>
       <div className="grid grid-cols-7 gap-1.5">
-        {RPE_CHOICES.map((v) => (
+        {RPE_SCALE.map((v) => (
           <button key={v} type="button" onClick={() => setRpe(rpe === v ? null : v)} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === v ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{v}</button>
         ))}
       </div>
