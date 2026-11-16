@@ -923,6 +923,14 @@ function FinishSummary({
     if (top1 > prev.best1RM + 0.5) return [`${names.get(w.exercise_id)?.name}: best estimated max, ${formatWeight(top1, units)} ${weightUnit(units)}`];
     return [];
   });
+  // Lifts that have working sets (exercises without sets are dropped on save), with the heaviest set of each.
+  const lifts = wexs.flatMap((w) => {
+    const sets = (setsBy.get(w.id) ?? []).filter((s) => s.type !== "warmup");
+    if (!sets.length) return [];
+    const top = sets.reduce((best, s) => ((s.weight ?? 0) > (best.weight ?? 0) ? s : best), sets[0]);
+    const topText = top.weight && top.reps ? ` · ${formatWeight(top.weight, units)} × ${top.reps}` : top.reps ? ` · ${top.reps} reps` : "";
+    return [{ id: w.id, name: names.get(w.exercise_id)?.name ?? w.exercise_id, detail: `${sets.length} ${sets.length === 1 ? "set" : "sets"}${topText}` }];
+  });
   const stat = (v: string, l: string) => (
     <div className="rounded-2xl bg-card-2 p-3 text-center">
       <div className="display num text-3xl font-extrabold">{v}</div>
@@ -941,6 +949,16 @@ function FinishSummary({
           <div className="display text-lg font-extrabold text-accent-soft">🏆 New records</div>
           <ul className="mt-1 text-sm font-semibold">{prs.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
+      )}
+      {lifts.length > 0 && (
+        <ul className="rounded-2xl bg-card-2 px-3 py-2 text-sm font-semibold">
+          {lifts.map((l) => (
+            <li key={l.id} className="flex justify-between gap-3 py-1">
+              <span className="min-w-0 truncate">{l.name}</span>
+              <span className="num shrink-0 text-muted">{l.detail}</span>
+            </li>
+          ))}
+        </ul>
       )}
       {cardio.length > 0 && (
         <ul className="rounded-2xl bg-card-2 px-3 py-2 text-sm font-semibold">
