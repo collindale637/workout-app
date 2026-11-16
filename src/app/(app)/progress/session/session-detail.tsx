@@ -94,14 +94,18 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
           <div className="text-sm font-medium text-muted">{cardioSummary(c, units)}</div>
         </Link>
       ))}
-      <button
-        type="button"
-        className={btn.primary}
-        disabled={Boolean(open)}
-        onClick={() => router.push(`/workout?repeat=${workout.id}`)}
-      >
-        {open ? "Finish your current workout first" : "Do this workout again"}
-      </button>
+      {justDone ? (
+        <Link href="/" className={btn.primary}>Done</Link>
+      ) : (
+        <button
+          type="button"
+          className={btn.primary}
+          disabled={Boolean(open)}
+          onClick={() => router.push(`/workout?repeat=${workout.id}`)}
+        >
+          {open ? "Finish your current workout first" : "Do this workout again"}
+        </button>
+      )}
       <button
         type="button"
         className={btn.danger}
