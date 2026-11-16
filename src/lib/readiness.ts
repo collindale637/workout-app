@@ -12,7 +12,7 @@ import { F_MAX, RECOVERING_AT, type MuscleRecovery } from "./recovery";
 export const READY_AVG = 80;
 
 export type ReadinessView = "plan" | "ppl" | "upper_lower" | "body_part";
-export const VIEW_LABELS: Record<ReadinessView, string> = { plan: "My plan", ppl: "PPL", upper_lower: "Upper / Lower", body_part: "Body part" };
+export const VIEW_LABELS: Record<ReadinessView, string> = { plan: "My plan", body_part: "Body part", upper_lower: "Upper / Lower", ppl: "PPL" };
 
 export type MuscleGroup = { name: string; muscles: string[] };
 
