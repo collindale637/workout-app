@@ -184,6 +184,30 @@ export function useWorkoutActions() {
     [db, requestSync],
   );
 
+  /**
+   * Puts the exercises in this order (drag to reorder). A superset only stays a superset while its exercises
+   * sit next to each other: anything that ends up split apart is unlinked.
+   */
+  const reorder = useCallback(
+    async (workoutId: string, ids: string[]) => {
+      const list = await db.workout_exercises.where("workout_id").equals(workoutId).toArray();
+      const byId = new Map(list.map((w) => [w.id, w]));
+      const ordered = [...ids.map((id) => byId.get(id)).filter((w): w is WorkoutExercise => Boolean(w)), ...list.filter((w) => !ids.includes(w.id))];
+      const groups = repairSupersets(ordered.map((w) => w.superset_group));
+      await db.transaction("rw", [db.workout_exercises, db.outbox], async () => {
+        for (let k = 0; k < ordered.length; k++) {
+          const w = ordered[k];
+          if (w.sort_order !== k || w.superset_group !== groups[k]) {
+            await db.workout_exercises.update(w.id, { sort_order: k, superset_group: groups[k] });
+            await markDirty(db, "workout_exercises", w.id);
+          }
+        }
+      });
+      requestSync(4000);
+    },
+    [db, requestSync],
+  );
+
   /** Links this exercise with the next one as a superset, or unlinks it. */
   const toggleSuperset = useCallback(
     async (workoutId: string, id: string) => {
@@ -282,7 +306,27 @@ export function useWorkoutActions() {
     [db, requestSync],
   );
 
-  return { start, addExercises, updateWex, removeWex, move, toggleSuperset, logSet, updateSet, deleteSet, logCardio, updateWorkout, finish, discard };
+  return { start, addExercises, updateWex, removeWex, move, reorder, toggleSuperset, logSet, updateSet, deleteSet, logCardio, updateWorkout, finish, discard };
+}
+
+/**
+ * Superset groups after a reorder: each group keeps its longest run of neighbours (the first one on a tie);
+ * members split off from it, and groups left with one exercise, are unlinked.
+ */
+export function repairSupersets(groups: (number | null)[]): (number | null)[] {
+  const best = new Map<number, { start: number; len: number }>();
+  for (let i = 0; i < groups.length; ) {
+    const g = groups[i];
+    let j = i;
+    while (j < groups.length && groups[j] === g) j++;
+    if (g !== null && (best.get(g)?.len ?? 0) < j - i) best.set(g, { start: i, len: j - i });
+    i = j;
+  }
+  return groups.map((g, i) => {
+    if (g === null) return null;
+    const b = best.get(g)!;
+    return b.len >= 2 && i >= b.start && i < b.start + b.len ? g : null;
+  });
 }
 
 /** Deletes a workout with its exercises, sets and attached cardio. */

@@ -114,6 +114,8 @@ export type WorkoutExercise = {
   rep_min: number | null;
   rep_max: number | null;
   rest_sec: number | null;
+  /** Planned set slots (1 = first working set) skipped in this workout. */
+  skipped_sets?: number[];
   updated_at?: string;
 };
 
