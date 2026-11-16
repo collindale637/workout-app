@@ -81,6 +81,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [infoFor, setInfoFor] = useState<string | null>(null);
   const [notesFor, setNotesFor] = useState<WorkoutExercise | "workout" | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
+  const [allDoneOpen, setAllDoneOpen] = useState(false);
   const [typing, setTyping] = useState<null | "weight" | "reps">(null);
 
   if (!wexs || !sets || !catalog) return null;
@@ -102,6 +103,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     await actions.logSet(current.id, draft);
     const group = current.superset_group;
     const doneNow = working(current.id) + (draft.type === "warmup" ? 0 : 1);
+    // This set finished the last planned set of the whole workout: no rest, say well done.
+    const finishedAll =
+      draft.type !== "warmup" &&
+      remaining(current) &&
+      wexs!.every((w) => (w.id === current.id ? doneNow : working(w.id)) >= (w.target_sets ?? 3));
+    if (finishedAll) {
+      await db.setMeta("rest", null);
+      if ("vibrate" in navigator) navigator.vibrate?.([80, 60, 80]);
+      setAllDoneOpen(true);
+      return;
+    }
     if (group !== null) {
       const members = wexs!.filter((w) => w.superset_group === group);
       const pos = members.findIndex((w) => w.id === current.id);
@@ -161,7 +173,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               <h1 className="display text-[40px] leading-[0.95] font-extrabold">{ex.name}</h1>
             </button>
             <p className="mt-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
-              {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : `SET ${setNumber} OF ${current.target_sets ?? 3}`} · TARGET {targetLabel.toUpperCase()}
+              {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`} · TARGET {targetLabel.toUpperCase()}
               {current.superset_group !== null && " · SUPERSET"}
             </p>
             {gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) && (
@@ -404,6 +416,33 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             }}
           />
         )}
+      </Sheet>
+
+      <Sheet open={allDoneOpen} onClose={() => setAllDoneOpen(false)}>
+        <div className="flex flex-col items-center gap-2 pb-2 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white" aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+          </div>
+          <h2 className="display text-3xl font-extrabold">Nice work!</h2>
+          <p className="text-base font-medium text-muted">
+            Every planned set is done: {wexs.length} {wexs.length === 1 ? "lift" : "lifts"}, {[...setsBy.values()].flat().filter((x) => x.type !== "warmup").length} sets in {formatDuration(elapsed)}.
+          </p>
+        </div>
+        <div className="mt-3 flex flex-col gap-2">
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={() => {
+              setAllDoneOpen(false);
+              setFinishOpen(true);
+            }}
+          >
+            Finish workout
+          </button>
+          <button type="button" className={btn.secondary} onClick={() => setAllDoneOpen(false)}>
+            Keep going
+          </button>
+        </div>
       </Sheet>
 
       <Sheet open={finishOpen} onClose={() => setFinishOpen(false)} title="Finish workout?">
