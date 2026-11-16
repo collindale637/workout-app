@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { describeNeeds, isAvailable } from "@/lib/availability";
 import { exerciseImageUrl } from "@/lib/exercise-images";
+import { ImageCarousel } from "./image-carousel";
 import type { Catalog } from "@/lib/hooks";
 
 /** Pictures, muscles, equipment and how-to for one exercise. */
 export function ExerciseInfo({ catalog, id, gymEquipment, gymName }: { catalog: Catalog; id: string; gymEquipment: Set<string> | null; gymName?: string }) {
   const ex = catalog.byId.get(id);
-  const [frame, setFrame] = useState(0);
   if (!ex) return <p className="text-muted">Exercise not found.</p>;
   const muscles = catalog.musclesOf.get(id) ?? [];
   const needs = catalog.needs.get(id) ?? [];
@@ -18,29 +17,7 @@ export function ExerciseInfo({ catalog, id, gymEquipment, gymName }: { catalog: 
   return (
     <div className="flex flex-col gap-4">
       {ex.images.length > 0 && (
-        <div className="relative overflow-hidden rounded-3xl bg-white">
-          {/* Swipe carousel: native scroll-snap, one slide per image. touch-pan-x keeps the page still while swiping
-              (same as the RPE strip); overscroll-x-contain stops the end of the row from tugging the page or going "back". */}
-          <div
-            className="flex touch-pan-x snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              setFrame(Math.round(el.scrollLeft / el.clientWidth));
-            }}
-          >
-            {ex.images.map((img, i) => (
-              <div key={img} className="w-full shrink-0 snap-center">
-                {/* eslint-disable-next-line @next/next/no-img-element -- remote images, cached by the service worker */}
-                <img src={exerciseImageUrl(img)} alt={`${ex.name}, position ${i + 1}`} className="aspect-[4/3] w-full object-contain" loading="lazy" draggable={false} />
-              </div>
-            ))}
-          </div>
-          {ex.images.length > 1 && (
-            <span className="pointer-events-none absolute right-3 bottom-3 rounded-full bg-black/60 px-3 py-1 text-xs font-bold text-white">
-              {frame + 1}/{ex.images.length} · swipe
-            </span>
-          )}
-        </div>
+        <ImageCarousel key={id} srcs={ex.images.map(exerciseImageUrl)} altFor={(i) => `${ex.name}, position ${i + 1}`} />
       )}
       <div className="flex flex-wrap gap-1.5">
         {muscles.filter((m) => m.role === "primary").map((m) => (
