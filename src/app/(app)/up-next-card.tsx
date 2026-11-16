@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
 import { useWorkoutActions } from "@/lib/workout";
-import { suggestionFor, useLastSets } from "@/lib/smart";
+import { suggestionFor, useLastSets, useStartingProfile } from "@/lib/smart";
 import { useUpNext, useUpNextChoice } from "@/lib/up-next";
 import { doseLabel, MusclePills, suggestionLabel, supersetLetter } from "@/components/planned";
 import { MuscleChooser } from "@/components/muscle-chooser";
@@ -24,6 +24,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
   const { choice, setChoice } = useUpNextChoice();
   const { start } = useWorkoutActions();
   const lastSets = useLastSets((up?.items ?? []).map((i) => i.exercise_id));
+  const who = useStartingProfile();
   const [options, setOptions] = useState(false);
   const [pickMuscles, setPickMuscles] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -133,7 +134,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
               const s =
                 catalog.byId.get(it.exercise_id)?.category === "cardio"
                   ? undefined
-                  : suggestionFor(catalog, it.exercise_id, lastSets?.get(it.exercise_id), it.rep_min, it.rep_max, gym ? equipmentRows : null);
+                  : suggestionFor(catalog, it.exercise_id, lastSets?.get(it.exercise_id), it.rep_min, it.rep_max, gym ? equipmentRows : null, who);
               const sLabel = suggestionLabel(s, units);
               return (
                 <li key={`${it.exercise_id}-${i}`}>

@@ -4,8 +4,8 @@ import type { EquipmentDetails, ExerciseEquipment, GymEquipment, SetType } from 
   Weight suggestions by double progression (plan doc → "Suggest weights"):
   hit the top of the rep range on every working set and the weight goes up by the smallest jump this gym
   allows; otherwise keep the weight and aim for one more rep. If every set at that weight fell 2+ reps short
-  of the bottom of the range, it was too heavy: drop one step and build back up. With no history there's no suggestion
-  (the first session is for finding a comfortable working weight). Weights are pounds.
+  of the bottom of the range, it was too heavy: drop one step and build back up. With no history there's only a
+  starting-weight estimate, if there is one (starting-weights.ts); otherwise the first session is for finding a comfortable weight. Weights are pounds.
 */
 
 export type LoggedSet = { weight: number | null; reps: number | null; type: SetType };
@@ -17,11 +17,13 @@ export type Suggestion = {
   change: "up" | "same" | "down" | "new";
   /** Weight used last time (top working weight). */
   from: number | null;
+  /** True when `weight` is a starting-weight estimate (no history for this lift yet), not from your logs. */
+  estimated?: boolean;
 };
 
 const BARBELLS = new Set(["barbell", "ez_bar", "trap_bar", "safety_squat_bar", "smith_machine", "landmine", "t_bar_row_machine"]);
 
-type Load = { increment: number; max?: number; ladder?: number[] };
+export type Load = { increment: number; min?: number; max?: number; ladder?: number[] };
 
 /** The smallest jump in weight for this exercise at this gym (and the heaviest available, if known). */
 export function loadFor(needs: ExerciseEquipment[], gymRows: Pick<GymEquipment, "equipment_id" | "details">[] | null): Load {
@@ -32,7 +34,7 @@ export function loadFor(needs: ExerciseEquipment[], gymRows: Pick<GymEquipment, 
   for (const id of pick) {
     const d = details.get(id) ?? {};
     if (BARBELLS.has(id)) return { increment: 2 * (d.plate_increment ?? 2.5) };
-    if (id === "dumbbells") return { increment: d.dumbbell_step ?? 5, max: d.dumbbell_max };
+    if (id === "dumbbells") return { increment: d.dumbbell_step ?? 5, min: d.dumbbell_min, max: d.dumbbell_max };
     if (id === "kettlebells" && d.kettlebells?.length) {
       const ladder = [...d.kettlebells].sort((a, b) => a - b);
       return { increment: 5, ladder, max: ladder[ladder.length - 1] };
@@ -46,11 +48,16 @@ export function loadFor(needs: ExerciseEquipment[], gymRows: Pick<GymEquipment, 
   return { increment: 5 };
 }
 
-export function suggestNext(last: LoggedSet[], repMin: number | null, repMax: number | null, load: Load): Suggestion {
+/** `estimate` (pounds) is a starting weight for a lift with no history; it is only used when there is none. */
+export function suggestNext(last: LoggedSet[], repMin: number | null, repMax: number | null, load: Load, estimate: number | null = null): Suggestion {
   const working = last.filter((s) => s.type === "working" && (s.reps ?? 0) > 0);
   const top = repMax ?? repMin;
   const bottom = repMin ?? repMax;
-  if (!working.length) return { weight: null, reps: top, change: "new", from: null };
+  if (!working.length) {
+    return estimate && estimate > 0
+      ? { weight: estimate, reps: top, change: "new", from: null, estimated: true }
+      : { weight: null, reps: top, change: "new", from: null };
+  }
 
   const weights = working.map((s) => s.weight).filter((w): w is number => w !== null && w > 0);
   if (!weights.length) {

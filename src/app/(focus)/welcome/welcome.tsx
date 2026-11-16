@@ -14,11 +14,15 @@ import { CARDIO_PREF_LABELS, GOAL_BLURBS, recommendSplit, splitChoices } from "@
 import { TEMPLATE_LABELS } from "@/lib/defaults";
 import { MusclePills } from "@/components/planned";
 import { Chip, btn, field, label } from "@/components/ui/kit";
-import type { CardioPref, Experience, Goal, GymTemplate, Units } from "@/lib/db/types";
+import { HeightField, SexField, WeightField, validHeightIn, validWeightLb } from "@/components/body-fields";
+import { useBodyweightActions } from "@/lib/progress-data";
+import { dateKey } from "@/lib/progress";
+import type { CardioPref, Experience, Goal, GymTemplate, Sex, Units } from "@/lib/db/types";
 
 /*
-  Onboarding (plan doc → "Onboarding"): about you, goal + experience, schedule, cardio, your gym, and a
-  starter plan from the split that fits. Each step saves as you go, so closing the app midway loses nothing.
+  Onboarding (plan doc → "Onboarding"): about you (name, units, weight, height, sex: these set the starting
+  weights for lifts you haven't done yet), goal + experience, schedule, cardio, your gym, and a starter plan
+  from the split that fits. Each step saves as you go, so closing the app midway loses nothing.
 */
 
 const STEPS = ["You", "Goal", "Schedule", "Cardio", "Gym", "Plan"] as const;
@@ -34,6 +38,14 @@ export function Welcome() {
   const [days, setDays] = useState(4);
   const [minutes, setMinutes] = useState(60);
   const [cardio, setCardio] = useState<CardioPref>("auto");
+  const { db } = useData();
+  const { log: logWeight } = useBodyweightActions();
+  const [weightLb, setWeightLb] = useState<number | null>(null);
+  const [heightIn, setHeightIn] = useState<number | null>(null);
+  const [sex, setSex] = useState<Sex | null>(null);
+  const [bodyError, setBodyError] = useState<string | null>(null);
+  // Bumped when saved values load, so the weight and height boxes re-read them.
+  const [seed, setSeed] = useState(0);
 
   useEffect(() => {
     if (!profile) return;
@@ -45,13 +57,22 @@ export function Welcome() {
     setMinutes(profile.session_minutes);
     setUnits(profile.units);
     setCardio(profile.cardio_pref ?? "auto");
+    setHeightIn(profile.height_in ?? null);
+    setSex(profile.sex ?? null);
+    // Come back to this step (or reopen the app midway) and your last weigh-in is already filled in.
+    void db.body_metrics.toArray().then((rows) => {
+      const last = rows.filter((r) => r.bodyweight !== null).sort((a, b) => a.date.localeCompare(b.date)).pop();
+      if (last) setWeightLb((w) => w ?? Number(last.bodyweight));
+      setSeed((n) => n + 1);
+    });
     // Only on first load: later saves shouldn't reset what's being edited.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
 
   const go = async (to: number) => {
     // Save what's been answered so far.
-    await save({ display_name: name.trim() || null, units, goal, experience, days_per_week: days, session_minutes: minutes, cardio_pref: cardio });
+    await save({ display_name: name.trim() || null, units, goal, experience, days_per_week: days, session_minutes: minutes, cardio_pref: cardio, height_in: heightIn, sex });
+    if (step === 0 && validWeightLb(weightLb)) await logWeight(dateKey(new Date()), weightLb);
     setStep(to);
     window.scrollTo(0, 0);
   };
@@ -79,7 +100,16 @@ export function Welcome() {
       </div>
 
       {step === 0 && (
-        <form onSubmit={(e) => { e.preventDefault(); void go(1); }} className="flex flex-col gap-5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!validWeightLb(weightLb)) return setBodyError("Enter your weight so we can suggest starting weights.");
+            if (!validHeightIn(heightIn)) return setBodyError("Enter your height so we can suggest starting weights.");
+            setBodyError(null);
+            void go(1);
+          }}
+          className="flex flex-col gap-5"
+        >
           <Title a="Let's set" b="you up." />
           <p className="-mt-2 text-base font-medium text-muted">A few quick questions, then you&apos;ll have a plan built for your goal and your gym. You can change any of it later.</p>
           <label className="flex flex-col gap-2">
@@ -93,6 +123,13 @@ export function Welcome() {
               <Chip active={units === "kg"} onClick={() => setUnits("kg")}>Kilograms · km</Chip>
             </div>
           </div>
+          <WeightField key={`w-${units}-${seed}`} units={units} valueLb={weightLb} onChange={setWeightLb} />
+          <HeightField key={`h-${units}-${seed}`} units={units} valueIn={heightIn} onChange={setHeightIn} />
+          <SexField value={sex} onChange={setSex} />
+          <p className="-mt-2 text-sm font-medium text-muted">
+            We use these to suggest a starting weight for lifts you haven&apos;t done yet. They&apos;re estimates; adjust to what feels right. Sex is optional, and skipping it gives lighter starting weights. Your weight also starts your Progress chart. You can change all of this later.
+          </p>
+          {bodyError && <p role="alert" className="text-sm font-bold text-[#FFD2B3]">{bodyError}</p>}
           <Next />
         </form>
       )}

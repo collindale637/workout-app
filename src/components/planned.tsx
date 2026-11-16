@@ -18,7 +18,7 @@ export function doseLabel(catalog: Catalog, item: Item) {
 
 export function suggestionLabel(s: Suggestion | undefined, units: Units) {
   if (!s) return null;
-  if (s.change === "new") return "New";
+  if (s.change === "new") return s.estimated && s.weight !== null ? `Try ~${formatWeight(s.weight, units)} ${weightUnit(units)}` : "New";
   if (s.weight === null) return s.reps ? `Aim for ${s.reps} reps` : null;
   return `${formatWeight(s.weight, units)} ${weightUnit(units)}${s.change === "up" ? " ↑" : s.change === "down" ? " ↓" : ""}`;
 }

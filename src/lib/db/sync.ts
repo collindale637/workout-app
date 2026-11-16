@@ -13,7 +13,7 @@ import type { OutboxEntry, SyncTable } from "./types";
 
 /** Columns sent to the server for each table (anything else is local-only). */
 const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "exercise_prefs">, string[]> = {
-  profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at", "cardio_pref"],
+  profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at", "cardio_pref", "height_in", "sex"],
   exercises: ["id", "name", "aliases", "category", "movement_pattern", "mechanic", "force", "level", "instructions", "images", "is_common", "is_active", "owner_id", "source"],
   gyms: ["id", "name", "template", "is_default"],
   plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active", "notes"],

@@ -50,3 +50,23 @@ export const formatMax = (lb: number, units: Units) =>
 
 /** Epley estimated one-rep max. */
 export const estimate1RM = (weight: number, reps: number) => (reps <= 1 ? weight : weight * (1 + reps / 30));
+
+// Height is stored in inches (like weights in lb); these convert for display and input.
+const CM_PER_IN = 2.54;
+
+export const inchesToCm = (inches: number) => Math.round(inches * CM_PER_IN * 10) / 10;
+export const cmToInches = (cm: number) => Math.round((cm / CM_PER_IN) * 10) / 10;
+
+/** 70.5 -> { ft: 5, inch: 10.5 } */
+export function splitFeetInches(inches: number) {
+  const ft = Math.floor(inches / 12);
+  return { ft, inch: Math.round((inches - ft * 12) * 10) / 10 };
+}
+
+/** 70.5 -> `5'10.5"` (lb users) or "179 cm" (kg users). */
+export function formatHeight(inches: number | null, units: Units) {
+  if (inches === null || inches === undefined) return "";
+  if (units === "kg") return `${Math.round(inches * CM_PER_IN)} cm`;
+  const { ft, inch } = splitFeetInches(inches);
+  return `${ft}'${Number.isInteger(inch) ? inch : inch.toFixed(1)}"`;
+}
