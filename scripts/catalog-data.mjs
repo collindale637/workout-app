@@ -101,6 +101,8 @@ export const EQUIPMENT = [
   ["stair_climber", "Stair climber / StairMaster", "cardio", false],
   ["ski_erg", "Ski erg", "cardio", false],
   ["jump_rope", "Jump rope", "cardio", true],
+  ["bicycle", "Bike (road / mountain)", "cardio", false],
+  ["skates", "Skates (inline / roller)", "cardio", false],
   // Accessories
   ["resistance_bands", "Resistance bands", "accessories", true],
   ["stability_ball", "Stability ball", "accessories", true],

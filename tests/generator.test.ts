@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptToGym, baseName, closestMatch, dayStyle, generateWorkout, type GenOptions } from "@/lib/generator";
+import { adaptToGym, baseName, closestMatch, dayStyle, generateWorkout, pickCardio, type GenOptions } from "@/lib/generator";
 import { isAvailable } from "@/lib/availability";
 import { loadFor, suggestNext } from "@/lib/progression";
 import { bodyweightGym, catalog, commercialGym, homeGym, hotelGym } from "./fixtures/catalog";
@@ -146,6 +146,26 @@ describe("gym swaps", () => {
     expect(r.swaps.map((s) => s.from)).toEqual(["Barbell_Squat", "Lying_Leg_Curls"]);
     for (const i of r.items) expect(isAvailable(catalog.needs.get(i.exercise_id) ?? [], homeGym)).toBe(true);
     expect(new Set(r.items.map((i) => i.exercise_id)).size).toBe(r.items.length);
+  });
+});
+
+describe("cardio needs the gear (Batch 1)", () => {
+  const outdoorGear = ["Bicycling", "Skating"];
+  it("never picks an outdoor bike ride or skating unless the gym has a bike / skates", () => {
+    for (const gym of [commercialGym, homeGym, hotelGym, bodyweightGym]) {
+      for (let i = 0; i < 50; i++) {
+        let seed = i + 1;
+        const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+        expect(outdoorGear).not.toContain(pickCardio(catalog, { gymEquipment: gym }, random));
+      }
+    }
+    expect(pickCardio(catalog, { gymEquipment: bodyweightGym })).toBe("Trail_Running_Walking");
+    expect(pickCardio(catalog, { gymEquipment: new Set(["bicycle"]) })).toBe("Bicycling");
+  });
+
+  it("swaps a treadmill run for something the new gym can actually do", () => {
+    const to = closestMatch(catalog, "Running_Treadmill", { gymEquipment: bodyweightGym, experience: "intermediate" });
+    expect(to).toBe("Trail_Running_Walking");
   });
 });
 

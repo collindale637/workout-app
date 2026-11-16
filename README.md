@@ -117,6 +117,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261116000300_phase2_plans.sql` | Plan days remember their target muscles; PHUL and Hybrid splits | ✓ |
 | `20261117000100_phase3_ai.sql` | Plan notes; AI usage log written through `ai_log_request()`, spend via `ai_spend_this_month()` | ✓ |
 | `20261118000100_phase4_progress.sql` | `profiles.cardio_pref`; three no-equipment exercises | ✓ |
+| `20261119000100_outdoor_cardio_gear.sql` | Outdoor Bike Ride needs a bike, Skating needs skates (new equipment items) | ✓ |
 
 ## One-time setup
 

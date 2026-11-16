@@ -191,7 +191,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Stair Climber | cardio | quads | calves, glutes, hamstrings | stair_climber |
 | Jump Rope | cardio | quads | calves, hamstrings | jump_rope |
 | Outdoor Run / Walk | cardio | quads | calves, glutes, hamstrings | none |
-| Outdoor Bike Ride | cardio | quads | calves, glutes, hamstrings | none |
+| Outdoor Bike Ride | cardio | quads | calves, glutes, hamstrings | bicycle |
 | Battle Ropes | other | front_delts | chest, forearms | battle_ropes |
 | Box Jump | other | hamstrings | abductors, adductors, calves, glutes, quads | plyo_box or flat_bench or adjustable_bench |
 | Doorframe Row | horizontal_pull | upper_back, lats | biceps, rear_delts | none |

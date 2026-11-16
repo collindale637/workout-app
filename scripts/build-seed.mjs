@@ -121,6 +121,8 @@ function equipmentFor(ex, name) {
     [/hyperextensions back/, () => add("back_extension_bench", "ghd")],
     [/treadmill/, () => add("treadmill")],
     [/bicycling stationary/, () => add("stationary_bike")],
+    [/^bicycling$/, () => add("bicycle")],
+    [/^skating$/, () => add("skates")],
     [/recumbent bike/, () => add("recumbent_bike")],
     [/rowing stationary/, () => add("rower")],
     [/elliptical/, () => add("elliptical")],

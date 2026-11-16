@@ -26,6 +26,8 @@ export const TEMPLATE_LABELS: Record<GymTemplate, { name: string; blurb: string 
 const STRONGMAN_AND_SPECIALTY = new Set([
   "atlas_stone", "log_bar", "axle_bar", "yoke", "farmers_handles", "keg", "tire", "sledgehammer", "chains",
   "safety_squat_bar", "reverse_hyper", "climbing_rope", "balance_board", "wrist_roller", "sandbag", "pendulum_squat", "belt_squat",
+  // Personal outdoor gear, not something a gym has.
+  "bicycle", "skates",
 ]);
 
 /** Which equipment a new gym starts with. Everything stays editable. */

@@ -6,7 +6,7 @@ import { useCatalog } from "@/lib/hooks";
 import { useHistory, type HistoryItem } from "@/lib/history";
 import { cardioLabel } from "@/lib/cardio";
 import { distanceUnit, formatDuration, toDisplayDistance, weightUnit } from "@/lib/units";
-import { Empty, PageHeader, btn } from "@/components/ui/kit";
+import { Empty, PageHeader } from "@/components/ui/kit";
 
 /** Every finished workout and cardio session, by month (Progress → History). */
 export function History() {
@@ -20,10 +20,6 @@ export function History() {
   return (
     <main className="flex flex-col gap-4 pb-4">
       <PageHeader title="History" back="/progress" />
-      <div className="grid grid-cols-2 gap-2">
-        <Link href="/workout" className={btn.secondary}>+ Workout</Link>
-        <Link href="/cardio" className={btn.secondary}>+ Cardio</Link>
-      </div>
       {items && items.length === 0 && <Empty>Nothing logged yet. Your workouts and cardio will show up here.</Empty>}
       {[...byMonth.entries()].map(([month, list]) => (
         <section key={month} className="flex flex-col gap-2">
