@@ -122,7 +122,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261120000100_ai_pick_kinds.sql` | AI usage log accepts `swap` and `suggest` requests | ✓ |
 | `20261120000200_recovery_times.sql` | Faster muscle recovery times (30 / 36 / 44 h; lower back 48 h) | ✓ |
 | `20261121000100_cardio_incline.sql` | `cardio_sessions.incline`: optional treadmill incline (% grade, 0–40) | ✓ |
-| `20261122000100_height_sex.sql` | `profiles.height_in` (inches) and `profiles.sex` (male / female, optional): used to suggest starting weights | pending |
+| `20261122000100_height_sex.sql` | `profiles.height_in` (inches) and `profiles.sex` (male / female, optional): used to suggest starting weights | ✓ |
 
 ## One-time setup
 
