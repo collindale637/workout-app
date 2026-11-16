@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { RPE_CHOICES } from "@/lib/defaults";
 import { cardioHasDistance } from "@/lib/cardio";
 import { distanceUnit, fromDisplayDistance, toDisplayDistance } from "@/lib/units";
 import { btn, field, label } from "@/components/ui/kit";
+import { RpeSlider } from "./rpe-slider";
 import type { CardioSession, CardioType, Units } from "@/lib/db/types";
 
 export type CardioResults = {
@@ -128,11 +128,7 @@ export function CardioResultsForm({
       </label>
       <div className="flex flex-col gap-2">
         <span className={label}>EFFORT (RPE, OPTIONAL)</span>
-        <div className="grid grid-cols-6 gap-1.5">
-          {RPE_CHOICES.map((r) => (
-            <button key={r} type="button" onClick={() => setRpe(rpe === r ? null : r)} aria-pressed={rpe === r} className={`display num h-11 rounded-xl text-lg font-extrabold ${rpe === r ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{r}</button>
-          ))}
-        </div>
+        <RpeSlider value={rpe} defaultRpe={null} resetKey={type} onChange={setRpe} tone="dark" />
       </div>
       {askWhen && (
         <label className="flex flex-col gap-2">
