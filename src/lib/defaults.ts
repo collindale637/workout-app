@@ -94,4 +94,4 @@ export const MUSCLE_GROUPS: { label: string; muscles: string[] }[] = [
 
 export const RPE_CHOICES = [6, 7, 7.5, 8, 8.5, 9, 10];
 /** Full scale for logging a set: slide sideways in the live workout to reach the easy end. */
-export const RPE_SCALE = [1, 2, 3, 4, 5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+export const RPE_SCALE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
