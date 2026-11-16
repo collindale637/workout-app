@@ -580,7 +580,7 @@ function SetTable({
         <button key={s.id} type="button" onClick={() => onEdit(s)} className={`${cols} min-h-11 rounded-xl text-left active:bg-card`} aria-label={`Edit set ${tag}`}>
           <span className={`${badge} text-muted`}>{tag}</span>
           <span className={`display num text-lg font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>
-            {fmt(s)} <span className="text-sm text-accent">@{s.rpe ?? defaultRpe}</span>
+            {fmt(s)} <span className="text-sm text-accent">RPE: {s.rpe ?? defaultRpe}</span>
           </span>
           <span className="display num text-lg font-extrabold text-muted">{i >= 0 ? lastCell(i) : ""}</span>
         </button>
