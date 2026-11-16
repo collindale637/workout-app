@@ -173,8 +173,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-2 block text-left">
               <h1 className="display text-[40px] leading-[0.95] font-extrabold">{ex.name}</h1>
             </button>
-            <p className="mt-1 flex flex-wrap items-center text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
-              <button type="button" onClick={() => setTypeOpen(true)} className="-my-3 -ml-1 inline-flex min-h-11 items-center gap-1 rounded-lg px-1" aria-label="Change set type">
+            <p className="mt-2 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
+              <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 pr-2.5 pl-3 after:absolute after:-inset-2 after:content-[''] active:bg-white/25" aria-label="Change set type: working, warm-up or drop">
                 {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
               </button>
@@ -229,7 +229,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               history={history?.get(current.exercise_id)}
               units={units}
               defaultRpe={defaultRpe}
-              nextLabel={draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop" : "next"}
+              nextType={draft.type}
               onEdit={setEditSet}
             />
 
@@ -542,32 +542,44 @@ function lastTimeLabel(iso: string) {
 
 /**
  * Today vs last time, one row per set. Tap a row you've logged to edit it.
- * Warm-ups get their own rows (W) and aren't compared; working and drop sets line up with last time's in order.
+ * Numbers count working sets only: warm-ups are "W" and drop sets are "D", so they don't use up a number.
+ * Last time is paired by order (warm-ups skipped), so a drop set lines up with whatever you did in that position.
  */
 function SetTable({
-  done, history, units, defaultRpe, nextLabel, onEdit,
+  done, history, units, defaultRpe, nextType, onEdit,
 }: {
   done: WorkoutSet[];
   history?: { last: WorkoutSet[]; lastDate: string | null };
   units: Units;
   defaultRpe: number;
-  nextLabel: string;
+  nextType: SetType;
   onEdit: (s: WorkoutSet) => void;
 }) {
   const last = history?.last.filter((s) => s.type !== "warmup") ?? [];
-  const fmt = (s: WorkoutSet) => `${formatWeight(s.weight, units)}×${s.reps ?? "—"}`;
-  const lastCell = (i: number) => (last[i] ? fmt(last[i]) : "—");
-  const cols = "grid grid-cols-[2.75rem_1fr_1fr] items-center";
-  // Every set number sits in the same fixed box, so the highlighted "next" number lines up with the rest.
+  const u = weightUnit(units) === "kg" ? "kg" : "lbs";
+  const cols = "grid grid-cols-[2.75rem_1.15fr_1fr] items-center";
   const badge = "display flex h-8 w-8 items-center justify-center rounded-lg text-base font-extrabold";
 
-  let n = 0; // working + drop sets so far
+  const amount = (s: WorkoutSet) => (
+    <>
+      {s.weight === null ? "BW" : formatWeight(s.weight, units)}
+      <span className="text-sm font-semibold text-muted">{s.weight === null ? "" : ` ${u}`}&nbsp;&nbsp;</span>
+      {s.reps ?? "—"}
+      <span className="text-sm font-semibold text-muted"> reps</span>
+    </>
+  );
+  const lastCell = (i: number) => (last[i] ? amount(last[i]) : "—");
+
+  let paired = 0; // working + drop sets so far (to pair with last time)
+  let numbered = 0; // working sets so far (to number the rows)
   const rows = done.map((s) => {
     const isWarm = s.type === "warmup";
-    const i = isWarm ? -1 : n++;
-    return { s, i, tag: isWarm ? "W" : s.type === "drop" ? "D" : String(i + 1) };
+    const i = isWarm ? -1 : paired++;
+    if (s.type === "working") numbered++;
+    return { s, i, tag: isWarm ? "W" : s.type === "drop" ? "D" : String(numbered) };
   });
-  const later = last.slice(n + 1).map((_, k) => n + 1 + k); // last time had more sets than you've reached
+  const nextTag = nextType === "warmup" ? "W" : nextType === "drop" ? "D" : String(numbered + 1);
+  const later = last.slice(paired + 1).map((_, k) => paired + 1 + k); // last time went further than you have
 
   return (
     <section aria-label="Sets" className="flex flex-col">
@@ -577,24 +589,29 @@ function SetTable({
         <span>LAST{history?.lastDate && last.length ? ` · ${lastTimeLabel(history.lastDate).toUpperCase()}` : ""}</span>
       </div>
       {rows.map(({ s, i, tag }) => (
-        <button key={s.id} type="button" onClick={() => onEdit(s)} className={`${cols} min-h-11 rounded-xl text-left active:bg-card`} aria-label={`Edit set ${tag}`}>
+        <button key={s.id} type="button" onClick={() => onEdit(s)} className={`${cols} min-h-14 border-t border-line py-2 text-left active:bg-card`} aria-label={`Edit set ${tag}`}>
           <span className={`${badge} text-muted`}>{tag}</span>
-          <span className={`display num text-lg font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>
-            {fmt(s)} <span className="text-sm text-accent">RPE: {s.rpe ?? defaultRpe}</span>
+          <span className="flex flex-col items-start gap-0.5">
+            <span className={`display num text-[22px] leading-none font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>{amount(s)}</span>
+            <span className="display flex gap-1 text-[11px] font-semibold tracking-[0.08em]">
+              <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>
+              {s.type === "drop" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">DROP</span>}
+              {s.type === "warmup" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">WARM-UP</span>}
+            </span>
           </span>
-          <span className="display num text-lg font-extrabold text-muted">{i >= 0 ? lastCell(i) : ""}</span>
+          <span className="display num text-[22px] leading-none font-extrabold text-muted">{i >= 0 ? lastCell(i) : ""}</span>
         </button>
       ))}
-      <div className={`${cols} min-h-11`} aria-current="step">
-        <span className={`${badge} bg-primary/20 text-accent-soft`}>{nextLabel === "warm-up" ? "W" : nextLabel === "drop" ? "D" : n + 1}</span>
-        <span className="display text-lg font-extrabold text-accent-soft">{nextLabel}</span>
-        <span className="display num text-lg font-extrabold text-muted">{lastCell(n)}</span>
+      <div className={`${cols} min-h-14 border-t border-line py-2`} aria-current="step">
+        <span className={`${badge} bg-primary/20 text-accent-soft`}>{nextTag}</span>
+        <span className="display text-[22px] font-extrabold text-accent-soft">NEXT</span>
+        <span className="display num text-[22px] leading-none font-extrabold text-muted">{nextType === "warmup" ? "" : lastCell(paired)}</span>
       </div>
       {later.map((i) => (
-        <div key={i} className={`${cols} min-h-11 opacity-60`}>
-          <span className={`${badge} text-muted`}>{i + 1}</span>
-          <span className="display text-lg font-extrabold text-muted">—</span>
-          <span className="display num text-lg font-extrabold text-muted">{lastCell(i)}</span>
+        <div key={i} className={`${cols} min-h-14 border-t border-line py-2 opacity-60`}>
+          <span className={`${badge} text-muted`}>·</span>
+          <span className="display text-[22px] font-extrabold text-muted">—</span>
+          <span className="display num text-[22px] leading-none font-extrabold text-muted">{lastCell(i)}</span>
         </div>
       ))}
       {!last.length && <p className="pt-1 text-sm font-medium text-muted">First time logging this one.</p>}
