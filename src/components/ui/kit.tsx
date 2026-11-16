@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Small shared building blocks for the dark "4B" look.
 
@@ -50,7 +50,7 @@ export function PageHeader({ title, back, right }: { title: string; back?: strin
   );
 }
 
-/** Bottom sheet. Tap the dimmed area or press Escape to close. */
+/** Bottom sheet. Swipe it down, tap the dimmed area or press Escape to close. */
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title?: string; children: React.ReactNode }) {
   useEffect(() => {
     if (!open) return;
@@ -71,11 +71,43 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
       document.body.style.overflow = prevBody;
     };
   }, [open]);
+  const panel = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ y: number; t: number } | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
   if (!open) return null;
+
+  // Swipe down to close: only starts when the sheet's content is scrolled to the top.
+  const onTouchStart = (e: React.TouchEvent) => {
+    if ((panel.current?.scrollTop ?? 0) <= 0) drag.current = { y: e.touches[0].clientY, t: Date.now() };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (!drag.current) return;
+    const dy = e.touches[0].clientY - drag.current.y;
+    setDragging(dy > 0);
+    setDragY(Math.max(0, dy));
+  };
+  const onTouchEnd = () => {
+    const start = drag.current;
+    drag.current = null;
+    setDragging(false);
+    if (!start) return;
+    const speed = dragY / Math.max(1, Date.now() - start.t);
+    setDragY(0);
+    if (dragY > 120 || (dragY > 40 && speed > 0.5)) onClose();
+  };
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
       <button className="absolute inset-0 touch-none bg-black/60" aria-label="Close" onClick={onClose} />
-      <div className="safe-bottom relative mx-auto max-h-[85dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-line bg-card px-5 pt-3">
+      <div
+        ref={panel}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        style={{ transform: dragY ? `translateY(${dragY}px)` : undefined, transition: dragging ? "none" : "transform 0.2s ease-out" }}
+        className="safe-bottom relative mx-auto max-h-[85dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-line bg-card px-5 pt-3"
+      >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
         {title && <h2 className="display mb-3 text-2xl font-extrabold">{title}</h2>}
         {children}
