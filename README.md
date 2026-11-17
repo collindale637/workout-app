@@ -123,6 +123,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261120000200_recovery_times.sql` | Faster muscle recovery times (30 / 36 / 44 h; lower back 48 h) | ✓ |
 | `20261121000100_cardio_incline.sql` | `cardio_sessions.incline`: optional treadmill incline (% grade, 0–40) | ✓ |
 | `20261122000100_height_sex.sql` | `profiles.height_in` (inches) and `profiles.sex` (male / female, optional): used to suggest starting weights | ✓ |
+| `20261123000100_ai_jobs.sql` | `ai_jobs` table: AI plan builds run on the server and the draft waits for you if you leave the screen | not yet |
 
 ## One-time setup
 

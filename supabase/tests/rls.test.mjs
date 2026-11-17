@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql", "20261122000100_height_sex.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql", "20261122000100_height_sex.sql", "20261123000100_ai_jobs.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -34,6 +34,7 @@ await db.exec(readFileSync(root + "20261120000100_ai_pick_kinds.sql", "utf8"));
 await db.exec(readFileSync(root + "20261120000200_recovery_times.sql", "utf8"));
 await db.exec(readFileSync(root + "20261121000100_cardio_incline.sql", "utf8"));
 await db.exec(readFileSync(root + "20261122000100_height_sex.sql", "utf8"));
+await db.exec(readFileSync(root + "20261123000100_ai_jobs.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -116,6 +117,18 @@ r.push(["A saves height and sex", await as(A, `update profiles set height_in = 7
 r.push(["absurd height rejected", await as(A, `update profiles set height_in = 12 returning id`)]);
 r.push(["bad sex value rejected", await as(A, `update profiles set sex = 'robot' returning id`)]);
 r.push(["B can't change A's height", await as(B, `update profiles set height_in = 60 where id = '${A}' returning id`)]);
+r.push(["A starts an AI job", await as(A, `insert into ai_jobs (id, kind, ref) values ('dddddddd-0000-0000-0000-000000000001','plan',null) returning status`)]);
+r.push(["A finishes the job", await as(A, `update ai_jobs set status = 'done', result = '{"ok":true}' where id = 'dddddddd-0000-0000-0000-000000000001' returning status`)]);
+r.push(["bad job kind rejected", await as(A, `insert into ai_jobs (kind) values ('import')`)]);
+r.push(["bad job status rejected", await as(A, `update ai_jobs set status = 'weird' returning id`)]);
+r.push(["B can't see A's job", await as(B, `select count(*)::int n from ai_jobs`)]);
+r.push(["B can't change A's job", await as(B, `update ai_jobs set status = 'failed' where id = 'dddddddd-0000-0000-0000-000000000001' returning id`)]);
+r.push(["B can't delete A's job", await as(B, `delete from ai_jobs where id = 'dddddddd-0000-0000-0000-000000000001' returning id`)]);
+r.push(["B can't create a job as A", await as(B, `insert into ai_jobs (owner_id, kind) values ('${A}','plan')`)]);
+r.push(["stuck job expires", await as(A, `insert into ai_jobs (id, kind, created_at) values ('dddddddd-0000-0000-0000-000000000002','plan', now() - interval '20 minutes')`)]);
+r.push(["expire runs", await as(A, `select ai_jobs_expire()`)]);
+r.push(["stuck job is now failed", await as(A, `select status from ai_jobs where id = 'dddddddd-0000-0000-0000-000000000002'`)]);
+r.push(["A dismisses the job", await as(A, `delete from ai_jobs where id = 'dddddddd-0000-0000-0000-000000000001' returning id`)]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
 

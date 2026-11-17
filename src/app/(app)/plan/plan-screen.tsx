@@ -12,6 +12,7 @@ import { GOAL_LABELS } from "@/lib/profile";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { Card, Sheet, btn, field } from "@/components/ui/kit";
 import { Sparkle } from "@/components/ai";
+import { useAiJob } from "@/lib/ai/client";
 import type { Plan } from "@/lib/db/types";
 
 const Chevron = () => (
@@ -22,6 +23,8 @@ export function PlanScreen() {
   const active = useActivePlan();
   const plans = usePlans();
   const catalog = useCatalog();
+  const aiJob = useAiJob("new").job;
+  const aiLine = aiJob?.status === "running" ? "Building your plan… tap to check" : aiJob?.status === "done" && aiJob.result?.ok ? "Your AI plan is ready. Tap to review" : null;
   if (active === undefined || !plans || !catalog) return null;
   const past = plans.filter((p) => !p.is_active);
 
@@ -41,7 +44,7 @@ export function PlanScreen() {
             <Sparkle size={22} className="shrink-0 text-accent" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-base font-bold">Build with AI</span>
-              <span className="text-sm font-medium text-muted">Describe what you want, get a full plan for your gym</span>
+              <span className={`text-sm font-medium ${aiLine ? "text-accent" : "text-muted"}`}>{aiLine ?? "Describe what you want, get a full plan for your gym"}</span>
             </span>
             <Chevron />
           </Link>

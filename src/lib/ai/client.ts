@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isAvailable } from "@/lib/availability";
 import { isCardioExercise, cardioLabel } from "@/lib/cardio";
 import { formatWeight, weightUnit, toDisplayDistance, distanceUnit } from "@/lib/units";
@@ -8,7 +8,7 @@ import type { LocalDB } from "@/lib/db/dexie";
 import type { Catalog } from "@/lib/hooks";
 import type { MuscleRecovery } from "@/lib/recovery";
 import type { ExercisePref, Exercise, Profile } from "@/lib/db/types";
-import type { AiImage, AiProfile, AiRequest, AiResponse, AiUsage, AllowedExercise } from "./types";
+import type { AiImage, AiJob, AiProfile, AiRequest, AiResponse, AiUsage, AllowedExercise } from "./types";
 
 /*
   The phone's side of AI: it gathers the context (what this gym can do, your profile, recovery and recent
@@ -120,6 +120,70 @@ export async function askAI(req: AiRequest): Promise<AiResponse> {
   } catch {
     return { ok: false, error: "Couldn't reach the server. Check your connection and try again." };
   }
+}
+
+/** Starts a plan build on the server and returns right away; the answer is picked up with `useAiJob`. */
+export async function startAiJob(req: AiRequest): Promise<{ ok: true } | { ok: false; error: string; usage?: AiUsage }> {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, error: "You're offline. AI needs a connection; everything else works without one." };
+  try {
+    const res = await fetch("/api/ai", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...req, background: true }) });
+    const data = (await res.json().catch(() => null)) as ({ ok: true; job_id: string } | { ok: false; error: string; usage?: AiUsage }) | null;
+    if (!data) return { ok: false, error: `Something went wrong (${res.status}). Try again.` };
+    return data.ok ? { ok: true } : data;
+  } catch {
+    return { ok: false, error: "Couldn't reach the server. Check your connection and try again." };
+  }
+}
+
+async function fetchAiJob(ref: string): Promise<AiJob | null | "error"> {
+  try {
+    const res = await fetch(`/api/ai/jobs?ref=${encodeURIComponent(ref)}`, { cache: "no-store" });
+    if (!res.ok) return "error";
+    const data = (await res.json()) as { ok: boolean; job: AiJob | null };
+    return data.ok ? data.job : "error";
+  } catch {
+    return "error";
+  }
+}
+
+/**
+ * The newest background AI build for one screen (a plan id, or "new"): checks when the screen opens and when you
+ * come back to the app, and keeps checking every few seconds while it's running.
+ */
+export function useAiJob(ref: string) {
+  const [job, setJob] = useState<AiJob | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const alive = useRef(true);
+  const refresh = useCallback(async () => {
+    const r = await fetchAiJob(ref);
+    if (!alive.current) return;
+    if (r !== "error") setJob(r);
+    setLoaded(true);
+  }, [ref]);
+  useEffect(() => {
+    alive.current = true;
+    // Load once when the screen opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh();
+    const onShow = () => document.visibilityState === "visible" && void refresh();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      alive.current = false;
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, [refresh]);
+  const running = job?.status === "running";
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(id);
+  }, [running, refresh]);
+  const clear = useCallback(async () => {
+    const id = job?.id;
+    setJob(null);
+    if (id) await fetch(`/api/ai/jobs?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => undefined);
+  }, [job?.id]);
+  return { job, loaded, refresh, clear };
 }
 
 /** This month's AI spend. `refresh` after a request (the response carries fresh numbers too). */

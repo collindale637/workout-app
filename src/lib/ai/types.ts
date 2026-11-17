@@ -129,7 +129,14 @@ export type AiRequest = {
   today?: { name: string; items: TodayItem[] };
   /** "swap": the exercise being replaced, and why (from the chips), if given. */
   swap?: { exercise_id: string; why: string | null };
+  /** "plan" / "edit": run on the server and save the answer as a job (see /api/ai/jobs) instead of waiting for it. */
+  background?: boolean;
+  /** With `background`: which screen asked (the plan being edited, or null for a new plan), so it picks up the right draft. */
+  jobRef?: string | null;
 };
+
+/** A background AI build, as the phone sees it. */
+export type AiJob = { id: string; kind: "plan" | "edit"; ref: string | null; status: "running" | "done" | "failed"; result: AiResponse | null; created_at: string };
 
 /** One exercise in the workout in progress. */
 export type TodayItem = { id: string; name: string; muscles: string[]; type: AllowedExercise["type"]; sets_done: number; sets_planned: number };
