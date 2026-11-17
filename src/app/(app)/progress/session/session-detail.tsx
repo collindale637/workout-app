@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile, useRemove } from "@/lib/db/provider";
 import { useCatalog, useOpenWorkout } from "@/lib/hooks";
-import { deleteWorkout } from "@/lib/workout";
+import { deleteWorkout, useWorkoutActions } from "@/lib/workout";
 import { cardioLabel, cardioSummary, isCardioExercise } from "@/lib/cardio";
 import { distanceUnit, formatDuration, formatWeight, toDisplayDistance, toDisplayWeight, hasBodyweightSets, isPerHand, volumeBy, VOLUME_NOTE, weightUnit } from "@/lib/units";
 import { filledSets } from "@/lib/set-slots";
@@ -15,8 +15,9 @@ import { useWorkoutComparison } from "@/lib/compare-data";
 import { useActivePlan } from "@/lib/smart";
 import { NextUpRow } from "@/components/next-up-row";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
-import type { Units } from "@/lib/db/types";
-import { Card, PageHeader, btn } from "@/components/ui/kit";
+import type { Units, WorkoutSet } from "@/lib/db/types";
+import { Card, PageHeader, Sheet, btn } from "@/components/ui/kit";
+import { EditSetForm } from "@/components/edit-set-form";
 
 export function SessionDetail() {
   const params = useSearchParams();
@@ -47,6 +48,8 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
   const compared = useWorkoutComparison(id);
   // Set detail: collapsed right after saving (the result card leads), open when you come from History.
   const [allOpen, setAllOpen] = useState<boolean | null>(null);
+  const [editSet, setEditSet] = useState<WorkoutSet | null>(null);
+  const actions = useWorkoutActions();
 
   if (data === undefined || !catalog || compared === undefined) return null;
   if (data === null) return <PageHeader title="Not found" back="/progress" />;
@@ -156,10 +159,13 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
                   )}
                   <ol className="mt-2 flex flex-col gap-1">
                     {list.map((s) => (
-                      <li key={s.id} className="num flex items-center gap-3 text-base">
-                        <span className="w-8 text-sm font-bold text-muted">{s.type === "warmup" ? "W" : s.type === "drop" ? "D" : s.set_no}</span>
-                        <span className="font-bold">{formatWeight(s.weight, units)}{s.weight !== null ? ` ${unit}` : ""} × {s.reps ?? "—"}</span>
-                        <span className={s.rpe === null ? "text-muted" : "text-accent"}>RPE {s.rpe ?? `${defaultRpe} (default)`}</span>
+                      <li key={s.id}>
+                        <button type="button" onClick={() => setEditSet(s)} aria-label={`Edit set ${s.set_no}`} className="num flex min-h-11 w-full items-center gap-3 text-left text-base active:bg-card-2">
+                          <span className="w-8 text-sm font-bold text-muted">{s.type === "warmup" ? "W" : s.type === "drop" ? "D" : s.set_no}</span>
+                          <span className="font-bold">{formatWeight(s.weight, units)}{s.weight !== null ? ` ${unit}` : ""} × {s.reps ?? "—"}</span>
+                          <span className={`flex-1 ${s.rpe === null ? "text-muted" : "text-accent"}`}>RPE {s.rpe ?? `${defaultRpe} (default)`}</span>
+                          <span aria-hidden="true" className="text-lg text-muted">›</span>
+                        </button>
                       </li>
                     ))}
                   </ol>
@@ -199,6 +205,25 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
       >
         Delete workout
       </button>
+
+      <Sheet open={editSet !== null} onClose={() => setEditSet(null)} title={editSet ? `Edit set ${editSet.set_no}` : undefined}>
+        {editSet && (
+          <EditSetForm
+            set={editSet}
+            units={units}
+            defaultRpe={defaultRpe}
+            onSave={async (changes) => {
+              await actions.updateSet(editSet.id, changes);
+              setEditSet(null);
+            }}
+            onDelete={async () => {
+              if (!confirm("Delete this set?")) return;
+              await actions.deleteSet(editSet);
+              setEditSet(null);
+            }}
+          />
+        )}
+      </Sheet>
 
       {justDone && (
         // Over the tab bar (z-20): no tab bar on the just-saved screen.

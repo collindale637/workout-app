@@ -183,7 +183,7 @@ export const isIsolation = (ex: Pick<Exercise, "id" | "mechanic" | "movement_pat
 export const isHold = (name: string) => /\bplank\b(?!\s*(jack|to|walk|up))|hollow (body )?hold|wall sit|l-sit|dead hang/i.test(name);
 
 const FREE_WEIGHTS = new Set(["barbell", "dumbbells", "trap_bar", "ez_bar", "kettlebells"]);
-const GUIDED = /machine|smith|cable|lever|pulldown|row_station|leg_press|hack_squat|pendulum|belt_squat/;
+const GUIDED = /machine|smith|cable|lever|pulldown|row_station|leg_press|hack_squat|pendulum|belt_squat|leg_extension|leg_curl|pec_deck|hip_abductor|hip_adductor|reverse_hyper/;
 const LOWER_BODY = new Set(["quads", "hamstrings", "glutes"]);
 /** Best kept to low reps and never supersetted outside heavy days: technique fades fast when tired. */
 const HEAVY_ONLY = new Set(["Barbell_Deadlift", "Sumo_Deadlift", "Deficit_Deadlift", "Rack_Pulls"]);
@@ -686,9 +686,15 @@ export function rankSwaps(
     const pj = jaccard(p, c.primary);
     if (pj === 0) continue;
     let score = 3 * pj + jaccard(s, c.secondary);
-    if (c.ex.movement_pattern === ex.movement_pattern) score += 1.5;
+    // The closest swap does the same movement with the same kind of gear: Barbell Row → Dumbbell Row beats Barbell Row → Pull-Up.
+    if (c.ex.movement_pattern === ex.movement_pattern) score += 2;
     if (c.iso === isIsolation(ex)) score += 0.5;
     if (c.ex.is_common || c.ex.owner_id) score += 0.6;
+    const cIds = c.equipment ? c.equipment.split(",") : [];
+    const guidedKind = (ids: Iterable<string>) => [...ids].some((id) => GUIDED.test(id));
+    if (cIds.length && cIds.every((id) => fromNeeds.has(id))) score += 1;
+    else if (cIds.some((id) => fromNeeds.has(id))) score += 0.5;
+    else if (guidedKind(cIds) === guidedKind(fromNeeds) && c.free === (cat.needs.get(exerciseId) ?? []).some((n) => FREE_WEIGHTS.has(n.equipment_id))) score += 0.4;
     if (!LEVELS[opts.experience].has(c.ex.level) && !c.ex.owner_id) score -= 0.8;
     if (opts.prefs?.get(c.ex.id)?.favorite) score += 0.3;
     if (STAPLES[c.ex.id]) score += STAPLES[c.ex.id] === 1 ? 0.5 : 0.25;
