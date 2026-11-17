@@ -300,18 +300,29 @@ export type WheelProps = {
   onTap: () => void;
 };
 
-/** Scroll-wheel picker: flick for big jumps, tap a value to land on it, tap the picked value to type one. */
+/**
+ * Scroll-wheel picker: flick for big jumps, tap a value to land on it, tap the picked value to type one.
+ * Built like the iOS picker: the white bar is a window onto a second copy of the list that moves in step with
+ * the scroll, so numbers turn blue gradually as they slide under it instead of switching style on the row change.
+ */
 export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
   const box = useRef<HTMLDivElement>(null);
+  const lens = useRef<HTMLDivElement>(null);
   const frame = useRef(0);
   const scrolling = useRef(false);
   const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The copy inside the white bar follows the scroll position on every frame (no React render involved).
+  const follow = () => {
+    if (box.current && lens.current) lens.current.style.transform = `translate3d(0,${-box.current.scrollTop}px,0)`;
+  };
 
   // Follow the value when it changes from outside (typed, next set, undo), but never fight a finger mid-flick.
   useEffect(() => {
     const el = box.current;
     if (!el || scrolling.current) return;
     if (Math.round(el.scrollTop / ROW) !== index) el.scrollTop = index * ROW;
+    follow();
   }, [index, options.length]);
   useEffect(() => () => {
     cancelAnimationFrame(frame.current);
@@ -319,6 +330,7 @@ export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
   }, []);
 
   const onScroll = () => {
+    follow();
     scrolling.current = true;
     if (idle.current) clearTimeout(idle.current);
     idle.current = setTimeout(() => (scrolling.current = false), 160);
@@ -331,9 +343,12 @@ export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
     });
   };
 
+  // One size for every row in both layers so the two copies line up exactly; long values ("102.5") shrink together.
+  const size = options.some((o) => o.length >= 5) ? "text-[32px]" : "text-[38px]";
+  const row = `display num block h-[50px] w-full pr-5 leading-[50px] font-extrabold ${size}`;
+
   return (
     <div className="relative h-[150px] overflow-hidden rounded-[18px] bg-black/15">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-[50px] h-[50px] rounded-[14px] bg-white shadow-[0_6px_16px_rgba(0,0,30,0.25)]" />
       <div
         ref={box}
         data-no-sheet-drag
@@ -352,26 +367,31 @@ export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
             if (i !== index) onPick(i);
           } else if (e.key === "Enter") onTap();
         }}
-        className="relative h-full touch-pan-y snap-y snap-mandatory overflow-y-auto overscroll-contain py-[50px] [mask-image:linear-gradient(transparent,#000_30%,#000_70%,transparent)] [scrollbar-width:none] focus-visible:outline-2 focus-visible:outline-white [&::-webkit-scrollbar]:hidden"
+        className="relative h-full touch-pan-y snap-y snap-mandatory overflow-y-auto overscroll-contain py-[50px] [mask-image:linear-gradient(transparent,#000_35%,#000_65%,transparent)] [scrollbar-width:none] focus-visible:outline-2 focus-visible:outline-white [&::-webkit-scrollbar]:hidden"
       >
-        {options.map((o, i) => {
-          const on = i === index;
-          return (
-            <button
-              key={`${i}-${o}`}
-              type="button"
-              tabIndex={-1}
-              onClick={() => (on ? onTap() : box.current?.scrollTo({ top: i * ROW, behavior: "smooth" }))}
-              className={`display num block h-[50px] w-full snap-center pr-5 leading-none font-extrabold ${on ? `text-primary ${o.length >= 5 ? "text-[34px]" : "text-[42px]"}` : "text-[30px] text-white/45"}`}
-            >
-              {o}
-            </button>
-          );
-        })}
+        {options.map((o, i) => (
+          <button
+            key={`${i}-${o}`}
+            type="button"
+            tabIndex={-1}
+            onClick={() => (i === index ? onTap() : box.current?.scrollTo({ top: i * ROW, behavior: "smooth" }))}
+            className={`${row} snap-center text-white/45`}
+          >
+            {o}
+          </button>
+        ))}
       </div>
-      <span aria-hidden="true" className="display pointer-events-none absolute top-[67px] right-3 max-w-[40%] truncate text-[12px] leading-none font-bold tracking-[0.08em] text-primary/75">
-        {l}
-      </span>
+      {/* The white bar: touches pass through to the wheel underneath. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-[50px] h-[50px] overflow-hidden rounded-[14px] bg-white shadow-[0_6px_16px_rgba(0,0,30,0.25)]">
+        <div ref={lens} className="-mx-2 will-change-transform">
+          {options.map((o, i) => (
+            <span key={`${i}-${o}`} className={`${row} text-center text-primary`}>
+              {o}
+            </span>
+          ))}
+        </div>
+        <span className="display absolute top-[17px] right-1.5 max-w-[40%] truncate text-[12px] leading-none font-bold tracking-[0.08em] text-primary/75">{l}</span>
+      </div>
     </div>
   );
 }
