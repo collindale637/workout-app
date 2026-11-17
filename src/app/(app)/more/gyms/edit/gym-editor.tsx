@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useGymActions } from "@/lib/gyms";
-import { CATEGORY_LABELS, CATEGORY_ORDER, TEMPLATE_LABELS, defaultDetails, hasDetails } from "@/lib/defaults";
+import { CATEGORY_LABELS, CATEGORY_ORDER, GYM_NAME_MAX, TEMPLATE_LABELS, TEMPLATE_SHORT_NAME, defaultDetails, hasDetails } from "@/lib/defaults";
 import { Card, Sheet, PageHeader, btn, field, label } from "@/components/ui/kit";
 import { fromDisplayWeight, toDisplayWeight, weightUnit } from "@/lib/units";
 import type { EquipmentDetails, GymTemplate, Units } from "@/lib/db/types";
@@ -51,7 +51,8 @@ function NewGym() {
       </Sheet>
       <label className="flex flex-col gap-2">
         <span className={label}>NAME</span>
-        <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Home, Work gym, Hotel…" autoFocus />
+        <input className={field} value={name} maxLength={GYM_NAME_MAX} onChange={(e) => setName(e.target.value)} placeholder="Home, Work gym, Hotel…" autoFocus />
+        <span className="text-right text-xs font-bold text-muted">{name.length}/{GYM_NAME_MAX}</span>
       </label>
       <span className={label}>START FROM</span>
       <div className="-mt-2 flex flex-col gap-2">
@@ -75,7 +76,7 @@ function NewGym() {
         onClick={async () => {
           setBusy(true);
           const hadActive = Boolean(profile?.active_gym_id);
-          const gym = await createGym(name || TEMPLATE_LABELS[template].name, template, !hadActive);
+          const gym = await createGym(name || TEMPLATE_SHORT_NAME[template], template, !hadActive);
           if (hadActive) setCreated({ id: gym.id, name: gym.name });
           else edit(gym.id);
         }}
@@ -172,7 +173,8 @@ function EditGym({ id }: { id: string }) {
       <Card className="flex flex-col gap-3 p-4">
         <label className="flex flex-col gap-2">
           <span className={label}>NAME</span>
-          <input className={field} value={current.name} onChange={(e) => edit((d) => ({ ...d, name: e.target.value }))} />
+          <input className={field} value={current.name} maxLength={GYM_NAME_MAX} onChange={(e) => edit((d) => ({ ...d, name: e.target.value }))} />
+          <span className="text-right text-xs font-bold text-muted">{current.name.length}/{GYM_NAME_MAX}</span>
         </label>
         {/* Applies right away (it isn't part of the Save changes draft). The primary gym stays ticked: there's always one. */}
         <label className={`flex min-h-14 items-center gap-3 px-1 py-1 ${gym.is_default ? "" : "cursor-pointer"}`}>
@@ -181,7 +183,7 @@ function EditGym({ id }: { id: string }) {
             checked={gym.is_default}
             disabled={gym.is_default}
             onChange={(ev) => ev.target.checked && makeDefault(gym.id)}
-            className="h-7 w-7 shrink-0 accent-[var(--primary)]"
+            className="check-box h-7 w-7 shrink-0"
           />
           <span className="flex min-w-0 flex-col">
             <span className="text-base font-bold">Make this my primary gym</span>
@@ -222,7 +224,7 @@ function EditGym({ id }: { id: string }) {
                         type="checkbox"
                         checked={checked}
                         onChange={(ev) => toggle([e.id], ev.target.checked)}
-                        className="h-6 w-6 shrink-0 accent-[var(--primary)]"
+                        className="check-box h-6 w-6 shrink-0"
                       />
                       <span className={`text-base font-semibold ${checked ? "text-ink" : "text-muted"}`}>{e.name}</span>
                     </label>
@@ -321,10 +323,10 @@ function sameDraft(a: Draft, b: Draft) {
 
 function summarize(id: string, d: EquipmentDetails, units: Units) {
   const u = weightUnit(units);
-  const w = (lb?: number) => (lb === undefined ? "?" : toDisplayWeight(lb, units));
-  if (id === "dumbbells") return `${w(d.dumbbell_min)}–${w(d.dumbbell_max)} ${u}`;
-  if (id === "barbell") return `+${w(d.plate_increment)} ${u}`;
-  return `max ${w(d.stack_max)} ${u}`;
+  const w = (lb: number) => toDisplayWeight(lb, units);
+  if (id === "dumbbells") return d.dumbbell_min === undefined || d.dumbbell_max === undefined ? "Set range" : `${w(d.dumbbell_min)}–${w(d.dumbbell_max)} ${u}`;
+  if (id === "barbell") return d.plate_increment === undefined ? "Set size" : `+${w(d.plate_increment)} ${u}`;
+  return d.stack_max === undefined ? "Set max" : `max ${w(d.stack_max)} ${u}`;
 }
 
 function DetailsForm({ equipmentId, details, units, onSave }: { equipmentId: string; details: EquipmentDetails; units: Units; onSave: (d: EquipmentDetails) => void }) {

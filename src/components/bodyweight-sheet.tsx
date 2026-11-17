@@ -43,6 +43,7 @@ function Form({ onDone, initial }: { onDone: () => void; initial?: { date: strin
           className={`${field} display num h-16 text-4xl font-extrabold`}
           inputMode="decimal"
           autoFocus
+          onFocus={(e) => e.target.select()}
           value={value}
           onChange={(e) => setValue(e.target.value.replace(",", "."))}
           placeholder={units === "kg" ? "82.5" : "182.4"}

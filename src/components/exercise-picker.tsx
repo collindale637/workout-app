@@ -202,7 +202,7 @@ export function ExercisePicker({
       </div>
       {gymEquipment && (
         <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-muted">
-          <input type="checkbox" checked={atGymOnly} onChange={(e) => setAtGymOnly(e.target.checked)} className="h-5 w-5 accent-[var(--primary)]" />
+          <input type="checkbox" checked={atGymOnly} onChange={(e) => setAtGymOnly(e.target.checked)} className="check-box h-5 w-5" />
           Only what {gymName ?? "this gym"} has
         </label>
       )}
