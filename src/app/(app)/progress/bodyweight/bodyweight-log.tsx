@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { useBodyweightActions, useProgressData } from "@/lib/progress-data";
 import { weightTrend } from "@/lib/progress";
-import { toDisplayWeight, weightUnit } from "@/lib/units";
+import { toDisplayWeight, weightUnit, formatTick } from "@/lib/units";
 import { LineChart } from "@/components/charts";
 import { BodyweightSheet } from "@/components/bodyweight-sheet";
 import { Card, Empty, PageHeader, btn } from "@/components/ui/kit";
@@ -33,7 +33,7 @@ export function BodyweightLog() {
           <LineChart
             ariaLabel="Bodyweight, all entries, with 7-day average"
             height={220}
-            format={(v) => toDisplayWeight(v, units).toFixed(0)}
+            format={(v) => formatTick(toDisplayWeight(v, units))}
             series={[
               { name: "Daily", color: "var(--muted)", dots: trend.points.length <= 120 ? "all" : "none", width: 0, muted: true, points: trend.points.map((p) => ({ x: x(p.date), y: p.value, label: fmt(p.value) })) },
               { name: "7-day avg", color: "var(--chart-1)", dots: "end", points: trend.points.map((p) => ({ x: x(p.date), y: p.avg, label: fmt(p.avg) })) },

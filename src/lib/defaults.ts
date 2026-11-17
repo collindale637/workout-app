@@ -17,6 +17,10 @@ export function defaultTargets(goal: Goal, mechanic: "compound" | "isolation" | 
   }
 }
 
+export const GYM_NAME_MAX = 24;
+/** Default name when a gym is created without one: short enough to read on Today's gym picker. */
+export const TEMPLATE_SHORT_NAME: Record<GymTemplate, string> = { commercial: "Gym", home: "Home", hotel: "Hotel", bodyweight: "Bodyweight", custom: "My gym" };
+
 export const TEMPLATE_LABELS: Record<GymTemplate, { name: string; blurb: string }> = {
   commercial: { name: "Commercial gym", blurb: "Racks, machines, cables, dumbbells, cardio" },
   home: { name: "Home: dumbbells + bench", blurb: "Dumbbells, bench, pull-up bar, bands" },

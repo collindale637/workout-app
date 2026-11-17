@@ -148,7 +148,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
             </button>
           </div>
         )}
-        <div className="mt-1 flex gap-2">
+        <div className="mt-1 flex items-start gap-2">
           <button
             type="button"
             onClick={go}
@@ -161,27 +161,33 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
             {starting ? "Starting…" : startAnyway ? "Start anyway" : "Start"}
           </button>
           {up.mode !== "ai" && (
+            <div className="flex flex-col items-center gap-1">
+              <button
+                type="button"
+                onClick={regenerate}
+                aria-label="Regenerate"
+                title="Regenerate"
+                className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
+                </svg>
+              </button>
+              <span className="text-xs font-bold text-white/80">Regenerate</span>
+            </div>
+          )}
+          <div className="flex flex-col items-center gap-1">
             <button
               type="button"
-              onClick={regenerate}
-              aria-label="Regenerate"
-              title="Regenerate"
-              className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70"
+              onClick={() => setAiOpen(true)}
+              aria-label="Customize with AI"
+              title="Customize with AI"
+              className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70 text-white"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
-              </svg>
+              <Sparkle size={22} />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setAiOpen(true)}
-            aria-label="Customize with AI"
-            title="Customize with AI"
-            className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70 text-white"
-          >
-            <Sparkle size={22} />
-          </button>
+            <span className="text-xs font-bold text-white/80">Customize</span>
+          </div>
         </div>
       </section>
 
@@ -353,7 +359,7 @@ function StartCard({ hasGym }: { hasGym: boolean }) {
       <p className="text-[15px] font-medium text-[#DCE4FF]">
         Build a workout from {hasGym ? "what your gym has" : "the exercise library"}, repeat a past one, or log cardio.
       </p>
-      <div className="mt-1 flex gap-2">
+      <div className="mt-1 flex items-start gap-2">
         <Link href="/workout" className="display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full bg-white text-xl font-extrabold tracking-[0.08em] text-primary">
           Build
         </Link>

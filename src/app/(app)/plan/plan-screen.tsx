@@ -34,8 +34,6 @@ export function PlanScreen() {
 
       {active ? <ActivePlanCard /> : <NoPlan />}
 
-      <SplitLibrary hasActive={Boolean(active)} />
-
       <section className="flex flex-col gap-2">
         <h2 className="display text-xl font-extrabold">With AI</h2>
         <Card className="divide-y divide-line overflow-hidden">
@@ -59,6 +57,9 @@ export function PlanScreen() {
           </Link>
         </Card>
       </section>
+
+      <SplitLibrary hasActive={Boolean(active)} />
+
 
       {past.length > 0 && <PastPlans plans={past} />}
     </main>

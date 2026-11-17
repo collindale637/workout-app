@@ -25,6 +25,7 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<{ email?: string; password?: string }>({});
 
   // Coming back to this page from the browser's back/forward cache (e.g. after signing out) must
   // never show the previous person's email or a button stuck on "One sec…".
@@ -107,8 +108,13 @@ export function LoginForm() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@example.com"
+        onBlur={() => {
+          const v = email.trim();
+          setFieldError((f) => ({ ...f, email: v && !/^\S+@\S+\.\S+$/.test(v) ? "That doesn't look like an email address." : undefined }));
+        }}
         className={input}
       />
+      {fieldError.email && <p role="alert" className="text-sm font-bold text-warn">{fieldError.email}</p>}
       <label className={`${label} mt-2`} htmlFor="password">PASSWORD</label>
       <div className="relative">
         <input
@@ -119,6 +125,7 @@ export function LoginForm() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onBlur={() => setFieldError((f) => ({ ...f, password: mode === "up" && password && password.length < 6 ? "Use at least 6 characters." : undefined }))}
           className={`${input} pr-20`}
         />
         <button
@@ -130,6 +137,8 @@ export function LoginForm() {
           {showPassword ? "Hide" : "Show"}
         </button>
       </div>
+      {mode === "up" && !fieldError.password && <p className="text-sm font-medium text-muted">At least 6 characters.</p>}
+      {fieldError.password && <p role="alert" className="text-sm font-bold text-warn">{fieldError.password}</p>}
       <button
         type="submit"
         disabled={busy || !email || !password}

@@ -59,7 +59,7 @@ export function RecoveryScreen() {
           ))}
         </div>
         <p className="text-center text-sm font-medium text-muted">
-          Tap a muscle for details. Fresh is {FRESH_AT}%+, fatigued is under {RECOVERING_AT}%. A group is ready at {READY_AVG}%+ with no fatigued muscle.
+          Recovery is scored from the last 7 days of training. Tap a muscle for details. Fresh is {FRESH_AT}%+, fatigued is under {RECOVERING_AT}%. A group is ready at {READY_AVG}%+ with no fatigued muscle.
         </p>
       </section>
 
@@ -194,12 +194,6 @@ function FeelSlider({ r, onAdjust, onReset }: { r: MuscleRecovery; onAdjust: (sc
           aria-valuetext={`${value}% recovered`}
           className="feel-slider pointer-events-none h-11 w-full"
         />
-      </div>
-      <div className="-mt-1 flex justify-between px-0.5 text-xs font-bold text-muted" aria-hidden="true">
-        <span>Wrecked</span>
-        <span>Sore</span>
-        <span>Fine</span>
-        <span>Fresh</span>
       </div>
       <div className="mt-2 grid grid-cols-4 gap-1.5">
         {FEEL_PRESETS.map((p) => {

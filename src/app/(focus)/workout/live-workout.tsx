@@ -1040,7 +1040,7 @@ function SetTable({
       <div className={`${cols} pb-1 text-xs font-bold tracking-[0.12em] text-muted`}>
         <span>SET</span>
         <span>TODAY</span>
-        <span>LAST{history?.lastDate && last.length ? ` · ${lastTimeLabel(history.lastDate).toUpperCase()}` : ""}</span>
+        <span className="whitespace-nowrap">LAST</span>
         <span />
       </div>
       {warmup === "pending" && !hideNext && (

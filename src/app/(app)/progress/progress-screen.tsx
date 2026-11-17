@@ -12,7 +12,7 @@ import {
 } from "@/lib/progress";
 import { cardioLabel } from "@/lib/cardio";
 import { MUSCLE_GROUPS } from "@/lib/defaults";
-import { distanceUnit, formatMax, formatWeight, toDisplayDistance, toDisplayWeight, weightUnit } from "@/lib/units";
+import { distanceUnit, formatMax, formatWeight, toDisplayDistance, toDisplayWeight, weightUnit, formatTick } from "@/lib/units";
 import { ColumnChart, LineChart, RangeBar, Sparkline } from "@/components/charts";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { BodyweightSheet } from "@/components/bodyweight-sheet";
@@ -128,13 +128,14 @@ function Consistency({ data, goalDays, now }: { data: Data; goalDays: number; no
   const streak = weekStreak(perWeek, goalDays);
   const total = perWeek.reduce((a, b) => a + b, 0);
   const avg = total / WEEKS;
-  const [tip, setTip] = useState<CalendarDay | null>(null);
+  const [showDays, setShowDays] = useState(false);
   const months = cal.map((w, i) => {
     const first = w.find((d) => d.date.getDate() === 1) ?? (i === 0 ? w[0] : null);
     return first ? first.date.toLocaleDateString([], { month: "short" }) : "";
   });
 
   return (
+    <div role="button" tabIndex={0} aria-expanded={showDays} onClick={() => setShowDays((v) => !v)} className="cursor-pointer">
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -156,31 +157,40 @@ function Consistency({ data, goalDays, now }: { data: Data; goalDays: number; no
           <div key={w} className="flex min-w-0 flex-1 flex-col gap-[3px]">
             <span className="h-3.5 overflow-visible text-[10px] font-bold whitespace-nowrap text-muted">{months[w]}</span>
             {week.map((d) => (
-              <button
+              <div
                 key={d.key}
-                type="button"
                 aria-label={`${d.date.toLocaleDateString([], { month: "short", day: "numeric" })}: ${kindLabel(d)}`}
-                onClick={() => setTip(tip?.key === d.key ? null : d)}
                 className={`relative flex aspect-square w-full items-center justify-center rounded-[4px] ${
                   d.future ? "bg-transparent" : d.kind === "lift" || d.kind === "both" ? "bg-chart-1" : "bg-card-2"
-                } ${tip?.key === d.key ? "ring-2 ring-ink" : ""}`}
+                }`}
               >
                 {(d.kind === "cardio" || d.kind === "both") && (
                   <span className={`h-[45%] w-[45%] rounded-full bg-chart-2 ${d.kind === "both" ? "ring-2 ring-card" : ""}`} />
                 )}
-              </button>
+              </div>
             ))}
           </div>
         ))}
       </div>
+      {showDays && (
+        <ul className="divide-y divide-line">
+          {cal.flat().filter((d) => !d.future && d.kind !== null).reverse().slice(0, 30).map((d) => (
+            <li key={d.key} className="flex justify-between py-2 text-sm font-semibold">
+              <span>{d.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
+              <span className="text-muted">{kindLabel(d)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-muted">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px] bg-chart-1" />Lifting</span>
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-chart-2" />Cardio</span>
         </div>
-        <span className="num">{tip ? `${tip.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} · ${kindLabel(tip)}` : `${total} days trained`}</span>
+        <span className="num">{showDays ? "Hide days" : `${total} days trained · tap for the list`}</span>
       </div>
     </Card>
+    </div>
   );
 }
 
@@ -247,9 +257,9 @@ function Lifts({ data, units, now }: { data: Data; units: Units; now: number }) 
           return (
             <Link key={l.exerciseId} href={`/progress/lift?id=${encodeURIComponent(l.exerciseId)}`} className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-base font-bold">{name}</div>
+                <div className="line-clamp-2 text-base leading-tight font-bold">{name}</div>
                 <div className="truncate text-sm font-medium text-muted">
-                  {l.bodyweight ? "Best set" : "Est. max"} · {l.sessions} {l.sessions === 1 ? "session" : "sessions"}
+                  {l.bodyweight ? "Best" : "Max"} · {l.sessions} {l.sessions === 1 ? "session" : "sessions"}
                 </div>
               </div>
               <Sparkline values={l.trend} />
@@ -403,7 +413,7 @@ function Bodyweight({ data, units, now, onLog }: { data: Data; units: Units; now
                 <LineChart
                   ariaLabel="Bodyweight, daily and 7-day average"
                   height={180}
-                  format={(v) => toDisplayWeight(v, units).toFixed(0)}
+                  format={(v) => formatTick(toDisplayWeight(v, units))}
                   series={[
                     { name: "Daily", color: "var(--muted)", dots: "all", width: 0, muted: true, points: recent.map((p) => ({ x: x(p.date), y: p.value, label: fmt(p.value) })) },
                     { name: "7-day avg", color: "var(--chart-1)", dots: "end", points: recent.map((p) => ({ x: x(p.date), y: p.avg, label: fmt(p.avg) })) },

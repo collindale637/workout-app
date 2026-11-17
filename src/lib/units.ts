@@ -26,6 +26,11 @@ export const isPerHand = (ex: { name: string } | null | undefined) => Boolean(ex
 export const weightStep = (units: Units) => (units === "kg" ? 2.5 : 5);
 
 /** "185", "92.5", "BW" */
+/** Axis label: whole numbers, with one decimal only when the tick needs it (180.5). */
+export function formatTick(v: number) {
+  return Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1);
+}
+
 export function formatWeight(lb: number | null, units: Units) {
   if (lb === null || lb === undefined) return "BW";
   const v = toDisplayWeight(lb, units);

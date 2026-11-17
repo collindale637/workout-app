@@ -11,7 +11,7 @@ import { useUpNextChoice } from "@/lib/up-next";
 import { buildPlanDays } from "@/lib/generator";
 import { EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile";
 import { CARDIO_PREF_LABELS, GOAL_BLURBS, recommendSplit, splitChoices } from "@/lib/onboarding";
-import { TEMPLATE_LABELS } from "@/lib/defaults";
+import { TEMPLATE_LABELS, GYM_NAME_MAX, TEMPLATE_SHORT_NAME } from "@/lib/defaults";
 import { MusclePills } from "@/components/planned";
 import { Chip, StickyBar, btn, field, label } from "@/components/ui/kit";
 import { HeightField, SexField, WeightField, heightProblem, validWeightLb, weightProblem } from "@/components/body-fields";
@@ -34,7 +34,7 @@ export function Welcome() {
   const [name, setName] = useState("");
   const [units, setUnits] = useState<Units>("lb");
   const [goal, setGoal] = useState<Goal>("hypertrophy");
-  const [experience, setExperience] = useState<Experience>("intermediate");
+  const [experience, setExperience] = useState<Experience>("beginner");
   const [days, setDays] = useState(4);
   const [minutes, setMinutes] = useState(60);
   const [cardio, setCardio] = useState<CardioPref>("auto");
@@ -257,7 +257,8 @@ function GymStep({ onDone }: { onDone: () => void }) {
           <p className="-mt-2 text-base font-medium text-muted">Pick the closest match; workouts only use what&apos;s there. You can tick equipment on and off later and add more gyms any time.</p>
           <label className="flex flex-col gap-2">
             <span className={label}>GYM NAME</span>
-            <input className={field} value={gymName} onChange={(e) => setGymName(e.target.value)} placeholder="Main gym, Home, Work…" />
+            <input className={field} value={gymName} maxLength={GYM_NAME_MAX} onChange={(e) => setGymName(e.target.value)} placeholder="Main gym, Home, Work…" />
+            <span className="text-right text-xs font-bold text-muted">{gymName.length}/{GYM_NAME_MAX}</span>
           </label>
           <div className="flex flex-col gap-2">
             {(Object.keys(TEMPLATE_LABELS) as GymTemplate[]).map((t) => (
@@ -271,7 +272,7 @@ function GymStep({ onDone }: { onDone: () => void }) {
         onClick={async () => {
           if (!has) {
             setBusy(true);
-            await createGym(gymName || TEMPLATE_LABELS[template].name, template);
+            await createGym(gymName || TEMPLATE_SHORT_NAME[template], template);
             setBusy(false);
           }
           onDone();
