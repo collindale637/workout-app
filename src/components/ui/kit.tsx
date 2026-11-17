@@ -136,6 +136,24 @@ export function RowLink({ href, title, detail, right }: { href: string; title: s
   );
 }
 
+/**
+ * Pinned bottom bar for a page's main button, so it's always in thumb reach.
+ * aboveNav: sits on top of the tab bar (uses --nav-h from globals.css); otherwise it hugs the bottom edge.
+ * line: optional one-line summary above the button.
+ */
+export function StickyBar({ children, line, aboveNav = false }: { children: React.ReactNode; line?: React.ReactNode; aboveNav?: boolean }) {
+  return (
+    <div
+      className={`fixed inset-x-0 z-10 mx-auto w-full max-w-md border-t border-line bg-bg/95 px-5 pt-3.5 backdrop-blur ${
+        aboveNav ? "bottom-[var(--nav-h)] pb-3" : "safe-bottom bottom-0"
+      }`}
+    >
+      {line && <p className="mb-2 truncate text-center text-sm font-semibold text-muted">{line}</p>}
+      {children}
+    </div>
+  );
+}
+
 export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <section className={`rounded-3xl border border-line bg-card ${className}`}>{children}</section>;
 }

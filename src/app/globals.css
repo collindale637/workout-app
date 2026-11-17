@@ -24,6 +24,9 @@
      1 = lifting (cobalt, a step lighter than --primary so thin marks read), 2 = cardio (teal). */
   --chart-1: #4f74ff;
   --chart-2: #14a3b8;
+  /* Height of the bottom tab bar (1px border + 10px top padding + 44px row + safe area): StickyBar sits on it.
+     If BottomNav's height changes, update this. */
+  --nav-h: calc(55px + max(env(safe-area-inset-bottom), 8px));
 }
 
 [data-theme="light"] {

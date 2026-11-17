@@ -10,7 +10,7 @@ import { useUpNextChoice } from "@/lib/up-next";
 import { buildPlanDays } from "@/lib/generator";
 import { GOAL_LABELS } from "@/lib/profile";
 import { doseLabel, MusclePills } from "@/components/planned";
-import { Chip, PageHeader, btn, field, label } from "@/components/ui/kit";
+import { Chip, PageHeader, StickyBar, btn, field, label } from "@/components/ui/kit";
 import type { Goal } from "@/lib/db/types";
 
 const WEEKS = [4, 6, 8, 12];
@@ -57,7 +57,7 @@ export function PlanBuilder() {
   const empty = days?.filter((d) => d.items.length === 0) ?? [];
 
   return (
-    <main className="flex flex-col gap-4 pb-6">
+    <main className="flex flex-col gap-4 pb-24">
       <PageHeader title={split.name} back="/plan" />
       <p className="-mt-2 text-base font-medium text-muted">{split.description}</p>
 
@@ -115,21 +115,25 @@ export function PlanBuilder() {
         </section>
       ))}
 
-      {active && <p className="text-sm font-medium text-muted">This becomes your active plan. &ldquo;{active.plan.name}&rdquo; moves to past plans.</p>}
-      <button
-        type="button"
-        className={btn.primary}
-        disabled={!days || saving || empty.length === days.length}
-        onClick={async () => {
-          if (!days) return;
-          setSaving(true);
-          await actions.create({ name: planName.trim() || split.name, goal: chosenGoal, splitId: split.id, weeks, days });
-          await setChoice({ mode: "plan", seed: 0 });
-          router.replace("/plan");
-        }}
+      <StickyBar
+        aboveNav
+        line={`${split.days_per_week} days · ${weeks} weeks${active ? ` · replaces ${active.plan.name}` : ""}`}
       >
-        {saving ? "Saving…" : "Create plan"}
-      </button>
+        <button
+          type="button"
+          className={`${btn.primary} w-full`}
+          disabled={!days || saving || empty.length === days.length}
+          onClick={async () => {
+            if (!days) return;
+            setSaving(true);
+            await actions.create({ name: planName.trim() || split.name, goal: chosenGoal, splitId: split.id, weeks, days });
+            await setChoice({ mode: "plan", seed: 0 });
+            router.replace("/plan");
+          }}
+        >
+          {saving ? "Saving…" : "Create plan"}
+        </button>
+      </StickyBar>
     </main>
   );
 }
