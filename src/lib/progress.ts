@@ -24,6 +24,10 @@ export type LiftSet = {
   type: SetType;
   weight: number | null;
   reps: number | null;
+  /** Dumbbell in each hand: volume counts both. */
+  perHand?: boolean;
+  /** A single-joint lift: judged on reps at a weight, not on an estimated max. */
+  isolation?: boolean;
 };
 
 export type LiftSession = {
@@ -40,6 +44,7 @@ export type LiftSession = {
   volume: number;
   workingSets: number;
   sets: { weight: number | null; reps: number | null; type: SetType }[];
+  isolation: boolean;
 };
 
 const counts = (s: { type: SetType; reps: number | null }) => s.type !== "warmup" && (s.reps ?? 0) > 0;
@@ -76,9 +81,10 @@ export function liftSessions(sets: LiftSet[]): Map<string, LiftSession[]> {
       topWeight,
       topReps: topWeight ? Math.max(...loaded.filter((s) => s.weight === topWeight).map((s) => s.reps!)) : 0,
       bestReps: Math.max(...work.map((s) => s.reps!)),
-      volume: work.reduce((a, s) => a + (s.weight ?? 0) * s.reps!, 0),
+      volume: work.reduce((a, s) => a + (s.weight ?? 0) * s.reps! * (s.perHand ? 2 : 1), 0),
       workingSets: work.filter((s) => s.type === "working").length,
       sets: list.map((s) => ({ weight: s.weight, reps: s.reps, type: s.type })),
+      isolation: Boolean(list[0].isolation),
     };
     out.set(exerciseId, [...(out.get(exerciseId) ?? []), session]);
   }
@@ -97,9 +103,22 @@ export type PREvent = {
   previous: number;
   /** For weight PRs: reps done at the new weight. */
   reps?: number;
+  /** For rep PRs on weighted lifts: the weight the reps were done at. */
+  weight?: number;
 };
 
-/** Every PR, newest first. One event per session per kind; e1RM beats weight when both happen. */
+/** An estimated max has to beat the old one by this much to count, so small bumps don't fill the PR list. */
+export const PR_MARGIN = 1.025;
+
+/** Most reps in a working set at this weight or heavier, across earlier sessions. */
+const repsAtOrAbove = (before: LiftSession[], weight: number) =>
+  Math.max(0, ...before.flatMap((x) => x.sets.filter((s) => s.type === "working" && (s.weight ?? 0) >= weight && (s.reps ?? 0) > 0).map((s) => s.reps!)));
+
+/**
+ * Every PR, newest first. One event per session per kind; e1RM beats weight when both happen.
+ * Estimated-max PRs need a 2.5% jump. Single-joint lifts (curls, raises) are judged on reps instead: more
+ * reps at the same weight or heavier, or a heavier weight.
+ */
 export function prEvents(sessions: Map<string, LiftSession[]>): PREvent[] {
   const out: PREvent[] = [];
   for (const [exerciseId, list] of sessions) {
@@ -109,12 +128,16 @@ export function prEvents(sessions: Map<string, LiftSession[]>): PREvent[] {
     list.forEach((s, i) => {
       const first = i === 0;
       const loaded = s.topWeight > 0;
-      const e = !first && loaded && bestE > 0 && s.e1rm > bestE + 0.5;
+      const e = !first && loaded && !s.isolation && bestE > 0 && s.e1rm >= bestE * PR_MARGIN;
       const w = !first && loaded && bestW > 0 && s.topWeight > bestW;
       const r = !first && !loaded && bestW === 0 && s.bestReps > bestR;
+      const prior = list.slice(0, i);
+      const priorReps = loaded && s.isolation && !first ? repsAtOrAbove(prior, s.topWeight) : 0;
+      const isoReps = priorReps > 0 && s.topReps > priorReps && s.topWeight <= bestW;
       if (e) out.push({ exerciseId, workoutId: s.workoutId, at: s.at, kind: "e1rm", value: s.e1rm, previous: bestE });
       if (w && !e) out.push({ exerciseId, workoutId: s.workoutId, at: s.at, kind: "weight", value: s.topWeight, previous: bestW, reps: s.topReps });
       if (r) out.push({ exerciseId, workoutId: s.workoutId, at: s.at, kind: "reps", value: s.bestReps, previous: bestR });
+      if (isoReps) out.push({ exerciseId, workoutId: s.workoutId, at: s.at, kind: "reps", value: s.topReps, previous: priorReps, weight: s.topWeight });
       bestE = Math.max(bestE, s.e1rm);
       bestW = Math.max(bestW, s.topWeight);
       bestR = Math.max(bestR, s.bestReps);

@@ -8,7 +8,7 @@ import { useData, useProfile, useRemove } from "@/lib/db/provider";
 import { useCatalog, useOpenWorkout } from "@/lib/hooks";
 import { deleteWorkout } from "@/lib/workout";
 import { cardioLabel, cardioSummary, isCardioExercise } from "@/lib/cardio";
-import { distanceUnit, formatDuration, formatWeight, toDisplayDistance, toDisplayWeight, volumeLb, weightUnit } from "@/lib/units";
+import { distanceUnit, formatDuration, formatWeight, toDisplayDistance, toDisplayWeight, hasBodyweightSets, isPerHand, volumeBy, VOLUME_NOTE, weightUnit } from "@/lib/units";
 import { filledSets } from "@/lib/set-slots";
 import { shortDate, volumeDeltaText, type Comparison } from "@/lib/compare";
 import { useWorkoutComparison } from "@/lib/compare-data";
@@ -55,7 +55,7 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
   const note = compared?.note ?? null;
   const start = new Date(workout.started_at);
   const dur = workout.ended_at ? (new Date(workout.ended_at).getTime() - start.getTime()) / 1000 : 0;
-  const volume = volumeLb(sets);
+  const volume = volumeBy(sets, wexs, (id) => isPerHand(catalog.byId.get(id)));
   const workingSets = sets.filter((s) => s.type !== "warmup").length;
   const unit = weightUnit(units);
   const shown = (lb: number) => Math.round(toDisplayWeight(lb, units));
@@ -120,6 +120,7 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
           ))}
         </div>
       )}
+      {hasBodyweightSets(sets) && <p className="-mt-2 text-xs font-semibold text-muted">{VOLUME_NOTE}</p>}
 
       {notDone.length > 0 && <NotDoneBlock label="NOT DONE" rows={notDone} />}
 

@@ -140,3 +140,24 @@ describe("bodyweight", () => {
     expect(weightTrend([{ date: "2026-11-01", bodyweight: 180 }]).change30).toBeNull();
   });
 });
+
+describe("batch 12: PR margin and isolation rep PRs", () => {
+  const iso = (wid: string, at: string, w: number, r: number) => ({ ...set(wid, at, w, r, "working", "curl"), isolation: true });
+
+  it("an estimated max must beat the old one by 2.5%", () => {
+    const small = prEvents(liftSessions([set("a", "2026-11-02T10:00:00Z", 200, 5), set("b", "2026-11-05T10:00:00Z", 200, 5), set("c", "2026-11-09T10:00:00Z", 140, 8)]));
+    expect(small.filter((p) => p.kind === "e1rm")).toEqual([]);
+    const real = prEvents(liftSessions([set("a", "2026-11-02T10:00:00Z", 200, 5), set("b", "2026-11-05T10:00:00Z", 200, 6)]));
+    expect(real.map((p) => p.kind)).toEqual(["e1rm"]);
+  });
+
+  it("curls and other isolation lifts earn rep PRs at the same weight, not estimated-max PRs", () => {
+    const prs = prEvents(liftSessions([iso("a", "2026-11-02T10:00:00Z", 30, 8), iso("b", "2026-11-05T10:00:00Z", 30, 10), iso("c", "2026-11-09T10:00:00Z", 30, 10)]));
+    expect(prs.map((p) => [p.workoutId, p.kind, p.value, p.previous, p.weight])).toEqual([["b", "reps", 10, 8, 30]]);
+  });
+
+  it("a heavier weight on an isolation lift is a weight PR, and fewer reps at the same weight is nothing", () => {
+    const prs = prEvents(liftSessions([iso("a", "2026-11-02T10:00:00Z", 30, 10), iso("b", "2026-11-05T10:00:00Z", 35, 6), iso("c", "2026-11-09T10:00:00Z", 30, 8)]));
+    expect(prs.map((p) => [p.workoutId, p.kind])).toEqual([["b", "weight"]]);
+  });
+});

@@ -15,7 +15,7 @@ import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
 import { RPE_SCALE } from "@/lib/defaults";
-import { formatDuration, formatWeight, fromDisplayWeight, isPerHand, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
+import { formatDuration, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, toDisplayWeight, VOLUME_NOTE, volumeBy, weightStep, weightUnit } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
@@ -1260,7 +1260,7 @@ function FinishSummary({
   const [allOpen, setAllOpen] = useState(false);
   const all = wexs.flatMap((w) => setsBy.get(w.id) ?? []);
   const workingSets = all.filter((s) => s.type !== "warmup").length;
-  const volume = volumeLb(all);
+  const volume = volumeBy(all, wexs, (id) => isPerHand(names.get(id)));
   const nameOf = (w: WorkoutExercise) => names.get(w.exercise_id)?.name ?? w.exercise_id;
   const last = cmp?.totals.last ?? null;
 
@@ -1303,6 +1303,7 @@ function FinishSummary({
           last ? vs(shown(volume) - shown(last.volumeLb), (n) => n.toLocaleString(), "less", "more") : null,
         )}
       </div>
+      {hasBodyweightSets(all) && <p className="-mt-1 text-xs font-semibold text-muted">{VOLUME_NOTE}</p>}
       {recordCount > 0 ? (
         <div className="flex items-center gap-2.5 rounded-2xl bg-primary/15 px-3 py-2.5 text-sm font-bold text-accent-soft">
           <PrBadge />

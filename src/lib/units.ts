@@ -21,7 +21,8 @@ export const distanceUnit = (units: Units) => (units === "kg" ? "km" : "mi");
 
 /** Default plus/minus step for the weight buttons. */
 /** Lifts done with a dumbbell in each hand: the weight shown is per dumbbell ("LB EACH"). Label only. */
-export const isPerHand = (ex: { name: string } | null | undefined) => Boolean(ex && /dumbbell/i.test(ex.name));
+export const isPerHand = (ex: { name: string } | null | undefined) =>
+  Boolean(ex && /dumbbell/i.test(ex.name) && !/one[- ]arm|single[- ]arm|goblet|pullover|concentration|one dumbbell|kickback/i.test(ex.name));
 
 export const weightStep = (units: Units) => (units === "kg" ? 2.5 : 5);
 
@@ -51,6 +52,30 @@ export function formatDuration(totalSec: number) {
 export function volumeLb(sets: { weight: number | null; reps: number | null; type: string }[]) {
   return sets.reduce((sum, s) => (s.type === "warmup" ? sum : sum + (s.weight ?? 0) * (s.reps ?? 0)), 0);
 }
+
+/**
+ * Weight moved across a workout's sets, counting both dumbbells on per-hand lifts (the weight logged is per
+ * dumbbell). `wexs` maps each set to its exercise; `perHand` says which exercises are per-hand.
+ * Bodyweight sets have no external load, so they add nothing (see `hasBodyweightSets`).
+ */
+export function volumeBy(
+  sets: { workout_exercise_id: string; weight: number | null; reps: number | null; type: string }[],
+  wexs: { id: string; exercise_id: string }[],
+  perHand: (exerciseId: string) => boolean,
+) {
+  const exOf = new Map(wexs.map((w) => [w.id, w.exercise_id]));
+  return sets.reduce((sum, s) => {
+    if (s.type === "warmup") return sum;
+    const ex = exOf.get(s.workout_exercise_id);
+    return sum + (s.weight ?? 0) * (s.reps ?? 0) * (ex && perHand(ex) ? 2 : 1);
+  }, 0);
+}
+
+/** Any working set done with no added weight (push-ups, pull-ups): volume doesn't count your bodyweight. */
+export const hasBodyweightSets = (sets: { weight: number | null; reps: number | null; type: string }[]) =>
+  sets.some((s) => s.type !== "warmup" && !(s.weight ?? 0) && (s.reps ?? 0) > 0);
+
+export const VOLUME_NOTE = "Weight moved counts added weight (both dumbbells), not your bodyweight.";
 
 /** An estimated max, rounded to a whole pound (or half kilo): the decimals are noise. */
 export const formatMax = (lb: number, units: Units) =>

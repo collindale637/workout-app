@@ -203,6 +203,7 @@ export function prText(p: PREvent, units: Units) {
   const u = weightUnit(units);
   if (p.kind === "e1rm") return `Est. max ${formatMax(p.value, units)} ${u} (+${formatMax(Math.max(1, p.value - p.previous), units)})`;
   if (p.kind === "weight") return `Heaviest ${formatWeight(p.value, units)} ${u} × ${p.reps} (+${formatWeight(p.value - p.previous, units)})`;
+  if (p.weight) return `${p.value} reps at ${formatWeight(p.weight, units)} ${u} (+${p.value - p.previous})`;
   return `${p.value} reps (+${p.value - p.previous})`;
 }
 

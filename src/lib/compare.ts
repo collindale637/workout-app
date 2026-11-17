@@ -1,6 +1,6 @@
 import { slotRows } from "./set-slots";
-import { bestE1rm } from "./progress";
-import { formatMax, formatWeight, toDisplayWeight, volumeLb, weightUnit } from "./units";
+import { bestE1rm, PR_MARGIN } from "./progress";
+import { formatMax, formatWeight, toDisplayWeight, volumeBy, volumeLb, weightUnit } from "./units";
 import type { SetType, Units } from "./db/types";
 
 /*
@@ -126,6 +126,8 @@ export function compareWorkout(args: {
   /** Each exercise's history before this workout (see historyBefore). */
   history: Map<string, LiftHistory>;
   isBodyweight: (exerciseId: string) => boolean;
+  /** Dumbbell-in-each-hand lifts: their volume counts both dumbbells. */
+  isPerHand?: (exerciseId: string) => boolean;
   isCardio: (exerciseId: string) => boolean;
   units: Units;
   /** Seconds this workout has run (the live sheet passes the running clock). */
@@ -159,7 +161,7 @@ export function compareWorkout(args: {
       const top1 = bestE1rm(loaded);
       const name = args.names?.(w.exercise_id) ?? w.exercise_id;
       if (top > h.bestWeight) record = { wexId: w.id, exerciseId: w.exercise_id, kind: "weight", text: `${name}: heaviest ever, ${formatWeight(top, units)} ${unit}` };
-      else if (top1 > h.best1RM + 0.5) record = { wexId: w.id, exerciseId: w.exercise_id, kind: "e1rm", text: `${name}: best estimated max, ${formatMax(top1, units)} ${unit}` };
+      else if (top1 >= h.best1RM * PR_MARGIN) record = { wexId: w.id, exerciseId: w.exercise_id, kind: "e1rm", text: `${name}: best estimated max, ${formatMax(top1, units)} ${unit}` };
     }
     if (record) records.push(record);
 
@@ -169,7 +171,7 @@ export function compareWorkout(args: {
       continue;
     }
 
-    sameLiftsDelta += volumeLb(today) - volumeLb(prev);
+    sameLiftsDelta += (volumeLb(today) - volumeLb(prev)) * (args.isPerHand?.(w.exercise_id) ? 2 : 1);
     const bw = isBodyweight(w.exercise_id) || [...today, ...prev].every((s) => s.weight === null);
     const topToday = Math.max(...today.map((s) => toDisplayWeight(s.weight ?? 0, units)));
     const topPrev = Math.max(...prev.map((s) => toDisplayWeight(s.weight ?? 0, units)));
@@ -197,7 +199,8 @@ export function compareWorkout(args: {
     rows.push({ wexId: w.id, exerciseId: w.exercise_id, kind, delta, record, best });
   }
 
-  const totalsOf = (list: CmpSet[], dur: number): Totals => ({ volumeLb: volumeLb(list), sets: list.filter(counts).length, durationSec: dur });
+  const perHand = args.isPerHand ?? (() => false);
+  const totalsOf = (list: CmpSet[], lifts: CmpWex[], dur: number): Totals => ({ volumeLb: volumeBy(list, lifts, perHand), sets: list.filter(counts).length, durationSec: dur });
   const prevDur = previous?.workout.ended_at ? (new Date(previous.workout.ended_at).getTime() - new Date(previous.workout.started_at).getTime()) / 1000 : 0;
   const compared = rows.filter((r) => r.kind !== "first");
   return {
@@ -209,7 +212,7 @@ export function compareWorkout(args: {
     down: compared.filter((r) => r.kind === "down" || r.kind === "skipped").length,
     records,
     sameLiftsDelta,
-    totals: { today: totalsOf(sets, durationSec), last: previous ? totalsOf(previous.sets, prevDur) : null },
+    totals: { today: totalsOf(sets, wexs, durationSec), last: previous ? totalsOf(previous.sets, previous.wexs, prevDur) : null },
   };
 }
 
