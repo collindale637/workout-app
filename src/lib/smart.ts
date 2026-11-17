@@ -113,6 +113,8 @@ export type ActivePlan = {
   nextDay: PlanDay | null;
   /** 1-based week number since the plan started. */
   week: number;
+  /** Plan days finished today (local date), so a day picked for today stops pinning "Up next" once it's done. */
+  doneToday: Set<string>;
 };
 
 export function usePlans() {
@@ -137,7 +139,9 @@ export function usePlan(planId: string | null | undefined) {
     const nextDay = days.length ? (lastDay ? days[(days.indexOf(lastDay) + 1) % days.length] : days[0]) : null;
     const start = plan.start_date ? new Date(`${plan.start_date}T00:00:00`).getTime() : new Date(plan.created_at).getTime();
     const week = Math.max(1, Math.floor((Date.now() - start) / (7 * 86_400_000)) + 1);
-    return { plan, days, exercises, nextDay, week };
+    const today = new Date().toDateString();
+    const doneToday = new Set(done.filter((w) => new Date(w.ended_at!).toDateString() === today).map((w) => w.plan_day_id!));
+    return { plan, days, exercises, nextDay, week, doneToday };
   }, [db, planId]);
 }
 

@@ -48,15 +48,20 @@ export function useUpNextChoice() {
   const { db } = useData();
   // null (not undefined) when nothing is saved, so "still loading" and "nothing saved" differ.
   const stored = useLiveQuery(async () => (await db.getMeta<UpNextChoice>("upNext")) ?? null, [db]);
+  const plan = useActivePlan();
   const today = todayIso();
-  const choice = stored && stored.date === today ? stored : null;
+  const todays = stored && stored.date === today ? stored : null;
+  // A plan day picked for today (Change, Regenerate, Switch, or an AI swap for it) stops counting once that day is
+  // finished, so "Up next" moves on to the plan's next day instead of showing the finished one again.
+  const pinned = todays?.mode === "ai" ? todays.ai?.planDayId : todays?.mode === "plan" ? todays.dayId : null;
+  const choice = todays && pinned && plan?.doneToday.has(pinned) ? null : todays;
   const setChoice = useCallback(
     async (c: Omit<UpNextChoice, "date">) => {
       await db.setMeta("upNext", { ...c, date: todayIso() });
     },
     [db],
   );
-  return { choice, setChoice, loaded: stored !== undefined };
+  return { choice, setChoice, loaded: stored !== undefined && plan !== undefined };
 }
 
 export function useUpNext(): UpNext | null | undefined {
