@@ -5,6 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useCatalog } from "@/lib/hooks";
 import { isCardioExercise } from "@/lib/cardio";
+import { isPerHand } from "@/lib/units";
 import { compareWorkout, findPrevious, historyBefore, FINISH_NOTES_KEY, type Comparison, type FinishNote, type FinishNotes } from "@/lib/compare";
 
 /**
@@ -46,6 +47,7 @@ export function useWorkoutComparison(workoutId: string | null): { comparison: Co
       previous: raw.prev,
       history: historyBefore(workout.started_at, raw.workouts, raw.hWexs, raw.hSets, workout.id),
       isBodyweight: (id) => (catalog.needs.get(id) ?? []).length === 0,
+      isPerHand: (id) => isPerHand(catalog.byId.get(id)),
       isCardio: (id) => isCardioExercise(catalog.byId.get(id)),
       units,
       durationSec,

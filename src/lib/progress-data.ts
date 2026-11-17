@@ -6,6 +6,7 @@ import { useData } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
 import { newId } from "@/lib/db/dexie";
 import { useCatalog } from "@/lib/hooks";
+import { isPerHand } from "@/lib/units";
 import { dateKey, liftSessions, type CardioEntry, type LiftSet, type MuscleSet, type WeightEntry } from "@/lib/progress";
 import type { BodyMetric } from "@/lib/db/types";
 
@@ -37,7 +38,7 @@ export function useProgressData() {
       const ex = catalog.byId.get(w.exercise_id);
       if (ex?.category === "cardio") continue;
       const at = workoutAt.get(w.workout_id)!;
-      liftSets.push({ workoutId: w.workout_id, exerciseId: w.exercise_id, at, type: s.type, weight: s.weight, reps: s.reps });
+      liftSets.push({ workoutId: w.workout_id, exerciseId: w.exercise_id, at, type: s.type, weight: s.weight, reps: s.reps, perHand: isPerHand(ex), isolation: ex?.mechanic === "isolation" });
       muscleSets.push({ at: s.completed_at, type: s.type, muscles: (catalog.musclesOf.get(w.exercise_id) ?? []).map((m) => ({ muscle_id: m.muscle_id, role: m.role })) });
     }
     // Cardio from open (unfinished) workouts waits until the workout is finished, like the history list.

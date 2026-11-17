@@ -10,7 +10,7 @@ import { todayIso } from "@/lib/plans";
 import { useNow } from "@/lib/use-now";
 import { dateKey } from "@/lib/progress";
 import { useWorkoutComparison } from "@/lib/compare-data";
-import { formatDuration, toDisplayWeight, volumeLb, weightUnit } from "@/lib/units";
+import { formatDuration, toDisplayWeight, hasBodyweightSets, isPerHand, volumeBy, VOLUME_NOTE, weightUnit } from "@/lib/units";
 import { NextUpRow } from "@/components/next-up-row";
 import { btn } from "@/components/ui/kit";
 
@@ -60,19 +60,20 @@ export function DoneTodayCard({ workoutId, trainAgain, onTrainAgain }: { workout
     if (!workout) return null;
     const wexs = await db.workout_exercises.where("workout_id").equals(workoutId).toArray();
     const sets = await db.sets.where("workout_exercise_id").anyOf(wexs.map((w) => w.id)).toArray();
-    return { workout, sets };
+    const hand = new Set((await db.exercises.bulkGet([...new Set(wexs.map((w) => w.exercise_id))])).filter((e) => isPerHand(e)).map((e) => e!.id));
+    return { workout, sets, wexs, hand };
   }, [db, workoutId]);
   const compared = useWorkoutComparison(workoutId);
   if (!data) return null;
 
-  const { workout, sets } = data;
+  const { workout, sets, wexs, hand } = data;
   const dur = workout.ended_at ? (new Date(workout.ended_at).getTime() - new Date(workout.started_at).getTime()) / 1000 : 0;
   const records = compared?.comparison.records.length ?? 0;
   const notStarted = compared?.note?.notStarted.length ?? 0;
   const tiles: [string, string][] = [
     [formatDuration(dur), "TIME"],
     [String(sets.filter((s) => s.type !== "warmup").length), "SETS"],
-    [Math.round(toDisplayWeight(volumeLb(sets), units)).toLocaleString(), `${weightUnit(units).toUpperCase()} MOVED`],
+    [Math.round(toDisplayWeight(volumeBy(sets, wexs, (id) => hand.has(id)), units)).toLocaleString(), `${weightUnit(units).toUpperCase()} MOVED`],
   ];
 
   return (
@@ -98,6 +99,7 @@ export function DoneTodayCard({ workoutId, trainAgain, onTrainAgain }: { workout
             </div>
           ))}
         </div>
+        {hasBodyweightSets(sets) && <p className="-mt-1 text-xs font-semibold text-muted">{VOLUME_NOTE}</p>}
         {(records > 0 || notStarted > 0) && (
           <p className="text-sm font-semibold text-muted">
             {records > 0 && <span className="text-accent-soft">{records} {records === 1 ? "record" : "records"}</span>}

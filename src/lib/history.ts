@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData } from "@/lib/db/provider";
-import { volumeLb } from "@/lib/units";
+import { isPerHand, volumeBy } from "@/lib/units";
 import type { CardioSession, Workout } from "@/lib/db/types";
 
 export type HistoryItem =
@@ -22,6 +22,7 @@ export function useHistory(limit = 200) {
     for (const w of wexs) wexBy.set(w.workout_id, [...(wexBy.get(w.workout_id) ?? []), w]);
     const setsBy = new Map<string, typeof sets>();
     for (const s of sets) setsBy.set(s.workout_exercise_id, [...(setsBy.get(s.workout_exercise_id) ?? []), s]);
+    const perHandIds = new Set((await db.exercises.bulkGet([...new Set(wexs.map((w) => w.exercise_id))])).filter((e) => isPerHand(e)).map((e) => e!.id));
     const openIds = new Set((await db.workouts.filter((w) => !w.ended_at).primaryKeys()) as string[]);
 
     const items: HistoryItem[] = workouts.map((w) => {
@@ -33,7 +34,7 @@ export function useHistory(limit = 200) {
         workout: w,
         exerciseIds: list.map((x) => x.exercise_id),
         sets: ss.filter((s) => s.type !== "warmup").length,
-        volume: volumeLb(ss),
+        volume: volumeBy(ss, list, (id) => perHandIds.has(id)),
         durationSec: (new Date(w.ended_at!).getTime() - new Date(w.started_at).getTime()) / 1000,
         cardio: cardio.filter((c) => c.workout_id === w.id),
       };

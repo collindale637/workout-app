@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimate1RM, formatDuration, isPerHand, formatWeight, fromDisplayWeight, toDisplayDistance, toDisplayWeight, volumeLb } from "@/lib/units";
+import { estimate1RM, formatDuration, hasBodyweightSets, isPerHand, formatWeight, fromDisplayWeight, toDisplayDistance, toDisplayWeight, volumeBy, volumeLb } from "@/lib/units";
 
 describe("units", () => {
   it("round-trips kilograms through pounds", () => {
@@ -28,5 +28,22 @@ describe("units", () => {
   it("estimates 1RM", () => {
     expect(estimate1RM(200, 1)).toBe(200);
     expect(Math.round(estimate1RM(185, 8))).toBe(234);
+  });
+});
+
+describe("batch 12: per-hand volume", () => {
+  const wexs = [{ id: "d", exercise_id: "db_press" }, { id: "b", exercise_id: "bench" }];
+  const set = (wex: string, weight: number | null, reps: number, type = "working") => ({ workout_exercise_id: wex, weight, reps, type });
+  it("counts both dumbbells, one barbell, and skips warm-ups", () => {
+    const sets = [set("d", 50, 10), set("d", 50, 8, "warmup"), set("b", 100, 10)];
+    expect(volumeBy(sets, wexs, (id) => id === "db_press")).toBe(50 * 10 * 2 + 100 * 10);
+  });
+  it("one-dumbbell lifts aren't per-hand", () => {
+    for (const n of ["One-Arm Dumbbell Row", "Goblet Squat With Dumbbell", "Dumbbell Pullover", "Concentration Curls With Dumbbell"]) expect(isPerHand({ name: n }), n).toBe(false);
+    expect(isPerHand({ name: "Dumbbell Bench Press" })).toBe(true);
+  });
+  it("notes bodyweight sets", () => {
+    expect(hasBodyweightSets([set("b", null, 10)])).toBe(true);
+    expect(hasBodyweightSets([set("b", 100, 10), set("b", null, 10, "warmup")])).toBe(false);
   });
 });
