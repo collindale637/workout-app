@@ -7,6 +7,7 @@ import { adaptToGym, dayStyle, generateWorkout, type GenItem, type Swap } from "
 import { pickFreshTargets } from "@/lib/recovery";
 import { recoveryScores, useActivePlan, useGeneratorInputs, type ActivePlan } from "@/lib/smart";
 import { todayIso } from "@/lib/plans";
+import { lighterItems, lighterMinutes } from "@/lib/today-alt";
 import type { PlanDay } from "@/lib/db/types";
 
 /*
@@ -20,7 +21,13 @@ import type { PlanDay } from "@/lib/db/types";
 export type UpNextMode = "plan" | "fresh" | "muscles" | "ai";
 /** A workout from "Customize with AI". planDayId is set when it replaces today's plan day, so the plan still moves on. */
 export type AiPick = { name: string; summary: string; items: GenItem[]; planDayId: string | null };
-export type UpNextChoice = { date: string; mode: UpNextMode; dayId?: string | null; muscles?: string[]; seed: number; ai?: AiPick };
+/**
+ * via "switch": picked with Today's Switch row (not ready → train another day or go lighter). light: every lift capped
+ * at 2 sets. Both reset daily with the rest of the choice.
+ */
+export type UpNextChoice = {
+  date: string; mode: UpNextMode; dayId?: string | null; muscles?: string[]; seed: number; ai?: AiPick; via?: "switch"; light?: boolean;
+};
 
 export type UpNext = {
   mode: UpNextMode;
@@ -33,6 +40,8 @@ export type UpNext = {
   plan: ActivePlan | null;
   seed: number;
   source: "plan" | "generated" | "ai";
+  /** "Go lighter" (plan mode): lifts capped at 2 sets; minutes is the estimate for the shorter session. */
+  light?: { minutes: number };
 };
 
 export function useUpNextChoice() {
@@ -91,6 +100,14 @@ export function useUpNext(): UpNext | null | undefined {
           ? planned
           : generateWorkout(catalog, { ...base, goal: plan.plan.goal ?? profile.goal, targets: day.target_muscle_ids, cardio: style.cardio ?? undefined, focus: style.focus }).items;
       const adapted = adaptToGym(catalog, items, gen);
+      if (choice?.light) {
+        const light = lighterItems(adapted.items, (id) => catalog.byId.get(id)?.category === "cardio");
+        const minutes = lighterMinutes(profile.session_minutes, adapted.items, light);
+        return {
+          mode, title: day.name, subtitle: `Lighter today: 2 sets per lift · about ${minutes} min`,
+          targets: day.target_muscle_ids, items: light, swaps: adapted.swaps, day, plan, seed, source: "plan", light: { minutes },
+        };
+      }
       return {
         mode, title: day.name, subtitle: `${plan.plan.name} · Day ${day.day_order} of ${plan.days.length}${seed ? " · regenerated" : ""}`,
         targets: day.target_muscle_ids, items: adapted.items, swaps: adapted.swaps, day, plan, seed, source: "plan",

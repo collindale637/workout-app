@@ -17,6 +17,7 @@ import { doneDisc } from "@/components/ui/kit";
 import { QuickCardio } from "./quick-cardio";
 import { SyncBadge } from "@/components/sync-badge";
 import { UpNextCard } from "./up-next-card";
+import { DoneTodayCard, useDoneToday, useTrainAgain } from "./done-today-card";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const noop = () => () => {};
@@ -50,6 +51,8 @@ export function TodayScreen() {
   }, [todayKey, history]);
 
   const lastWorkout = history?.find((h) => h.kind === "workout");
+  const doneToday = useDoneToday();
+  const trainAgain = useTrainAgain();
 
   return (
     <main className="mt-4 flex flex-col gap-4">
@@ -95,11 +98,21 @@ export function TodayScreen() {
 
       <CardioTimerBanner />
 
-      {open ? <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} /> : <UpNextCard hasGym={gyms.length > 0} />}
+      {open ? (
+        <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} />
+      ) : doneToday === undefined ? null : doneToday ? (
+        <>
+          <DoneTodayCard workoutId={doneToday.id} trainAgain={trainAgain.on} onTrainAgain={() => void trainAgain.set()} />
+          {trainAgain.on && <UpNextCard hasGym={gyms.length > 0} />}
+        </>
+      ) : (
+        <UpNextCard hasGym={gyms.length > 0} />
+      )}
 
       <QuickCardio />
 
-      {lastWorkout?.kind === "workout" && !open && <LastWorkout item={lastWorkout} />}
+      {/* The done card already shows today's workout. */}
+      {lastWorkout?.kind === "workout" && !open && !doneToday && <LastWorkout item={lastWorkout} />}
 
       {gyms.length === 0 && (
         <Link href="/more/gyms/edit?new=1" className="rounded-3xl border-2 border-dashed border-accent-strong/60 p-4 text-base font-bold text-accent">
