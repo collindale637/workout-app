@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimate1RM, formatDuration, formatWeight, fromDisplayWeight, toDisplayDistance, toDisplayWeight, volumeLb } from "@/lib/units";
+import { estimate1RM, formatDuration, isPerHand, formatWeight, fromDisplayWeight, toDisplayDistance, toDisplayWeight, volumeLb } from "@/lib/units";
 
 describe("units", () => {
   it("round-trips kilograms through pounds", () => {
@@ -13,6 +13,13 @@ describe("units", () => {
   it("formats durations", () => {
     expect(formatDuration(65)).toBe("1:05");
     expect(formatDuration(3725)).toBe("1:02:05");
+  });
+  it("knows per-hand (dumbbell) lifts", () => {
+    expect(isPerHand({ name: "Dumbbell Bench Press" })).toBe(true);
+    expect(isPerHand({ name: "Incline DUMBBELL Curl" })).toBe(true);
+    expect(isPerHand({ name: "Barbell Bench Press" })).toBe(false);
+    expect(isPerHand({ name: "Push-Up" })).toBe(false);
+    expect(isPerHand(undefined)).toBe(false);
   });
   it("converts distance", () => expect(toDisplayDistance(3.10686, "kg")).toBe(5));
   it("counts volume without warm-ups", () => {

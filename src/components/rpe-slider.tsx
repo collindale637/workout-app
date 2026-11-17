@@ -10,13 +10,17 @@ import { RPE_SCALE } from "@/lib/defaults";
  * defaultRpe null = no default (cardio): nothing is outlined until you pick.
  */
 export function RpeSlider({
-  value, defaultRpe, resetKey, onChange, tone = "blue",
+  value, defaultRpe, resetKey, onChange, tone = "blue", bleed = true, pill = false,
 }: {
   value: number | null;
   defaultRpe: number | null;
   resetKey: string;
   onChange: (v: number | null) => void;
   tone?: "blue" | "dark";
+  /** Stretch 20px past the parent's padding on both sides (the default); false keeps it inside its box (workout dock). */
+  bleed?: boolean;
+  /** Round chips (workout dock, UX spec 5.4); otherwise rounded squares. */
+  pill?: boolean;
 }) {
   const strip = useRef<HTMLDivElement>(null);
   const shown = value ?? defaultRpe ?? 6;
@@ -32,7 +36,7 @@ export function RpeSlider({
       role="group"
       data-no-sheet-drag
       aria-label="RPE, slide for lower values"
-      className={`-mx-5 flex touch-pan-x overflow-x-auto overscroll-x-contain px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${blue ? "-my-1 gap-[5px] py-1" : "gap-1.5"}`}
+      className={`${bleed ? "-mx-5 px-5" : ""} flex touch-pan-x overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${blue ? "-my-1 gap-[5px] py-1" : "gap-1.5"}`}
     >
       {RPE_SCALE.map((r) => {
         const on = value === r;
@@ -49,7 +53,7 @@ export function RpeSlider({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : r)}
-            className={`display num relative shrink-0 font-extrabold ${blue ? "h-[42px] w-12 rounded-[11px] text-[17px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']" : "h-12 w-[3.25rem] rounded-xl text-lg"} ${cls}`}
+            className={`display num relative shrink-0 font-extrabold ${pill ? "rounded-full" : blue ? "rounded-[11px]" : "rounded-xl"} ${blue ? "h-[42px] w-12 text-[17px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']" : "h-12 w-[3.25rem] text-lg"} ${cls}`}
           >
             {r}
           </button>

@@ -12,6 +12,8 @@ export type ReorderItem = {
   actions: RowAction[];
   onTap: () => void;
   ariaLabel: string;
+  /** Drawn on the face after the tappable part (e.g. a ⋯ button and the drag grip). Taps here don't open the row. */
+  trailing?: ReactNode;
   /** Drawn above the row, e.g. the line joining a superset. */
   before?: ReactNode;
   liClassName?: string;
@@ -233,7 +235,7 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
           <li key={it.id} data-row={it.id} className={`relative ${draggingId === it.id ? "z-10" : ""} ${it.liClassName ?? ""}`}>
             {it.before}
             <div className="relative">
-              <div className="absolute inset-0 flex justify-end overflow-hidden rounded-2xl" aria-hidden={!open}>
+              <div className="absolute inset-0 flex justify-end overflow-hidden rounded-[14px]" aria-hidden={!open}>
                 {it.actions.map((a) => (
                   <button
                     key={a.key}
@@ -265,10 +267,11 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
                     if (openId) return setOpenId(null);
                     it.onTap();
                   }}
-                  className="flex w-full min-w-0 items-center gap-3 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
                   {it.face}
                 </button>
+                {it.trailing}
               </div>
             </div>
           </li>
