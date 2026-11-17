@@ -15,8 +15,7 @@ import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
 import { RPE_SCALE } from "@/lib/defaults";
-import { formatDuration, formatMax, formatWeight, fromDisplayWeight, isPerHand, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
-import { bestE1rm } from "@/lib/progress";
+import { formatDuration, formatWeight, fromDisplayWeight, isPerHand, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
@@ -25,6 +24,9 @@ import { Sheet, btn, doneDisc, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
+import { setsLine, shortDate } from "@/lib/compare";
+import { useWorkoutComparison } from "@/lib/compare-data";
+import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
 import { RestBar, SetDock, type DockSet, type DockUpNext } from "./set-dock";
@@ -902,10 +904,11 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           elapsed={elapsed}
           cardio={cardioRows ?? []}
           timer={liveTimer}
-          bestBefore={history}
           names={catalog.byId}
+          isCardioWex={isCardioWex}
+          cardioDone={(w) => cardioByWex.has(w.id)}
           onSave={async () => {
-            await actions.finish(workout.id);
+            await actions.finish(workout.id, (id) => catalog.byId.get(id)?.name);
             router.replace(`/progress/session?id=${workout.id}&done=1`);
           }}
           onDiscard={async () => {
@@ -1174,77 +1177,89 @@ function NumberForm({ initial, decimal, allowBlank, blankLabel, onSave }: { init
 }
 
 function FinishSummary({
-  workout, wexs, setsBy, units, elapsed, cardio, timer, bestBefore, names, onSave, onDiscard, onClose,
+  workout, wexs, setsBy, units, elapsed, cardio, timer, names, isCardioWex, cardioDone, onSave, onDiscard, onClose,
 }: {
   workout: Workout; wexs: WorkoutExercise[]; setsBy: Map<string, WorkoutSet[]>; units: Units; elapsed: number;
-  cardio: CardioSession[]; timer: CardioTimer | null;
-  bestBefore: Map<string, { bestWeight: number; best1RM: number }> | undefined; names: Map<string, { name: string }>;
+  cardio: CardioSession[]; timer: CardioTimer | null; names: Map<string, { name: string }>;
+  isCardioWex: (w: WorkoutExercise) => boolean; cardioDone: (w: WorkoutExercise) => boolean;
   onSave: () => void; onDiscard: () => void; onClose: () => void;
 }) {
+  const cmp = useWorkoutComparison(workout.id)?.comparison;
+  const [allOpen, setAllOpen] = useState(false);
   const all = wexs.flatMap((w) => setsBy.get(w.id) ?? []);
   const workingSets = all.filter((s) => s.type !== "warmup").length;
   const volume = volumeLb(all);
-  const prs = wexs.flatMap((w) => {
-    const prev = bestBefore?.get(w.exercise_id);
-    const sets = (setsBy.get(w.id) ?? []).filter((s) => s.type !== "warmup" && s.weight && s.reps);
-    if (!prev || !sets.length || (prev.bestWeight === 0 && prev.best1RM === 0)) return [];
-    const top = Math.max(...sets.map((s) => s.weight!));
-    const top1 = bestE1rm(sets);
-    if (top > prev.bestWeight) return [`${names.get(w.exercise_id)?.name}: heaviest ever, ${formatWeight(top, units)} ${weightUnit(units)}`];
-    if (top1 > prev.best1RM + 0.5) return [`${names.get(w.exercise_id)?.name}: best estimated max, ${formatMax(top1, units)} ${weightUnit(units)}`];
-    return [];
-  });
-  // Every logged set of each lift, in order (exercises without sets are dropped on save).
-  const setText = (s: WorkoutSet) => {
-    const load = s.weight ? `${formatWeight(s.weight, units)} ${weightUnit(units)}` : "Bodyweight";
-    return s.reps ? `${load} × ${s.reps}` : load;
-  };
-  const lifts = wexs.flatMap((w) => {
-    const sets = [...(setsBy.get(w.id) ?? [])].sort((a, b) => a.set_no - b.set_no);
-    if (!sets.length) return [];
-    return [{ id: w.id, name: names.get(w.exercise_id)?.name ?? w.exercise_id, sets }];
-  });
-  const stat = (v: string, l: string) => (
+  const nameOf = (w: WorkoutExercise) => names.get(w.exercise_id)?.name ?? w.exercise_id;
+  const last = cmp?.totals.last ?? null;
+
+  // Third line on each tile: vs the previous workout (P).
+  const vs = (diff: number, text: (n: number) => string, less: string, more: string) => (diff === 0 ? "same" : `${text(Math.abs(diff))} ${diff < 0 ? less : more}`);
+  const shown = (lb: number) => Math.round(toDisplayWeight(lb, units));
+  const stat = (v: string, l: string, sub: string | null) => (
     <div className="rounded-2xl bg-card-2 p-3 text-center">
       <div className="display num text-3xl font-extrabold">{v}</div>
       <div className="text-xs font-bold tracking-[0.1em] text-muted">{l}</div>
+      {sub && <div className="mt-0.5 text-xs font-bold text-muted">{sub}</div>}
     </div>
   );
+
+  // Still on today's list: sets left on started lifts, and anything not started.
+  const unfinished = wexs.flatMap((w) => {
+    if (isCardioWex(w)) return cardioDone(w) ? [] : [{ id: w.id, name: nameOf(w), left: "not started" }];
+    const logged = (setsBy.get(w.id) ?? []).filter((x) => x.type !== "warmup").length;
+    if (!logged) return [{ id: w.id, name: nameOf(w), left: "not started" }];
+    const left = (w.target_sets ?? 3) - filledSets(setsBy.get(w.id) ?? [], w.target_sets ?? 3, w.skipped_sets);
+    return left > 0 ? [{ id: w.id, name: nameOf(w), left: left === 1 ? "1 set left" : `${left} sets left` }] : [];
+  });
+
+  const lifts = wexs.flatMap((w) => {
+    const sets = [...(setsBy.get(w.id) ?? [])].filter((x) => x.type !== "warmup").sort((a, b) => a.set_no - b.set_no);
+    return sets.length ? [{ id: w.id, name: nameOf(w), line: setsLine(sets, units) }] : [];
+  });
+  const vsDate = cmp?.previous ? shortDate(cmp.previous.started_at) : null;
+  const upLine = cmp && vsDate && cmp.compared > 0 ? `up on ${cmp.up} of ${cmp.compared} ${cmp.compared === 1 ? "lift" : "lifts"} vs ${vsDate}` : null;
+  const recordCount = cmp?.records.length ?? 0;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-2">
-        {stat(formatDuration(elapsed), "TIME")}
-        {stat(String(workingSets), "SETS")}
-        {stat(`${Math.round(units === "kg" ? volume / 2.2046 : volume).toLocaleString()}`, `${weightUnit(units).toUpperCase()} MOVED`)}
+        {stat(formatDuration(elapsed), "TIME", last ? vs(Math.round(elapsed - last.durationSec), formatDuration, "less", "more") : null)}
+        {stat(String(workingSets), "SETS", last ? vs(workingSets - last.sets, String, "fewer", "more") : null)}
+        {stat(
+          shown(volume).toLocaleString(),
+          `${weightUnit(units).toUpperCase()} MOVED`,
+          last ? vs(shown(volume) - shown(last.volumeLb), (n) => n.toLocaleString(), "less", "more") : null,
+        )}
       </div>
-      {prs.length > 0 && (
-        <div className="rounded-2xl border-2 border-accent-strong bg-primary/15 p-3">
-          <div className="display text-lg font-extrabold text-accent-soft">🏆 New records</div>
-          <ul className="mt-1 text-sm font-semibold">{prs.map((p) => <li key={p}>{p}</li>)}</ul>
+      {recordCount > 0 ? (
+        <div className="flex items-center gap-2.5 rounded-2xl bg-primary/15 px-3 py-2.5 text-sm font-bold text-accent-soft">
+          <PrBadge />
+          <span>
+            {recordCount} {recordCount === 1 ? "record" : "records"}
+            {upLine ? ` · ${upLine}` : ""}
+          </span>
         </div>
+      ) : (
+        upLine && <div className="rounded-2xl bg-primary/15 px-3 py-2.5 text-sm font-bold text-accent-soft">{upLine[0].toUpperCase() + upLine.slice(1)}</div>
       )}
+      {unfinished.length > 0 && <NotDoneBlock label="STILL ON TODAY'S LIST" rows={unfinished.map((u) => ({ key: u.id, name: u.name, right: u.left }))} />}
       {lifts.length > 0 && (
-        <ul className="flex flex-col gap-3 rounded-2xl bg-card-2 px-3 py-3 text-sm font-semibold">
-          {lifts.map((l) => (
-            <li key={l.id}>
-              <div className="truncate text-base font-bold">{l.name}</div>
-              <ol className="mt-1 flex flex-col">
-                {l.sets.map((st, i) => (
-                  <li key={st.id} className="flex justify-between gap-3 py-0.5">
-                    <span className="text-muted">
-                      {i + 1}
-                      {st.type === "warmup" ? " · warm-up" : st.type === "drop" ? " · drop" : ""}
-                    </span>
-                    <span className="num">
-                      {setText(st)}
-                      {st.rpe ? <span className="text-muted"> · RPE {st.rpe}</span> : null}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col rounded-2xl bg-card-2">
+          <button type="button" aria-expanded={allOpen} onClick={() => setAllOpen(!allOpen)} className="flex min-h-11 items-center justify-between px-4 text-sm font-bold">
+            All {workingSets} {workingSets === 1 ? "set" : "sets"}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className={`text-muted ${allOpen ? "rotate-180" : ""}`} aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+          {allOpen && (
+            <ul className="flex flex-col gap-1 px-4 pb-3 text-sm font-semibold">
+              {lifts.map((l) => (
+                <li key={l.id} className="flex justify-between gap-3">
+                  <span className="min-w-0 truncate font-bold">{l.name}</span>
+                  <span className="num shrink-0 text-muted">{l.line}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       {cardio.length > 0 && (
         <ul className="rounded-2xl bg-card-2 px-3 py-2 text-sm font-semibold">
@@ -1265,7 +1280,6 @@ function FinishSummary({
       <button type="button" className={btn.primary} onClick={onSave}>Save workout</button>
       <button type="button" className={btn.secondary} onClick={onClose}>Keep going</button>
       <button type="button" className={`${btn.ghost} text-danger`} onClick={onDiscard}>Discard workout</button>
-      <p className="text-center text-xs font-medium text-muted">{workout.name ?? "Workout"} · started {new Date(workout.started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
     </div>
   );
 }
