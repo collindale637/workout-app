@@ -14,7 +14,7 @@ import { loadFor, suggestNext } from "@/lib/progression";
 import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
-import { formatDuration, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, toDisplayWeight, VOLUME_NOTE, volumeBy, weightStep, weightUnit } from "@/lib/units";
+import { formatDuration, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, repsWheel, toDisplayWeight, VOLUME_NOTE, volumeBy, weightUnit, weightWheel, wheelNumber } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
@@ -320,14 +320,23 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (upNextFrom === w.id) setUpNextFrom(null);
   }
 
-  const step = weightStep(units);
+  // Dock wheels (weight in display units, reps). See weightWheel / repsWheel in lib/units.
   const shownWeight = draft.weight === null ? null : toDisplayWeight(draft.weight, units);
-  const bumpWeight = (dir: 1 | -1) => {
-    const base = shownWeight ?? 0;
-    const v = Math.max(0, Math.round((base + dir * step) / step) * step);
-    setDraft({ ...draft, weight: v === 0 && isBodyweight ? null : fromDisplayWeight(v, units) });
+  const wW = weightWheel(shownWeight, isBodyweight, units);
+  const wheelW = {
+    options: wW.values.map((v) => (v === null ? (isBodyweight ? "BW" : "—") : wheelNumber(v))),
+    index: wW.index,
+    onPick: (i: number) => {
+      const v = wW.values[i];
+      setDraft({ ...draft, weight: v === null ? null : fromDisplayWeight(v, units) });
+    },
   };
-  const bumpReps = (dir: 1 | -1) => setDraft({ ...draft, reps: Math.max(0, (draft.reps ?? 0) + dir) });
+  const wR = repsWheel(draft.reps);
+  const wheelR = {
+    options: wR.values.map((v) => (v === null ? "—" : String(v))),
+    index: wR.index,
+    onPick: (i: number) => setDraft({ ...draft, reps: wR.values[i] }),
+  };
 
   const targetLabel = current
     ? current.rep_min && current.rep_max && current.rep_min !== current.rep_max
@@ -499,7 +508,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const same = prev[setNumber - 1] ?? prev[prev.length - 1] ?? null;
     const unit = weightUnit(units);
     const weightLabel = isBodyweight && draft.weight === null ? "BODYWEIGHT" : `${unit.toUpperCase()}${isPerHand(ex) ? " EACH" : ""}`;
-    const weightValue = draft.weight === null ? (isBodyweight ? "BW" : "—") : formatWeight(draft.weight, units);
     return {
       kind: "set",
       hint: warmHint
@@ -510,23 +518,24 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             ? { text: estHint, tone: "plain" }
             : { text: hist?.lastDate ? `LAST TIME · ${lastTimeLabel(hist.lastDate)}` : "LAST TIME", tone: "plain" },
       last: same ? { main: `${same.weight === null ? "BW" : `${formatWeight(same.weight, units)} ${unit}`} × ${same.reps ?? "—"}`, rpe: same.rpe !== null ? String(same.rpe) : null } : null,
-      weight: { label: weightLabel, value: weightValue, onMinus: () => bumpWeight(-1), onPlus: () => bumpWeight(1), onTap: () => setTyping("weight") },
-      reps: { label: "REPS", value: draft.reps === null ? "—" : String(draft.reps), onMinus: () => bumpReps(-1), onPlus: () => bumpReps(1), onTap: () => setTyping("reps") },
+      weight: { label: weightLabel, ...wheelW, onTap: () => setTyping("weight") },
+      reps: { label: "REPS", ...wheelR, onTap: () => setTyping("reps") },
       // Warm-ups are easy by design, so no RPE for them.
       rpe:
         draft.type === "warmup" ? null : (
-          <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={dock.id} onChange={(rpe) => setDraft({ ...draft, rpe })} bleed={false} pill />
+          <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={dock.id} onChange={(rpe) => setDraft({ ...draft, rpe })} bleed={false} pill plain />
         ),
       logLabel,
       onLog: () => void log(),
       micro: setChipLabel,
       big: `${draft.weight === null ? (isBodyweight ? "BW" : "—") : `${formatWeight(draft.weight, units)} ${unit.toUpperCase()}`} × ${draft.reps ?? "—"}`,
+      progress: { set: setNumber, total: dock.target_sets ?? 3 },
     };
   })();
   const mainPad = dock
     ? dockHidden
-      ? "pb-[calc(92px+env(safe-area-inset-bottom))]"
-      : "pb-[calc(260px+env(safe-area-inset-bottom))]"
+      ? "pb-[calc(128px+env(safe-area-inset-bottom))]"
+      : "pb-[calc(346px+env(safe-area-inset-bottom))]"
     : "pb-10";
 
   return (
