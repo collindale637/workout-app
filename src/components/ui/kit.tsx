@@ -30,7 +30,7 @@ export function Chip({ active, onClick, children, className = "" }: { active: bo
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`min-h-11 shrink-0 rounded-2xl border-2 px-3 text-sm font-bold ${
+      className={`flex min-h-11 shrink-0 items-center justify-center rounded-2xl border-2 px-2 text-center text-sm font-bold whitespace-nowrap ${
         active ? "border-accent-strong bg-primary/15 text-accent-soft" : "border-line bg-card-2 text-muted"
       } ${className}`}
     >
@@ -127,7 +127,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
 }
 
 /** A tappable list row with a chevron. */
-export function RowLink({ href, title, detail, right }: { href: string; title: string; detail?: string; right?: React.ReactNode }) {
+export function RowLink({ href, title, detail, right }: { href: string; title: string; detail?: React.ReactNode; right?: React.ReactNode }) {
   return (
     <Link href={href} className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
       <div className="min-w-0 flex-1">

@@ -97,7 +97,7 @@ export function DayEditor() {
 
       <button type="button" onClick={() => setMusclesOpen(true)} className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4 text-left">
         <span className="flex items-baseline justify-between">
-          <span className={label}>TRAINS</span>
+          <span className={label}>TARGET MUSCLES</span>
           <span className="display text-sm font-extrabold tracking-[0.06em] text-accent">Edit</span>
         </span>
         <MusclePills catalog={catalog} ids={day.target_muscle_ids} max={12} />

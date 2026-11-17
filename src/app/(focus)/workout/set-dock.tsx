@@ -142,7 +142,6 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
       <button type="button" onClick={onShow} className="flex min-w-0 flex-1 flex-col items-start text-left" aria-label="Show the set panel">
         <span className={`display num text-[11px] leading-none font-bold tracking-[0.12em] ${upNext ? "text-[#C9F7DA]" : "text-[#DCE4FF]"}`}>
           {upNext ? "✓ DONE · UP NEXT" : content.micro}
-          {!upNext && rest && ` · REST ${formatDuration(rest.left)}`}
         </span>
         {upNext ? (
           <span className="display mt-1 block w-full truncate text-[24px] leading-none font-extrabold">{content.nextName}</span>
@@ -150,6 +149,12 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
           <span className="display num mt-1 block w-full truncate text-[26px] leading-none font-extrabold">{content.big}</span>
         )}
       </button>
+      {!upNext && rest && (
+        <div className="flex shrink-0 flex-col items-center" role="timer" aria-label={`Rest ${formatDuration(rest.left)} left`}>
+          <span className="display text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">REST</span>
+          <span className="display num mt-1 text-[34px] leading-none font-extrabold">{formatDuration(rest.left)}</span>
+        </div>
+      )}
       <button type="button" onClick={upNext ? content.onStart : content.onLog} className={`${white} h-12 shrink-0 px-5 text-lg`}>
         {upNext ? "Start" : content.logLabel}
       </button>
