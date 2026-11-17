@@ -165,3 +165,35 @@ export function Card({ children, className = "" }: { children: React.ReactNode; 
 export function Empty({ children }: { children: React.ReactNode }) {
   return <p className="rounded-3xl border border-dashed border-line px-5 py-8 text-center text-base font-medium text-muted">{children}</p>;
 }
+
+/** A "Are you sure?" bottom sheet, in place of the browser's confirm() pop-up. Cancel is the safe, first-reached button. */
+export function ConfirmSheet({
+  open, title, body, confirmLabel, cancelLabel = "Keep it", onConfirm, onClose,
+}: {
+  open: boolean;
+  title: string;
+  body?: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  onConfirm: () => void | Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="flex flex-col gap-3">
+        {body && <p className="text-base font-medium text-muted">{body}</p>}
+        <button type="button" className={btn.secondary} onClick={onClose}>{cancelLabel}</button>
+        <button
+          type="button"
+          className={btn.danger}
+          onClick={async () => {
+            onClose();
+            await onConfirm();
+          }}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </Sheet>
+  );
+}

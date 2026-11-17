@@ -49,7 +49,8 @@ const white =
   "display flex items-center justify-center rounded-full bg-white font-extrabold tracking-[0.04em] text-primary active:translate-y-px";
 
 /** "✓ Set 2 logged · 70 lb × 10" with Undo, shown for 5 s after a log (the screen owns the timer). */
-export type DockToast = { text: string; onUndo: () => void };
+/** "Set logged · Undo" (onUndo) or, with `warn`, a message that blocked the Log tap (no Undo). */
+export type DockToast = { text: string; onUndo?: () => void; warn?: boolean };
 
 export function SetDock({
   hidden, onHiddenChange, rest, content, toast = null,
@@ -112,15 +113,17 @@ export function SetDock({
       {toast && (
         <div
           data-no-sheet-drag
-          role="status"
+          role={toast.warn ? "alert" : "status"}
           className="absolute inset-x-3 bottom-[calc(100%+8px)] flex h-12 items-center gap-2 rounded-2xl border border-line bg-card-2 pr-0.5 pl-4 text-ink"
         >
           <span className="num min-w-0 flex-1 truncate text-sm font-bold">
-            <span className="text-good">✓</span> {toast.text}
+            <span className={toast.warn ? "text-warn" : "text-good"}>{toast.warn ? "!" : "✓"}</span> {toast.text}
           </span>
-          <button type="button" onClick={toast.onUndo} className="display h-11 min-w-11 shrink-0 rounded-xl px-3 text-base font-extrabold text-accent active:bg-line">
-            Undo
-          </button>
+          {toast.onUndo && (
+            <button type="button" onClick={toast.onUndo} className="display h-11 min-w-11 shrink-0 rounded-xl px-3 text-base font-extrabold text-accent active:bg-line">
+              Undo
+            </button>
+          )}
         </div>
       )}
       <button type="button" onClick={() => onHiddenChange(!hidden)} aria-label={hidden ? "Show the set panel" : "Hide the set panel"} className="flex h-5 w-full items-center justify-center">
