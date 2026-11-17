@@ -10,6 +10,7 @@ import { isHold, isIsolation } from "@/lib/generator";
 import { isCardioExercise } from "@/lib/cardio";
 import { clearCardioTimer } from "@/lib/cardio-timer";
 import { bestE1rm } from "@/lib/progress";
+import { addFinishNote, FINISH_NOTES_KEY, type FinishNotes } from "@/lib/compare";
 import type { CardioSession, Exercise, SetType, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 export type RestState = { endsAt: number; total: number; wexId: string } | null;
@@ -280,14 +281,27 @@ export function useWorkoutActions() {
   );
 
   const finish = useCallback(
-    async (id: string) => {
+    async (id: string, nameOf?: (exerciseId: string) => string | undefined) => {
       // Drop exercises with no sets (or, for cardio, no results) so history stays clean.
-      const wexs = await db.workout_exercises.where("workout_id").equals(id).toArray();
+      const wexs = await db.workout_exercises.where("workout_id").equals(id).sortBy("sort_order");
       const cardioDone = new Set((await db.cardio_sessions.where("workout_id").equals(id).toArray()).map((c) => c.workout_exercise_id));
+      const empty: WorkoutExercise[] = [];
       for (const w of wexs) {
         if (cardioDone.has(w.id)) continue;
-        if ((await db.sets.where("workout_exercise_id").equals(w.id).count()) === 0) await removeWex(w.id);
+        if ((await db.sets.where("workout_exercise_id").equals(w.id).count()) === 0) empty.push(w);
       }
+      // Remember what wasn't started (this phone only) so the saved screen and Today can still say so.
+      if (empty.length) {
+        const notes = await db.getMeta<FinishNotes>(FINISH_NOTES_KEY);
+        await db.setMeta(
+          FINISH_NOTES_KEY,
+          addFinishNote(notes, id, {
+            at: nowIso(),
+            notStarted: empty.map((w) => ({ exercise_id: w.exercise_id, name: nameOf?.(w.exercise_id) ?? w.exercise_id, sets: w.target_sets ?? 3 })),
+          }),
+        );
+      }
+      for (const w of empty) await removeWex(w.id);
       await db.workouts.update(id, { ended_at: nowIso() });
       await markDirty(db, "workouts", id);
       await db.setMeta("rest", null);
