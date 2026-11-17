@@ -1,5 +1,6 @@
 "use client";
 
+import { AvoidEditor } from "@/components/avoid-editor";
 import { useEffect, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile";
@@ -46,6 +47,8 @@ export function ProfileForm() {
           cardio_pref: draft.cardio_pref ?? "auto",
           height_in: draft.height_in ?? null,
           sex: draft.sex ?? null,
+          avoid_areas: draft.avoid_areas ?? [],
+          injury_note: draft.injury_note?.trim() || null,
         });
         setMessage("Saved");
       }}
@@ -94,6 +97,10 @@ export function ProfileForm() {
             ))}
           </div>
           <p className="text-sm font-medium text-muted">{CARDIO_PREF_LABELS[draft.cardio_pref ?? "auto"].blurb}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className={label}>ANYTHING TO AVOID?</span>
+          <AvoidEditor areas={draft.avoid_areas ?? []} note={draft.injury_note ?? ""} onAreas={(a) => set("avoid_areas", a)} onNote={(n) => set("injury_note", n)} />
         </div>
         <div className="flex flex-col gap-2">
           <span className={label}>WEIGH-IN REMINDER</span>

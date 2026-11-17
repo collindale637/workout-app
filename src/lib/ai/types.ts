@@ -30,6 +30,9 @@ export type AiProfile = {
   default_rpe: number;
   /** none = only when asked, auto = what the goal calls for, more = cardio most sessions. */
   cardio_pref?: "none" | "auto" | "more";
+  /** Body areas to go easy on, and a short note from the person. The exercise list is already filtered for the areas. */
+  avoid_areas?: string[];
+  injury_note?: string | null;
 };
 
 /** An exercise as Claude returns it (and as the phone saves it). Cardio uses minutes instead of sets × reps. */

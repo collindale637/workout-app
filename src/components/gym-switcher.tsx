@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useData, useProfile } from "@/lib/db/provider";
 import { markDirty } from "@/lib/db/sync";
 import { useActiveGym, useCatalog, useOpenWorkout } from "@/lib/hooks";
-import { usePrefs } from "@/lib/smart";
+import { useEffectivePrefs } from "@/lib/smart";
 import { closestMatch, type Swap } from "@/lib/generator";
 import { isAvailable } from "@/lib/availability";
 import { Sheet, btn } from "@/components/ui/kit";
@@ -17,7 +17,7 @@ export function GymSwitcher() {
   const { profile, save } = useProfile();
   const catalog = useCatalog();
   const open = useOpenWorkout();
-  const { prefs } = usePrefs();
+  const { prefs } = useEffectivePrefs();
   const [sheet, setSheet] = useState(false);
   const [result, setResult] = useState<{ gym: string; swaps: Swap[] } | null>(null);
 

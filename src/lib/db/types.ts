@@ -1,3 +1,4 @@
+import type { AvoidArea } from "@/lib/injuries";
 // Row shapes for the phone's local database (mirrors the Supabase tables).
 
 export type Muscle = {
@@ -70,6 +71,10 @@ export type Profile = {
   height_in: number | null;
   /** Optional; null = prefer not to say. Only used to tune starting-weight estimates. */
   sex: Sex | null;
+  /** Body areas to go easy on; exercises that load them are skipped. Missing on older saved profiles = none. */
+  avoid_areas?: AvoidArea[];
+  /** A short note the AI reads ("left shoulder pinches overhead"). */
+  injury_note?: string | null;
 };
 
 export type GymTemplate = "commercial" | "home" | "hotel" | "bodyweight" | "custom";

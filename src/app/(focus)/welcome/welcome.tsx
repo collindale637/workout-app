@@ -1,5 +1,7 @@
 "use client";
 
+import { AvoidEditor } from "@/components/avoid-editor";
+import type { AvoidArea } from "@/lib/injuries";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -26,7 +28,7 @@ import type { CardioPref, Experience, Goal, GymTemplate, Sex, Units } from "@/li
   from the split that fits. Each step saves as you go, so closing the app midway loses nothing.
 */
 
-const STEPS = ["You", "Goal", "Schedule", "Cardio", "Gym", "Plan"] as const;
+const STEPS = ["You", "Goal", "Schedule", "Cardio", "Avoid", "Gym", "Plan"] as const;
 
 export function Welcome() {
   const router = useRouter();
@@ -39,6 +41,8 @@ export function Welcome() {
   const [days, setDays] = useState(4);
   const [minutes, setMinutes] = useState(60);
   const [cardio, setCardio] = useState<CardioPref>("auto");
+  const [avoidAreas, setAvoidAreas] = useState<AvoidArea[]>([]);
+  const [injuryNote, setInjuryNote] = useState("");
   const { db } = useData();
   const { log: logWeight } = useBodyweightActions();
   const [weightLb, setWeightLb] = useState<number | null>(null);
@@ -58,6 +62,8 @@ export function Welcome() {
     setMinutes(profile.session_minutes);
     setUnits(profile.units);
     setCardio(profile.cardio_pref ?? "auto");
+    setAvoidAreas(profile.avoid_areas ?? []);
+    setInjuryNote(profile.injury_note ?? "");
     setHeightIn(profile.height_in ?? null);
     setSex(profile.sex ?? null);
     // Come back to this step (or reopen the app midway) and your last weigh-in is already filled in.
@@ -72,7 +78,7 @@ export function Welcome() {
 
   const go = async (to: number) => {
     // Save what's been answered so far.
-    await save({ display_name: name.trim() || null, units, goal, experience, days_per_week: days, session_minutes: minutes, cardio_pref: cardio, height_in: heightIn, sex });
+    await save({ display_name: name.trim() || null, units, goal, experience, days_per_week: days, session_minutes: minutes, cardio_pref: cardio, height_in: heightIn, sex, avoid_areas: avoidAreas, injury_note: injuryNote.trim() || null });
     if (step === 0 && validWeightLb(weightLb)) await logWeight(dateKey(new Date()), weightLb);
     setStep(to);
     window.scrollTo(0, 0);
@@ -194,9 +200,18 @@ export function Welcome() {
         </div>
       )}
 
-      {step === 4 && <GymStep onDone={() => go(5)} />}
+      {step === 4 && (
+        <div className="flex flex-col gap-5">
+          <Title a="Anything" b="to avoid?" />
+          <p className="-mt-2 text-base font-medium text-muted">Tap sore or injured areas. Plans and swaps skip exercises that load them.</p>
+          <AvoidEditor areas={avoidAreas} note={injuryNote} onAreas={setAvoidAreas} onNote={setInjuryNote} />
+          <Next onClick={() => go(5)}>{avoidAreas.length || injuryNote.trim() ? "Next" : "Nothing to avoid"}</Next>
+        </div>
+      )}
 
-      {step === 5 && <PlanStep days={days} goal={goal} experience={experience} cardio={cardio} onDone={finish} />}
+      {step === 5 && <GymStep onDone={() => go(6)} />}
+
+      {step === 6 && <PlanStep days={days} goal={goal} experience={experience} cardio={cardio} onDone={finish} />}
     </main>
   );
 }
