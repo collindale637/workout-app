@@ -17,12 +17,33 @@ export const HEIGHT_RANGE_IN = [40, 100] as const;
 export const validWeightLb = (lb: number | null): lb is number => lb !== null && lb >= WEIGHT_RANGE_LB[0] && lb <= WEIGHT_RANGE_LB[1];
 export const validHeightIn = (inches: number | null): inches is number => inches !== null && inches >= HEIGHT_RANGE_IN[0] && inches <= HEIGHT_RANGE_IN[1];
 
+/** Message for a weight or height that's missing or out of range, saying what's accepted. */
+export function weightProblem(lb: number | null, units: Units): string | null {
+  if (validWeightLb(lb)) return null;
+  const [lo, hi] = WEIGHT_RANGE_LB.map((v) => Math.round(toDisplayWeight(v, units)));
+  return lb === null ? `Enter your weight (${lo}–${hi} ${weightUnit(units)}).` : `Weight must be between ${lo} and ${hi} ${weightUnit(units)}.`;
+}
+export function heightProblem(inches: number | null, units: Units): string | null {
+  if (validHeightIn(inches)) return null;
+  const [lo, hi] = HEIGHT_RANGE_IN;
+  const range = units === "kg" ? `${Math.round(inchesToCm(lo))}–${Math.round(inchesToCm(hi))} cm` : `3 ft 4 in to 8 ft 4 in`;
+  return inches === null ? `Enter your height (${range}).` : `Height must be between ${range}.`;
+}
+
+function FieldError({ id, message }: { id: string; message?: string | null }) {
+  return message ? (
+    <p id={id} role="alert" className="text-sm font-bold text-[#FFD2B3]">
+      {message}
+    </p>
+  ) : null;
+}
+
 const num = (s: string) => {
   const n = parseFloat(s.replace(",", "."));
   return Number.isFinite(n) ? n : null;
 };
 
-export function WeightField({ units, valueLb, onChange }: { units: Units; valueLb: number | null; onChange: (lb: number | null) => void }) {
+export function WeightField({ units, valueLb, onChange, error }: { units: Units; valueLb: number | null; onChange: (lb: number | null) => void; error?: string | null }) {
   const [text, setText] = useState(() => (valueLb === null ? "" : String(toDisplayWeight(valueLb, units))));
   return (
     <label className="flex flex-col gap-2">
@@ -33,17 +54,20 @@ export function WeightField({ units, valueLb, onChange }: { units: Units; valueL
         value={text}
         placeholder={units === "kg" ? "82" : "180"}
         aria-label={`Weight in ${weightUnit(units)}`}
+        aria-invalid={!!error}
+        aria-describedby={error ? "weight-error" : undefined}
         onChange={(e) => {
           setText(e.target.value);
           const n = num(e.target.value);
           onChange(n === null ? null : Math.round(fromDisplayWeight(n, units) * 10) / 10);
         }}
       />
+      <FieldError id="weight-error" message={error} />
     </label>
   );
 }
 
-export function HeightField({ units, valueIn, onChange }: { units: Units; valueIn: number | null; onChange: (inches: number | null) => void }) {
+export function HeightField({ units, valueIn, onChange, error }: { units: Units; valueIn: number | null; onChange: (inches: number | null) => void; error?: string | null }) {
   const start = valueIn === null ? null : splitFeetInches(valueIn);
   const [ft, setFt] = useState(start ? String(start.ft) : "");
   const [inch, setInch] = useState(start ? String(start.inch) : "");
@@ -65,6 +89,7 @@ export function HeightField({ units, valueIn, onChange }: { units: Units; valueI
             onChange(n === null ? null : cmToInches(n));
           }}
         />
+        <FieldError id="height-error" message={error} />
       </label>
     );
   }
@@ -105,6 +130,7 @@ export function HeightField({ units, valueIn, onChange }: { units: Units; valueI
           <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-sm font-bold text-muted">in</span>
         </div>
       </div>
+      <FieldError id="height-error" message={error} />
     </div>
   );
 }

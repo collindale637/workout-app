@@ -14,7 +14,7 @@ import { CARDIO_PREF_LABELS, GOAL_BLURBS, recommendSplit, splitChoices } from "@
 import { TEMPLATE_LABELS } from "@/lib/defaults";
 import { MusclePills } from "@/components/planned";
 import { Chip, StickyBar, btn, field, label } from "@/components/ui/kit";
-import { HeightField, SexField, WeightField, validHeightIn, validWeightLb } from "@/components/body-fields";
+import { HeightField, SexField, WeightField, heightProblem, validWeightLb, weightProblem } from "@/components/body-fields";
 import { useBodyweightActions } from "@/lib/progress-data";
 import { dateKey } from "@/lib/progress";
 import type { CardioPref, Experience, Goal, GymTemplate, Sex, Units } from "@/lib/db/types";
@@ -43,7 +43,7 @@ export function Welcome() {
   const [weightLb, setWeightLb] = useState<number | null>(null);
   const [heightIn, setHeightIn] = useState<number | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);
-  const [bodyError, setBodyError] = useState<string | null>(null);
+  const [bodyErrors, setBodyErrors] = useState<{ weight: string | null; height: string | null }>({ weight: null, height: null });
   // Bumped when saved values load, so the weight and height boxes re-read them.
   const [seed, setSeed] = useState(0);
 
@@ -103,9 +103,9 @@ export function Welcome() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!validWeightLb(weightLb)) return setBodyError("Enter your weight so we can suggest starting weights.");
-            if (!validHeightIn(heightIn)) return setBodyError("Enter your height so we can suggest starting weights.");
-            setBodyError(null);
+            const problems = { weight: weightProblem(weightLb, units), height: heightProblem(heightIn, units) };
+            setBodyErrors(problems);
+            if (problems.weight || problems.height) return;
             void go(1);
           }}
           className="flex flex-col gap-5"
@@ -123,13 +123,12 @@ export function Welcome() {
               <Chip active={units === "kg"} onClick={() => setUnits("kg")}>Kilograms · km</Chip>
             </div>
           </div>
-          <WeightField key={`w-${units}-${seed}`} units={units} valueLb={weightLb} onChange={setWeightLb} />
-          <HeightField key={`h-${units}-${seed}`} units={units} valueIn={heightIn} onChange={setHeightIn} />
+          <WeightField key={`w-${units}-${seed}`} units={units} valueLb={weightLb} onChange={(v) => { setWeightLb(v); setBodyErrors((e) => ({ ...e, weight: null })); }} error={bodyErrors.weight} />
+          <HeightField key={`h-${units}-${seed}`} units={units} valueIn={heightIn} onChange={(v) => { setHeightIn(v); setBodyErrors((e) => ({ ...e, height: null })); }} error={bodyErrors.height} />
           <SexField value={sex} onChange={setSex} />
           <p className="-mt-2 text-sm font-medium text-muted">
             We use these to suggest a starting weight for lifts you haven&apos;t done yet. They&apos;re estimates; adjust to what feels right. Sex is optional, and skipping it gives lighter starting weights. Your weight also starts your Progress chart. You can change all of this later.
           </p>
-          {bodyError && <p role="alert" className="text-sm font-bold text-[#FFD2B3]">{bodyError}</p>}
           <Next />
         </form>
       )}
