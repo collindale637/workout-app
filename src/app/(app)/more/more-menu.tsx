@@ -34,7 +34,6 @@ export function MoreMenu() {
         <RowLink href="/more/profile" title="Profile & settings" detail={`${profile?.display_name ?? "You"} · ${profile ? GOAL_LABELS[profile.goal] : ""} · RPE ${profile?.default_rpe ?? 8} default`} />
         <RowLink href="/more/gyms" title="Gyms" detail={`${gymCount ?? 0} gym${gymCount === 1 ? "" : "s"} · equipment checklists`} />
         <RowLink href="/more/library" title="Exercise library" detail="Browse, search, add your own" />
-        <RowLink href="/cardio" title="Log cardio" detail="Run, walk, bike, row, swim…" />
       </Card>
       <Card className="flex items-center justify-between gap-3 p-4">
         <div className="min-w-0">

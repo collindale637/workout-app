@@ -9,7 +9,7 @@ import { TEMPLATE_LABELS } from "@/lib/defaults";
 
 export function GymList() {
   const { db } = useData();
-  const { gyms, gym: active } = useActiveGym();
+  const { gyms } = useActiveGym();
   const counts = useLiveQuery(async () => {
     const rows = await db.gym_equipment.toArray();
     const m = new Map<string, number>();
@@ -32,8 +32,14 @@ export function GymList() {
                 key={g.id}
                 href={`/more/gyms/edit?id=${g.id}`}
                 title={g.name}
-                detail={`${counts?.get(g.id) ?? 0} items · ${g.template ? TEMPLATE_LABELS[g.template].name : "Custom"}${g.is_default ? " · Primary" : ""}`}
-                right={g.id === active?.id ? <span className="display text-xs font-extrabold tracking-[0.08em] text-accent">HERE NOW</span> : null}
+                detail={
+                  <span className="inline-flex items-center gap-1.5">
+                    {g.is_default && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-accent" role="img" aria-label="Primary gym"><path d="M12 2.8l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6l-5.8 3.1 1.1-6.5L2.6 9.6l6.5-.9z" /></svg>
+                    )}
+                    {counts?.get(g.id) ?? 0} items · {g.template ? TEMPLATE_LABELS[g.template].name : "Custom"}
+                  </span>
+                }
               />
             ))}
         </Card>

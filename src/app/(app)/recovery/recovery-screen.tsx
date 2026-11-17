@@ -5,11 +5,10 @@ import { useProfile } from "@/lib/db/provider";
 import { useCatalog } from "@/lib/hooks";
 import { useRecovery } from "@/lib/smart";
 import { useFatigueAdjustments } from "@/lib/fatigue-adjust";
-import { FRESH_AT, RECOVERING_AT, type MuscleRecovery } from "@/lib/recovery";
+import { type MuscleRecovery } from "@/lib/recovery";
 import { formatWeight } from "@/lib/units";
 import { BodyMap, STATE_COLOR, STATE_LABEL } from "@/components/body-map";
 import { Sheet } from "@/components/ui/kit";
-import { READY_AVG } from "@/lib/readiness";
 import { ReadinessTiles } from "./readiness-tiles";
 
 export function ago(iso: string | null, now = Date.now()) {
@@ -58,9 +57,6 @@ export function RecoveryScreen() {
             </span>
           ))}
         </div>
-        <p className="text-center text-sm font-medium text-muted">
-          Recovery is scored from the last 7 days of training. Tap a muscle for details. Fresh is {FRESH_AT}%+, fatigued is under {RECOVERING_AT}%. A group is ready at {READY_AVG}%+ with no fatigued muscle.
-        </p>
       </section>
 
       <section className="flex flex-col">
