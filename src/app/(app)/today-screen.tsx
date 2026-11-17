@@ -6,6 +6,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog, useOpenWorkout } from "@/lib/hooks";
 import { useHistory } from "@/lib/history";
+import { useWeeklyTarget } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { useCardioTimer } from "@/lib/cardio-timer";
 import { cardioElapsedSec, cardioLabel, cardioSummary } from "@/lib/cardio";
@@ -53,6 +54,7 @@ export function TodayScreen() {
   const lastWorkout = history?.find((h) => h.kind === "workout");
   const doneToday = useDoneToday();
   const trainAgain = useTrainAgain();
+  const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
 
   return (
     <main className="mt-4 flex flex-col gap-4">
@@ -70,7 +72,7 @@ export function TodayScreen() {
         <div className="flex justify-between text-xs font-bold tracking-[0.1em] text-muted">
           <span>THIS WEEK</span>
           <span>
-            {week.doneCount} OF {profile?.days_per_week ?? 4} DONE
+            {week.doneCount} OF {weeklyTarget} DONE
           </span>
         </div>
         <div className="grid grid-cols-7 gap-1.5">

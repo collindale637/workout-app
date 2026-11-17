@@ -22,10 +22,33 @@ function NewGym() {
   const [name, setName] = useState("");
   const [template, setTemplate] = useState<GymTemplate>("commercial");
   const [busy, setBusy] = useState(false);
+  const { profile, save: saveProfile } = useProfile();
+  // A new gym doesn't take over as the active one without asking, unless it's the first gym.
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  const edit = (gymId: string) => router.replace(`/more/gyms/edit?id=${gymId}`);
 
   return (
     <main className="flex flex-col gap-4">
       <PageHeader title="New gym" back="/more/gyms" />
+      <Sheet open={created !== null} onClose={() => created && edit(created.id)} title="Training here now?">
+        <div className="flex flex-col gap-3">
+          <p className="text-base font-medium text-muted">
+            Switch to {created?.name} so Today and your workouts use its equipment? You can switch back any time from the gym picker on Today.
+          </p>
+          <button
+            type="button"
+            className={btn.primary}
+            onClick={async () => {
+              if (!created) return;
+              await saveProfile({ active_gym_id: created.id });
+              edit(created.id);
+            }}
+          >
+            Yes, switch to it
+          </button>
+          <button type="button" className={btn.secondary} onClick={() => created && edit(created.id)}>Not now</button>
+        </div>
+      </Sheet>
       <label className="flex flex-col gap-2">
         <span className={label}>NAME</span>
         <input className={field} value={name} onChange={(e) => setName(e.target.value)} placeholder="Home, Work gym, Hotel…" autoFocus />
@@ -51,8 +74,10 @@ function NewGym() {
         className={btn.primary}
         onClick={async () => {
           setBusy(true);
-          const gym = await createGym(name || TEMPLATE_LABELS[template].name, template);
-          router.replace(`/more/gyms/edit?id=${gym.id}`);
+          const hadActive = Boolean(profile?.active_gym_id);
+          const gym = await createGym(name || TEMPLATE_LABELS[template].name, template, !hadActive);
+          if (hadActive) setCreated({ id: gym.id, name: gym.name });
+          else edit(gym.id);
         }}
       >
         Create and pick equipment

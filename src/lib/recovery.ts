@@ -169,7 +169,7 @@ const SIZE_WEIGHT: Record<string, number> = { large: 3, medium: 2, small: 1 };
 export function pickFreshTargets(
   recovery: Map<string, MuscleRecovery>,
   muscles: Pick<Muscle, "id" | "size_class">[],
-): { template: FreshTemplate; targets: string[]; score: number } {
+): { template: FreshTemplate; targets: string[]; score: number; tooFew: boolean } {
   const size = new Map(muscles.map((m) => [m.id, SIZE_WEIGHT[m.size_class] ?? 1]));
   const rec = (id: string) => recovery.get(id)?.score ?? 100;
   let best: { template: FreshTemplate; score: number } | null = null;
@@ -189,7 +189,8 @@ export function pickFreshTargets(
     if (!best || score > best.score) best = { template: t, score };
   }
   const { template, score } = best!;
-  let targets = template.muscles.filter((m) => rec(m) >= RECOVERING_AT);
-  if (targets.length < 2) targets = [...template.muscles].sort((a, b) => rec(b) - rec(a)).slice(0, 2);
-  return { template, targets, score };
+  // "Fresh muscles only": just the ones at 85%+ (FRESH_AT). Tired and still-recovering muscles sit this one out.
+  // Under two is not a lifting day (no lone biceps session): the caller offers core, cardio or rest instead.
+  const targets = template.muscles.filter((m) => rec(m) >= FRESH_AT);
+  return { template, targets, score, tooFew: targets.length < 2 };
 }
