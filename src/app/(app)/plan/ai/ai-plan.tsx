@@ -11,7 +11,7 @@ import { aiProfile, allowedAtGym, askAI, gymContext, historyLines, recoveryRecor
 import { draftSnapshot, planNotes, targetsFor } from "@/lib/ai/apply";
 import { AiItems, AiProblem, AiThinking, AiUsageNote, Sparkle } from "@/components/ai";
 import { MusclePills } from "@/components/planned";
-import { Chip, PageHeader, btn, field, label } from "@/components/ui/kit";
+import { Chip, PageHeader, StickyBar, btn, field, label } from "@/components/ui/kit";
 import type { AiPlan, PlanSnapshot } from "@/lib/ai/types";
 import type { Goal } from "@/lib/db/types";
 
@@ -133,7 +133,7 @@ export function AiPlanScreen() {
     const p = draft.plan;
     const oldDay = new Map(original?.days.map((d) => [d.id, new Set(d.items.map((i) => i.exercise_id))]) ?? []);
     return (
-      <main className="flex flex-col gap-4 pb-6">
+      <main className="flex flex-col gap-4 pb-24">
         <PageHeader title={editing ? "Proposed changes" : "Your AI plan"} back={editing ? "/plan" : undefined} />
         {draft.warnings.map((w) => <AiProblem key={w}>{w}</AiProblem>)}
 
@@ -185,10 +185,12 @@ export function AiPlanScreen() {
           </section>
         )}
 
-        <button type="button" className={btn.primary} disabled={saving} onClick={accept}>
-          {saving ? "Saving…" : editing ? "Save changes" : "Use this plan"}
-        </button>
-        {!editing && <p className="-mt-2 text-center text-sm font-medium text-muted">It becomes your active plan. You can edit any day after.</p>}
+        <StickyBar aboveNav>
+          <button type="button" className={`${btn.primary} w-full`} disabled={saving} onClick={accept}>
+            {saving ? "Saving…" : editing ? "Save changes" : "Use this plan"}
+          </button>
+        </StickyBar>
+        {!editing && <p className="text-center text-sm font-medium text-muted">It becomes your active plan. You can edit any day after.</p>}
 
         <section className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4">
           <span className={label}>WANT SOMETHING DIFFERENT?</span>

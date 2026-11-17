@@ -13,7 +13,7 @@ import { EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile";
 import { CARDIO_PREF_LABELS, GOAL_BLURBS, recommendSplit, splitChoices } from "@/lib/onboarding";
 import { TEMPLATE_LABELS } from "@/lib/defaults";
 import { MusclePills } from "@/components/planned";
-import { Chip, btn, field, label } from "@/components/ui/kit";
+import { Chip, StickyBar, btn, field, label } from "@/components/ui/kit";
 import { HeightField, SexField, WeightField, validHeightIn, validWeightLb } from "@/components/body-fields";
 import { useBodyweightActions } from "@/lib/progress-data";
 import { dateKey } from "@/lib/progress";
@@ -82,7 +82,7 @@ export function Welcome() {
   };
 
   return (
-    <main className="safe-top safe-bottom flex min-h-dvh flex-col gap-5 px-5 pb-10">
+    <main className="safe-top flex min-h-dvh flex-col gap-5 px-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
       <div className="mt-4 flex items-center gap-2">
         {step > 0 ? (
           <button type="button" onClick={() => setStep(step - 1)} aria-label="Back" className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent">
@@ -213,9 +213,11 @@ function Title({ a, b }: { a: string; b: string }) {
 
 function Next({ onClick, children = "Next", disabled }: { onClick?: () => void; children?: React.ReactNode; disabled?: boolean }) {
   return (
-    <button type={onClick ? "button" : "submit"} onClick={onClick} disabled={disabled} className={`${btn.primary} mt-1`}>
-      {children}
-    </button>
+    <StickyBar>
+      <button type={onClick ? "button" : "submit"} onClick={onClick} disabled={disabled} className={`${btn.primary} w-full`}>
+        {children}
+      </button>
+    </StickyBar>
   );
 }
 
