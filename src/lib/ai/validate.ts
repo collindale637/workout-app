@@ -15,6 +15,17 @@ export const MAX_ITEMS = 14;
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
+/**
+ * Free text shown to the person (summary, progression). Over the limit, it's cut at the last full sentence
+ * that fits, never mid-sentence ("...records on the main lifts and").
+ */
+export function prose(v: unknown, max: number): string {
+  const t = typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "";
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "), /[.!?]$/.test(cut) ? cut.length - 1 : -1);
+  return end > max * 0.4 ? cut.slice(0, end + 1) : `${cut.slice(0, cut.lastIndexOf(" ")).replace(/[,;:\s]+$/, "")}…`;
+}
 const num = (v: unknown): number | null => {
   const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
   return typeof n === "number" && Number.isFinite(n) ? n : null;
@@ -145,7 +156,7 @@ export function checkPlan(
   });
   const changes = Array.isArray(r.changes) ? r.changes.map((c) => str(c, 160)).filter(Boolean).slice(0, 12) : [];
   return {
-    plan: { name: name || "AI plan", goal, weeks, summary: str(r.summary, 600), progression: str(r.progression, 600), days, changes },
+    plan: { name: name || "AI plan", goal, weeks, summary: prose(r.summary, 900), progression: prose(r.progression, 1200), days, changes },
     errors,
   };
 }
@@ -158,7 +169,7 @@ export function checkWorkout(raw: unknown, allow: Map<string, AllowedExercise>):
   if (!name) errors.push(`"name" is missing.`);
   const items = checkItems(r.exercises, allow, "The workout", errors);
   if (!items.length) errors.push("The workout needs at least one valid exercise.");
-  return { workout: { name: name || "AI workout", summary: str(r.summary, 400), items }, errors };
+  return { workout: { name: name || "AI workout", summary: prose(r.summary, 400), items }, errors };
 }
 
 /**
@@ -217,8 +228,8 @@ export function checkImport(raw: unknown, allow: Map<string, AllowedExercise>): 
       name: str(r.name, 60) || "Imported plan",
       goal,
       weeks: weeks !== null && weeks >= 1 && weeks <= 52 ? weeks : null,
-      summary: str(r.summary, 600),
-      progression: str(r.progression, 600),
+      summary: prose(r.summary, 900),
+      progression: prose(r.progression, 1200),
       days,
       problems: textOrNull(r.problems, 400),
     },

@@ -23,7 +23,8 @@ export const TEMPLATE_SHORT_NAME: Record<GymTemplate, string> = { commercial: "G
 
 export const TEMPLATE_LABELS: Record<GymTemplate, { name: string; blurb: string }> = {
   commercial: { name: "Commercial gym", blurb: "Racks, machines, cables, dumbbells, cardio" },
-  home: { name: "Home: dumbbells + bench", blurb: "Dumbbells, bench, pull-up bar, bands" },
+  // Lists everything the preset ticks (common_at_home in the catalog), kettlebells included.
+  home: { name: "Home gym", blurb: "Dumbbells, kettlebells, bench, pull-up bar, bands, jump rope" },
   hotel: { name: "Hotel gym", blurb: "Light dumbbells, a bench, cardio machines" },
   bodyweight: { name: "Bodyweight only", blurb: "Nothing but you (add a bar or bands if you have them)" },
   custom: { name: "Blank", blurb: "Start empty and tick what's there" },
