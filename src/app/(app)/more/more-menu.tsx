@@ -2,15 +2,18 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
-import { useData, useProfile, usePendingCount } from "@/lib/db/provider";
+import { useData, useProfile } from "@/lib/db/provider";
+import { SyncBar, useSyncProgress } from "@/components/sync-badge";
+import { syncLine } from "@/lib/sync-status";
 import { Card, RowLink, btn } from "@/components/ui/kit";
 import { GOAL_LABELS } from "@/lib/profile";
 import { useAiUsage } from "@/lib/ai/client";
 
 export function MoreMenu() {
-  const { db, status, requestSync } = useData();
+  const { db, requestSync } = useData();
   const { profile } = useProfile();
-  const pending = usePendingCount();
+  const sync = useSyncProgress();
+  const { status, pending } = sync;
   const gymCount = useLiveQuery(() => db.gyms.count(), [db]);
   const lastSynced = useLiveQuery(() => db.getMeta<string>("lastSyncedAt"), [db]);
   const { usage } = useAiUsage();
@@ -36,13 +39,10 @@ export function MoreMenu() {
       <Card className="flex items-center justify-between gap-3 p-4">
         <div className="min-w-0">
           <div className="text-base font-bold">Sync</div>
-          <div className="text-sm font-medium text-muted">
-            {status === "syncing" ? "Syncing…" : status === "offline" ? "Offline" : status === "error" ? "Last sync failed" : "Up to date"}
-            {pending ? ` · ${pending} waiting` : ""}
-            {lastSynced ? ` · ${new Date(lastSynced).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}
-          </div>
+          <div className="text-sm font-medium text-muted" role="status">{syncLine({ status, pending, total: sync.total, lastSynced: lastSynced ? new Date(lastSynced) : null })}</div>
+          {sync.fraction !== null && <div className="mt-2"><SyncBar fraction={sync.fraction} /></div>}
         </div>
-        <button type="button" className={btn.ghost} onClick={() => requestSync(0)}>Sync now</button>
+        <button type="button" className={btn.ghost} disabled={status === "syncing"} onClick={() => requestSync(0)}>{status === "syncing" ? "Syncing…" : "Sync now"}</button>
       </Card>
       {usage && (
         <Card className="flex flex-col gap-2 p-4">
