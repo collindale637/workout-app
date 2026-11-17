@@ -308,7 +308,20 @@ function DetailsForm({ equipmentId, details, units, onSave }: { equipmentId: str
   const [a, setA] = useState(toD(equipmentId === "dumbbells" ? details.dumbbell_min : equipmentId === "barbell" ? details.plate_increment : details.stack_max));
   const [b, setB] = useState(toD(details.dumbbell_max));
   const [c, setC] = useState(toD(details.dumbbell_step));
+  const [error, setError] = useState<string | null>(null);
   const num = (s: string) => (s.trim() === "" ? undefined : fromDisplayWeight(Number(s.replace(",", ".")), units));
+  const bad = (v?: number) => v !== undefined && (!Number.isFinite(v) || v < 0);
+  /** Lightest must be below heaviest and the jump above zero; no negatives or non-numbers. */
+  const problem = (): string | null => {
+    const vals = equipmentId === "dumbbells" ? [num(a), num(b), num(c)] : [num(a)];
+    if (vals.some(bad)) return "Use numbers of 0 or more.";
+    if (equipmentId === "dumbbells") {
+      const [lo, hi, step] = vals;
+      if (lo !== undefined && hi !== undefined && lo >= hi) return "Lightest must be less than heaviest.";
+      if (step !== undefined && step <= 0) return "Jumps must be more than 0.";
+    } else if (vals[0] !== undefined && vals[0] <= 0) return "Enter a number above 0.";
+    return null;
+  };
 
   const input = (value: string, set: (v: string) => void, title: string) => (
     <label className="flex flex-col gap-2">
@@ -322,6 +335,9 @@ function DetailsForm({ equipmentId, details, units, onSave }: { equipmentId: str
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
+        const p = problem();
+        setError(p);
+        if (p) return;
         if (equipmentId === "dumbbells") onSave({ dumbbell_min: num(a), dumbbell_max: num(b), dumbbell_step: num(c) });
         else if (equipmentId === "barbell") onSave({ plate_increment: num(a) });
         else onSave({ stack_max: num(a) });
@@ -338,6 +354,7 @@ function DetailsForm({ equipmentId, details, units, onSave }: { equipmentId: str
       ) : (
         input(a, setA, "Stack max")
       )}
+      {error && <p role="alert" className="text-sm font-bold text-warn">{error}</p>}
       <p className="text-sm font-medium text-muted">Used later to suggest weights you can actually load.</p>
       <button type="submit" className={btn.primary}>Done</button>
     </form>

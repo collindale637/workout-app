@@ -20,12 +20,13 @@ import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
 import { ExerciseInfo } from "@/components/exercise-info";
-import { Sheet, btn, doneDisc, field, label } from "@/components/ui/kit";
+import { ConfirmSheet, Sheet, btn, doneDisc, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
 import { setsLine, shortDate } from "@/lib/compare";
 import { isDoubleTap } from "@/lib/double-tap";
+import { setProblem } from "@/lib/set-limits";
 import { useWorkoutComparison } from "@/lib/compare-data";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
@@ -155,6 +156,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [finishOpen, setFinishOpen] = useState(false);
   const [allDoneOpen, setAllDoneOpen] = useState(false);
   const [toast, setToast] = useState<(DockToast & { id: string }) | null>(null);
+  // "Are you sure?" bottom sheet for removing an exercise or deleting the workout.
+  const [confirmAsk, setConfirmAsk] = useState<{ title: string; body: string; label: string; cancel?: string; run: () => void | Promise<void> } | null>(null);
   const lastLogAt = useRef(0);
   // The undo toast lasts 5 s; a new log replaces it and restarts the clock.
   useEffect(() => {
@@ -231,6 +234,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (!current) return;
     // A second tap within 700 ms is a double tap, not another set.
     if (isDoubleTap(lastLogAt)) return;
+    // Nothing is saved when the numbers are out of range; say why, right above the Log button.
+    const problem = setProblem(draft.weight, draft.reps, units);
+    if (problem) {
+      setToast({ id: "warn", text: problem, warn: true });
+      return;
+    }
     const before = { currentId, upNextFrom, rest, draft, wexId: current.id, count: (setsBy.get(current.id) ?? []).length };
     const saved = await actions.logSet(current.id, draft);
     showLogged(saved, before);
@@ -370,9 +379,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       label: "Remove",
       icon: <RowIcon name="remove" />,
       className: "bg-danger text-white",
-      onPress: async () => {
-        if (confirm(isCardioWex(w) ? "Remove this cardio and its results?" : "Remove this exercise and its sets?")) await actions.removeWex(w.id);
-      },
+      onPress: () => setConfirmAsk({
+        title: isCardioWex(w) ? "Remove this cardio?" : "Remove this exercise?",
+        body: isCardioWex(w) ? "Its results are deleted too." : "Any sets you logged for it are deleted too.",
+        label: "Remove",
+        run: () => actions.removeWex(w.id),
+      }),
     },
   ];
   const menuLabel = (w: WorkoutExercise) => `${catalog.byId.get(w.exercise_id)?.name ?? w.exercise_id}: swap, how-to, notes, remove`;
@@ -682,7 +694,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               done={doneSets}
               history={history?.get(current.exercise_id)}
               units={units}
-              defaultRpe={defaultRpe}
               nextType={draft.type}
               target={current.target_sets ?? 3}
               skipped={current.skipped_sets ?? []}
@@ -951,14 +962,29 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             await actions.finish(workout.id, (id) => catalog.byId.get(id)?.name);
             router.replace(`/progress/session?id=${workout.id}&done=1`);
           }}
-          onDiscard={async () => {
-            if (!confirm("Delete this whole workout? This can't be undone.")) return;
-            await actions.discard(workout.id);
-            router.replace("/");
-          }}
+          onDiscard={() => setConfirmAsk({
+            title: "Delete this whole workout?",
+            body: "Every set in it is deleted. This can't be undone.",
+            label: "Delete workout",
+            cancel: "Keep workout",
+            run: async () => {
+              await actions.discard(workout.id);
+              router.replace("/");
+            },
+          })}
           onClose={() => setFinishOpen(false)}
         />
       </Sheet>
+
+      <ConfirmSheet
+        open={confirmAsk !== null}
+        title={confirmAsk?.title ?? ""}
+        body={confirmAsk?.body}
+        confirmLabel={confirmAsk?.label ?? ""}
+        cancelLabel={confirmAsk?.cancel}
+        onConfirm={() => confirmAsk?.run()}
+        onClose={() => setConfirmAsk(null)}
+      />
     </main>
   );
 }
@@ -977,12 +1003,11 @@ function lastTimeLabel(iso: string) {
  * (Skip). Warm-ups are "W" and drop sets are "D"; drop sets still use up a planned set. Last time is paired by set number.
  */
 function SetTable({
-  done, history, units, defaultRpe, nextType, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip,
+  done, history, units, nextType, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip,
 }: {
   done: WorkoutSet[];
   history?: { last: WorkoutSet[]; lastDate: string | null };
   units: Units;
-  defaultRpe: number;
   nextType: SetType;
   target: number;
   skipped: number[];
@@ -1047,7 +1072,7 @@ function SetTable({
               <span className="flex flex-col items-start gap-0.5">
                 <span className={`display num text-[22px] leading-none font-extrabold ${s.type === "warmup" ? "text-muted" : "text-ink"}`}>{amount(s)}</span>
                 <span className="display flex gap-1 text-[11px] font-semibold tracking-[0.08em]">
-                  {s.type !== "warmup" && <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe ?? defaultRpe}</span>}
+                  {s.type !== "warmup" && s.rpe !== null && <span className="rounded-md bg-primary/20 px-1.5 py-px text-accent-soft">RPE {s.rpe}</span>}
                   {s.type === "drop" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">DROP</span>}
                   {s.type === "warmup" && <span className="rounded-md bg-card-2 px-1.5 py-px text-muted">WARM-UP</span>}
                 </span>
@@ -1161,13 +1186,19 @@ function EditSetForm({ set, units, defaultRpe, onSave, onDelete }: { set: Workou
   const [r, setR] = useState(set.reps === null ? "" : String(set.reps));
   const [rpe, setRpe] = useState<number | null>(set.rpe);
   const [type, setType] = useState<SetType>(set.type);
+  const [error, setError] = useState<string | null>(null);
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         const wn = w.trim() === "" ? null : Number(w.replace(",", "."));
-        onSave({ weight: wn === null || Number.isNaN(wn) ? null : fromDisplayWeight(wn, units), reps: r.trim() === "" ? null : Number(r), rpe, type });
+        const weight = wn === null || Number.isNaN(wn) ? null : fromDisplayWeight(wn, units);
+        const reps = r.trim() === "" ? null : Number(r);
+        const problem = setProblem(weight, reps, units);
+        setError(problem);
+        if (problem) return;
+        onSave({ weight, reps, rpe, type });
       }}
     >
       <div className="grid grid-cols-2 gap-2">
@@ -1189,6 +1220,7 @@ function EditSetForm({ set, units, defaultRpe, onSave, onDelete }: { set: Workou
           <button key={t} type="button" onClick={() => setType(t)} className={`display h-11 rounded-xl text-sm font-extrabold ${type === t ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{TYPE_LABEL[t]}</button>
         ))}
       </div>
+      {error && <p role="alert" className="text-sm font-bold text-warn">{error}</p>}
       <button type="submit" className={btn.primary}>Save set</button>
       <button type="button" className={btn.danger} onClick={onDelete}>Delete set</button>
     </form>
