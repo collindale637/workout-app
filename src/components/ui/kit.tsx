@@ -15,6 +15,10 @@ export const btn = {
     "display flex h-12 items-center justify-center gap-2 rounded-2xl border-2 border-danger/40 px-4 text-lg font-extrabold tracking-[0.04em] text-danger disabled:opacity-50",
 };
 
+/** Finished disc (week strip, workout list): green fill, dark check, thin dark ring 5px in from the edge. */
+export const doneDisc =
+  "bg-[var(--done)] font-extrabold text-[var(--done-ink)] shadow-[inset_0_0_0_5px_var(--done),inset_0_0_0_6px_rgba(0,0,0,0.3)]";
+
 export const field =
   "h-12 w-full rounded-2xl border-2 border-line bg-card-2 px-4 text-base font-semibold text-ink outline-none placeholder:text-muted/60 focus:border-accent-strong";
 

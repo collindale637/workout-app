@@ -26,6 +26,11 @@
   --chart-2: #14a3b8;
   /* Height of the bottom tab bar (1px border + 10px top padding + 44px row + safe area): StickyBar sits on it.
      If BottomNav's height changes, update this. */
+  /* "Plates, tuned" accents (UX spec Part 5.0): the only colors added for the Nov 2026 restyle. */
+  --done: var(--good); /* the finished check: same green as weight increases */
+  --done-ink: #062414; /* the check mark drawn on --done */
+  --band-sky: #5aa9ff; /* quick-cardio band 1 */
+  --band-gold: #ffc533; /* quick-cardio band 2: cobalt's complement */
   --nav-h: calc(55px + max(env(safe-area-inset-bottom), 8px));
 }
 

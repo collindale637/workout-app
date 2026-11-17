@@ -8,6 +8,9 @@ import type { CardioType } from "@/lib/db/types";
 /** One tap starts a timer; the running banner at the top of Today (and the /cardio screen) take it from there. */
 export const QUICK_CARDIO: CardioType[] = ["walk", "run", "bike", "elliptical"];
 
+/** Colored top band per tile (UX spec 5.2). */
+const BANDS: Record<string, string> = { walk: "var(--band-sky)", run: "var(--band-gold)", bike: "var(--good)", elliptical: "var(--text)" };
+
 const ICONS: Record<string, React.ReactNode> = {
   walk: <path d="M12 8l-2 5 3 2 1 5M12 8l3 3 3 1M10 13l-3 3M13 6.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" />,
   run: <path d="M13 8l-3 4 3 3-1 5M13 8l4 2 2 3M10 12l-4 1M14 6.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" />,
@@ -33,9 +36,10 @@ export function QuickCardio() {
             type="button"
             disabled={busy}
             onClick={() => start(t, { workoutId: null, wexId: null })}
-            className="display flex h-[84px] flex-col items-center justify-center gap-1.5 rounded-[20px] border-2 border-line bg-card text-[15px] font-extrabold tracking-[0.03em] uppercase transition active:scale-95 active:border-accent-strong disabled:opacity-50"
+            style={{ "--band": BANDS[t] } as React.CSSProperties}
+            className="display flex h-[84px] flex-col items-center justify-center gap-1.5 rounded-[14px] border-0 bg-card text-[15px] font-extrabold tracking-[0.03em] uppercase shadow-[inset_0_6px_0_var(--band),inset_0_0_0_2px_var(--border)] transition active:scale-95 disabled:opacity-50"
           >
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent-soft)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               {ICONS[t]}
             </svg>
             {cardioLabel(t)}

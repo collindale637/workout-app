@@ -885,7 +885,7 @@ function SetTable({
   const u = weightUnit(units) === "kg" ? "kg" : "lbs";
   const cols = "grid grid-cols-[2.75rem_1.15fr_1fr_4.25rem] items-center";
   const badge = "display flex h-8 w-8 items-center justify-center rounded-lg text-base font-extrabold";
-  const skipBtn = "display relative h-9 min-w-14 justify-self-end rounded-[10px] bg-card-2 px-2.5 text-sm font-extrabold tracking-[0.08em] text-muted after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] active:bg-line";
+  const skipBtn = "display relative h-9 min-w-14 justify-self-end rounded-full bg-card-2 px-2.5 text-sm font-extrabold tracking-[0.08em] text-muted after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] active:bg-line";
 
   const amount = (s: WorkoutSet) => (
     <>
