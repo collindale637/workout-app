@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { after } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { AI_FAST_MODEL, AI_MODEL, AI_MONTHLY_CAP_USD, AiError, aiConfigured, callTool, costUsd } from "@/lib/ai/claude";
 import { runAi } from "@/lib/ai/run";
@@ -9,6 +10,9 @@ import { MAX_IMAGES, MAX_IMPORT_TEXT, MAX_PROMPT, PICK_KINDS, type AiKind, type 
   The one door to Claude. POST asks for a plan, an edit, a workout, a plan day, or an import; GET reports
   this month's AI spend. Every call is logged with its token cost, and a household monthly cap stops AI
   calls once reached (the rest of the app keeps working).
+
+  Plans and edits take up to a minute, so the phone sends them with `background: true`: the server saves a job
+  row, answers right away, and finishes the work after the response (see /api/ai/jobs for picking it up).
 */
 
 export const maxDuration = 300;
@@ -35,11 +39,14 @@ async function signedIn(sb: Supabase) {
   return Boolean(data?.claims?.sub);
 }
 
-const fail = (error: string, status: number, usage?: AiUsage) => NextResponse.json({ ok: false, error, usage } satisfies AiResponse, { status });
+type Failure = { ok: false; error: string; usage?: AiUsage };
+type Outcome = { body: AiResponse; status: number };
+const fail = (error: string, status: number, usage?: AiUsage): Outcome => ({ body: { ok: false, error, usage } satisfies Failure, status });
+const send = (o: Outcome) => NextResponse.json(o.body, { status: o.status });
 
 export async function GET() {
   const sb = await getSupabaseServer();
-  if (!(await signedIn(sb))) return fail("Sign in first.", 401);
+  if (!(await signedIn(sb))) return send(fail("Sign in first.", 401));
   return NextResponse.json(await readUsage(sb));
 }
 
@@ -71,15 +78,12 @@ function parseRequest(body: unknown): AiRequest | string {
     const o = b.options;
     if (!o || !GOALS.includes(o.goal) || !(o.days_per_week >= 1 && o.days_per_week <= 7) || !(o.weeks >= 1 && o.weeks <= 52)) return "Missing plan settings.";
   }
+  if (b.background && b.kind !== "plan" && b.kind !== "edit") return "Only plans and edits can run in the background.";
   return { ...(b as AiRequest), prompt, images };
 }
 
-export async function POST(request: NextRequest) {
-  const sb = await getSupabaseServer();
-  if (!(await signedIn(sb))) return fail("Sign in first.", 401);
-  const req = parseRequest(await request.json().catch(() => null));
-  if (typeof req === "string") return fail(req, 400);
-
+/** Runs one request to the end and logs its cost. Never throws: every outcome comes back as a body and a status. */
+async function execute(sb: Supabase, req: AiRequest): Promise<Outcome> {
   if (!aiConfigured()) return fail("AI isn't set up yet: add ANTHROPIC_API_KEY to the app's settings in Vercel.", 503, await readUsage(sb));
   const before = await readUsage(sb);
   if (before.household_usd >= before.cap_usd) {
@@ -118,7 +122,7 @@ export async function POST(request: NextRequest) {
     else if (r.kind === "import") out = { ok: true, kind: "import", result: r.value, warnings, usage };
     else if (r.kind === "plan" || r.kind === "edit") out = { ok: true, kind: r.kind, plan: r.value, warnings, usage };
     else out = { ok: true, kind: r.kind, workout: r.value as AiWorkout, warnings, usage };
-    return NextResponse.json(out);
+    return { body: out, status: 200 };
   } catch (e) {
     if (tokens.input_tokens || tokens.output_tokens) await log(false);
     const usage = await readUsage(sb).catch(() => undefined);
@@ -126,4 +130,39 @@ export async function POST(request: NextRequest) {
     console.error("AI route failed", e);
     return fail("Something went wrong talking to Claude. Try again.", 500, usage);
   }
+}
+
+export async function POST(request: NextRequest) {
+  const sb = await getSupabaseServer();
+  if (!(await signedIn(sb))) return send(fail("Sign in first.", 401));
+  const req = parseRequest(await request.json().catch(() => null));
+  if (typeof req === "string") return send(fail(req, 400));
+
+  if (!req.background || (req.kind !== "plan" && req.kind !== "edit")) return send(await execute(sb, req));
+
+  // Background: check the cheap things first so an obvious problem answers right away, then save the job and go.
+  if (!aiConfigured()) return send(fail("AI isn't set up yet: add ANTHROPIC_API_KEY to the app's settings in Vercel.", 503, await readUsage(sb)));
+  await sb.rpc("ai_jobs_expire");
+  const running = await sb.from("ai_jobs").select("id").eq("status", "running").limit(1);
+  if (running.data?.length) return send(fail("An AI plan is already being built. Wait for it to finish.", 409));
+  // One draft at a time: clear finished jobs (not the one running) so an old draft can't come back.
+  await sb.from("ai_jobs").delete().neq("status", "running");
+  const ref = typeof req.jobRef === "string" ? req.jobRef.slice(0, 64) : null;
+  const ins = await sb.from("ai_jobs").insert({ kind: req.kind, ref }).select("id").single();
+  if (ins.error || !ins.data) {
+    console.error("ai_jobs insert failed", ins.error?.message);
+    return send(fail("Couldn't start the AI build. Try again.", 500));
+  }
+  const jobId = ins.data.id as string;
+  after(async () => {
+    const out = await execute(sb, req);
+    const { error } = await sb
+      .from("ai_jobs")
+      .update({ status: out.body.ok ? "done" : "failed", result: out.body, updated_at: new Date().toISOString() })
+      .eq("id", jobId);
+    if (error) console.error("ai_jobs update failed", error.message);
+    // Keep only the last day of jobs, so the table stays tiny.
+    await sb.from("ai_jobs").delete().lt("created_at", new Date(Date.now() - 86_400_000).toISOString());
+  });
+  return NextResponse.json({ ok: true, job_id: jobId, kind: req.kind }, { status: 202 });
 }

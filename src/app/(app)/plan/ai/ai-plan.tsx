@@ -7,7 +7,7 @@ import { useGeneratorInputs, usePlan } from "@/lib/smart";
 import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
-import { aiProfile, allowedAtGym, askAI, gymContext, historyLines, recoveryRecord, useAiUsage } from "@/lib/ai/client";
+import { aiProfile, allowedAtGym, gymContext, historyLines, recoveryRecord, startAiJob, useAiJob, useAiUsage } from "@/lib/ai/client";
 import { draftSnapshot, planNotes, targetsFor } from "@/lib/ai/apply";
 import { AiItems, AiProblem, AiThinking, AiUsageNote, Sparkle } from "@/components/ai";
 import { MusclePills } from "@/components/planned";
@@ -39,9 +39,15 @@ export function AiPlanScreen() {
   const [days, setDays] = useState<number | null>(null);
   const [weeks, setWeeks] = useState(8);
   const [minutes, setMinutes] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  // The build runs on the server, so leaving this screen doesn't lose it: the draft is picked up from there.
+  const job = useAiJob(editId ?? "new");
+  const result = job.job?.status === "done" ? job.job.result : null;
+  const draft: Draft | null = result && result.ok && (result.kind === "plan" || result.kind === "edit") ? { plan: result.plan, warnings: result.warnings } : null;
+  const jobResult = job.job?.status === "failed" ? job.job.result : null;
+  const shownError = error ?? (jobResult && !jobResult.ok ? jobResult.error : null);
+  const busy = starting || job.job?.status === "running";
   const [name, setName] = useState<string | null>(null);
   const [more, setMore] = useState("");
   const [saving, setSaving] = useState(false);
@@ -71,11 +77,11 @@ export function AiPlanScreen() {
   /** First ask: a new plan, or an edit of the saved one. Follow-ups edit the draft on screen. */
   async function ask(followUp: boolean) {
     if (!catalog || !profile) return;
-    setBusy(true);
+    setStarting(true);
     setError(null);
     const base = original && !followUp ? original : draft ? snapshotOf(draft.plan) : null;
     const include = base?.days.flatMap((d) => d.items.map((i) => i.exercise_id)) ?? [];
-    const res = await askAI({
+    const res = await startAiJob({
       kind: base ? "edit" : "plan",
       prompt: followUp ? more : text,
       profile: { ...aiProfile(profile), session_minutes: chosen.minutes },
@@ -85,12 +91,15 @@ export function AiPlanScreen() {
       recovery: recoveryRecord(recovery?.map),
       history: await historyLines(db, catalog, profile.units),
       plan: base ?? undefined,
+      jobRef: editId ?? null,
     });
-    setBusy(false);
-    if (res.usage) setUsage(res.usage);
-    if (!res.ok) return setError(res.error);
-    if (res.kind !== "plan" && res.kind !== "edit") return;
-    setDraft({ plan: res.plan, warnings: res.warnings });
+    if (!res.ok && res.usage) setUsage(res.usage);
+    if (!res.ok) {
+      setStarting(false);
+      return setError(res.error);
+    }
+    await job.refresh();
+    setStarting(false);
     setName(null);
     setMore("");
     window.scrollTo({ top: 0 });
@@ -114,6 +123,7 @@ export function AiPlanScreen() {
       await actions.create({ name: planName, goal: p.goal, splitId: null, weeks: p.weeks, source: "ai", notes: planNotes(p), days: dayRows });
       await setChoice({ mode: "plan", seed: 0 });
     }
+    await job.clear();
     router.replace("/plan");
   }
 
@@ -124,7 +134,7 @@ export function AiPlanScreen() {
       <main className="flex flex-col gap-4">
         <PageHeader title={title} />
         <AiThinking what={draft || editing ? "Making the changes" : "Building your plan"} />
-        <p className="text-center text-sm font-medium text-muted">Plans take up to a minute. Keep this screen open.</p>
+        <p className="text-center text-sm font-medium text-muted">Plans take up to a minute. You can leave: it keeps building and your draft will be here when you come back.</p>
       </main>
     );
   }
@@ -201,15 +211,15 @@ export function AiPlanScreen() {
             onChange={(e) => setMore(e.target.value)}
             maxLength={1500}
           />
-          {error && <AiProblem>{error}</AiProblem>}
+          {shownError && <AiProblem>{shownError}</AiProblem>}
           <button type="button" className={btn.secondary} disabled={!more.trim()} onClick={() => ask(true)}>
             <Sparkle /> Ask for changes
           </button>
         </section>
-        <button type="button" className={btn.ghost} onClick={() => { setDraft(null); setError(null); }}>
+        <button type="button" className={btn.ghost} onClick={() => { setError(null); void job.clear(); }}>
           Discard and start over
         </button>
-        <AiUsageNote usage={usage} />
+        <AiUsageNote usage={(result && result.ok ? result.usage : null) ?? usage} />
       </main>
     );
   }
@@ -294,11 +304,11 @@ export function AiPlanScreen() {
         </>
       )}
 
-      {error && <AiProblem>{error}</AiProblem>}
+      {shownError && <AiProblem>{shownError}</AiProblem>}
       <button type="button" className={btn.primary} disabled={editing && !text.trim()} onClick={() => ask(false)}>
         <Sparkle /> {editing ? "Propose changes" : "Build my plan"}
       </button>
-      <AiUsageNote usage={usage} />
+      <AiUsageNote usage={(result && result.ok ? result.usage : null) ?? usage} />
     </main>
   );
 }
