@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -25,11 +25,12 @@ import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
 import { setsLine, shortDate } from "@/lib/compare";
+import { isDoubleTap } from "@/lib/double-tap";
 import { useWorkoutComparison } from "@/lib/compare-data";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
-import { RestBar, SetDock, type DockSet, type DockUpNext } from "./set-dock";
+import { RestBar, SetDock, type DockSet, type DockToast, type DockUpNext } from "./set-dock";
 import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 type Draft = { weight: number | null; reps: number | null; rpe: number | null; type: SetType };
@@ -108,6 +109,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   const [draft, setDraft] = useState<Draft>({ weight: null, reps: null, rpe: null, type: "working" });
   const [draftFor, setDraftFor] = useState<string | null>(null);
+  // Undo puts back the weight/reps you had entered, instead of a fresh prefill.
+  const restoreDraft = useRef<{ wexId: string; count: number; draft: Draft } | null>(null);
 
   // Prefill the next set: your last set of this exercise today, else the same set from last time.
   useEffect(() => {
@@ -116,6 +119,13 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     // `who` is in the key so the starting-weight estimate fills in if your bodyweight finishes loading after the screen opens.
     const warm = warmupState(current);
     const key = `${current.id}:${(setsBy.get(current.id) ?? []).length}:${who ? "w" : "n"}:${warm ?? ""}`;
+    const back = restoreDraft.current;
+    if (back && back.wexId === current.id && back.count === (setsBy.get(current.id) ?? []).length) {
+      restoreDraft.current = null;
+      setDraft(back.draft);
+      setDraftFor(key);
+      return;
+    }
     if (draftFor === key) return;
     const done = setsBy.get(current.id) ?? [];
     // Warm-ups never set the weight for a working set.
@@ -129,7 +139,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const src = lastToday ?? sameSetLastTime;
     const working = suggestion && suggestion.weight !== null ? suggestion.weight : (src?.weight ?? estimate ?? null);
     const warmup = warm === "pending" ? warmupDose(working, current.rep_max, equipmentIdsOf(current.exercise_id)) : null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill when the current exercise or set changes
     setDraft(
       warmup
         ? { weight: warmup.weight, reps: warmup.reps, rpe: null, type: "warmup" }
@@ -145,6 +154,14 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [notesFor, setNotesFor] = useState<WorkoutExercise | "workout" | null>(null);
   const [finishOpen, setFinishOpen] = useState(false);
   const [allDoneOpen, setAllDoneOpen] = useState(false);
+  const [toast, setToast] = useState<(DockToast & { id: string }) | null>(null);
+  const lastLogAt = useRef(0);
+  // The undo toast lasts 5 s; a new log replaces it and restarts the clock.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast((cur) => (cur?.id === toast.id ? null : cur)), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
   const [typing, setTyping] = useState<null | "weight" | "reps">(null);
   const [typeOpen, setTypeOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -212,7 +229,11 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   async function log() {
     if (!current) return;
-    await actions.logSet(current.id, draft);
+    // A second tap within 700 ms is a double tap, not another set.
+    if (isDoubleTap(lastLogAt)) return;
+    const before = { currentId, upNextFrom, rest, draft, wexId: current.id, count: (setsBy.get(current.id) ?? []).length };
+    const saved = await actions.logSet(current.id, draft);
+    showLogged(saved, before);
     const group = current.superset_group;
     const doneNow = filled(current) + (draft.type === "warmup" ? 0 : 1);
     // This set finished the last planned set of the whole workout: no rest, say well done.
@@ -252,6 +273,25 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       setCurrentId(current.id);
       setUpNextFrom(current.id);
     }
+  }
+
+  /** "✓ Set 2 logged · 70 lb × 10 · Undo" for 5 s. Undo deletes the set and puts the screen back as it was. */
+  function showLogged(saved: WorkoutSet, before: { currentId: string | null; upNextFrom: string | null; rest: RestState | null; draft: Draft; wexId: string; count: number }) {
+    const what = saved.type === "warmup" ? "Warm-up" : saved.type === "drop" ? "Drop set" : `Set ${setNumber}`;
+    const load = `${saved.weight === null ? "BW" : `${formatWeight(saved.weight, units)} ${weightUnit(units)}`} × ${saved.reps ?? "—"}`;
+    setToast({
+      id: saved.id,
+      text: `${what} logged · ${load}`,
+      onUndo: async () => {
+        setToast(null);
+        restoreDraft.current = { wexId: before.wexId, count: before.count, draft: before.draft };
+        await actions.deleteSet(saved);
+        await db.setMeta("rest", before.rest);
+        setAllDoneOpen(false);
+        setCurrentId(before.currentId);
+        setUpNextFrom(before.upNextFrom);
+      },
+    });
   }
 
   /** Skips a planned set. Skipping the last one finishes the exercise, same as logging it. */
@@ -695,7 +735,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         </div>
       </div>
 
-      {dock && dockContent && <SetDock hidden={dockHidden} onHiddenChange={setDockHidden} rest={restProps} content={dockContent} />}
+      {dock && dockContent && <SetDock hidden={dockHidden} onHiddenChange={setDockHidden} rest={restProps} content={dockContent} toast={toast} />}
 
       {/* Sheets */}
       <Sheet open={actionsFor !== null} onClose={() => setActionsFor(null)} title={actionsFor ? catalog.byId.get(actionsFor.exercise_id)?.name : undefined}>
