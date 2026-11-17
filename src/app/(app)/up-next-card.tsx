@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
 import { useWorkoutActions } from "@/lib/workout";
-import { suggestionFor, useLastSets, useStartingProfile } from "@/lib/smart";
+import { suggestionFor, useGeneratorInputs, useLastSets, useStartingProfile } from "@/lib/smart";
+import { formatWait, groupReadiness, READY_AVG } from "@/lib/readiness";
+import { pickAlternative } from "@/lib/today-alt";
 import { useUpNext, useUpNextChoice } from "@/lib/up-next";
-import { doseLabel, MusclePills, suggestionLabel, supersetLetter } from "@/components/planned";
+import { doseLabel, suggestionLabel, supersetLetter } from "@/components/planned";
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { Sheet, btn } from "@/components/ui/kit";
 import { ExerciseInfo } from "@/components/exercise-info";
@@ -30,6 +32,8 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
   const [starting, setStarting] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [showSwaps, setShowSwaps] = useState(false);
+  const { recovery } = useGeneratorInputs();
 
   if (up === undefined || !catalog || !profile) {
     return <section className="h-[300px] animate-pulse rounded-[28px] bg-primary/40" aria-label="Loading today's workout" />;
@@ -38,17 +42,63 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
 
   const units = profile.units;
   const seed = choice?.seed ?? 0;
-  const regenerate = () => setChoice({ mode: up.mode, dayId: up.day?.id ?? null, muscles: choice?.muscles, seed: seed + 1 });
+  const regenerate = () => setChoice({ mode: up.mode, dayId: up.day?.id ?? null, muscles: choice?.muscles, seed: seed + 1, via: choice?.via, light: choice?.light });
+
+  // Readiness of today's muscles (Part 2.1), with the same rule as the Recovery tab.
+  const tau = new Map(catalog.muscles.map((m) => [m.id, m.recovery_tau_hours]));
+  const readinessOf = (n: string, muscles: string[]) => (recovery ? groupReadiness({ name: n, muscles }, recovery.map, tau) : null);
+  const rd = up.targets.length ? readinessOf(up.title, up.targets) : null;
+  const lowest =
+    rd && !rd.ready && recovery
+      ? up.targets.flatMap((m) => (recovery.map.get(m) ? [recovery.map.get(m)!] : [])).sort((a, b) => a.score - b.score).slice(0, 2)
+      : [];
+
+  // One Switch when the plan day isn't ready (Part 2.2): a later ready day, or a lighter version of this one.
+  const switched = choice?.via === "switch" && up.mode === "plan";
+  const switchedDay = switched && !choice?.light;
+  const planned = up.plan ? (switchedDay ? up.plan.nextDay : up.day) : null;
+  const undo = () => setChoice({ mode: "plan", seed: 0 });
+  const switchRow: null | { text: React.ReactNode; label: "Switch" | "Undo"; onPress: () => void } = (() => {
+    if (up.mode !== "plan" || !up.plan || !planned || !recovery) return null;
+    if (switchedDay) return { text: <>{planned.name} stays next in your plan.</>, label: "Undo", onPress: undo };
+    if (switched) return { text: <>Lighter {planned.name}: 2 sets per lift, about {up.light?.minutes ?? profile.session_minutes} min.</>, label: "Undo", onPress: undo };
+    if (!rd || rd.ready) return null;
+    const alt = pickAlternative(up.plan.days, planned.id, (d) => readinessOf(d.name, d.target_muscle_ids) ?? { ready: false });
+    if (alt.kind === "day") {
+      const score = readinessOf(alt.day.name, alt.day.target_muscle_ids)?.score ?? 0;
+      return {
+        text: (
+          <>
+            <b className="font-extrabold">{alt.day.name} is ready ({score}%).</b> Train it today, {planned.name} next.
+          </>
+        ),
+        label: "Switch",
+        onPress: () => setChoice({ mode: "plan", dayId: alt.day.id, seed: 0, via: "switch" }),
+      };
+    }
+    return {
+      text: (
+        <>
+          <b className="font-extrabold">Nothing in your plan is ready.</b> Go lighter: 2 sets per lift.
+        </>
+      ),
+      label: "Switch",
+      onPress: () => setChoice({ mode: "plan", dayId: planned.id, seed: 0, light: true, via: "switch" }),
+    };
+  })();
+  const startAnyway = rd !== null && !rd.ready && !switched;
 
   async function go() {
     if (!up || !up.items.length) return;
     setStarting(true);
-    await start({ items: up.items, name: up.title, gymId: gym?.id ?? null, planDayId: up.day?.id ?? null, source: up.source });
+    // A switched-in day starts outside the plan's order, so the planned day stays next.
+    await start({ items: up.items, name: up.title, gymId: gym?.id ?? null, planDayId: switchedDay ? null : (up.day?.id ?? null), source: up.source });
     router.push("/workout");
   }
 
   const swapped = up.swaps.filter((s) => s.to);
   const dropped = up.swaps.filter((s) => !s.to);
+  const wasFrom = new Map(swapped.map((s) => [s.to!, s.from]));
   const name = (id: string) => catalog.byId.get(id)?.name ?? id;
 
   return (
@@ -56,7 +106,7 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
       <section className="flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">
-            UP NEXT{up.mode === "fresh" ? " · FRESH MUSCLES" : up.mode === "muscles" ? " · YOUR PICK" : up.mode === "ai" ? " · AI" : ""}
+            UP NEXT{up.light ? " · LIGHTER" : up.mode === "fresh" ? " · FRESH MUSCLES" : up.mode === "muscles" ? " · YOUR PICK" : up.mode === "ai" ? " · AI" : ""}
           </span>
           <button type="button" onClick={() => setOptions(true)} className="display -mr-1 min-h-11 rounded-full px-3 text-sm font-extrabold tracking-[0.08em] text-[#DCE4FF]">
             Change
@@ -64,23 +114,51 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
         </div>
         <h1 className="display text-[56px] leading-[0.85] font-extrabold tracking-[-0.02em] break-words">{up.title}</h1>
         <p className="-mt-1 text-[15px] font-semibold text-[#DCE4FF]">{up.subtitle}</p>
-        <MusclePills catalog={catalog} ids={up.targets} light max={7} />
-        {(swapped.length > 0 || dropped.length > 0) && (
-          <p className="rounded-2xl bg-white/15 px-3 py-2 text-sm font-semibold">
-            For {gym?.name ?? "this gym"}:{" "}
-            {swapped.map((s) => `${name(s.from)} → ${name(s.to!)}`).join("; ")}
-            {dropped.length ? `${swapped.length ? "; " : ""}skipped ${dropped.map((s) => name(s.from)).join(", ")} (no match here)` : ""}
-          </p>
+        {rd && (
+          <div className="flex flex-col gap-1.5 rounded-2xl bg-black/20 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">READINESS</span>
+              <span className={`display text-sm font-extrabold ${rd.ready ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>
+                {rd.ready ? "Ready" : `Ready in ${formatWait(rd.hoursToReady)}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative h-2 flex-1 rounded-full bg-white/20" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={rd.score} aria-label="Readiness">
+                <div className={`h-full rounded-full ${rd.ready ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, rd.score)}%` }} />
+                <span className="absolute -top-0.5 h-3 w-0.5 bg-white" style={{ left: `${READY_AVG}%` }} aria-hidden="true" />
+              </div>
+              <span className="display num w-11 text-right text-xl font-extrabold">{rd.score}%</span>
+            </div>
+            {lowest.length > 0 && (
+              <p className="text-sm font-semibold text-[#DCE4FF]">
+                Lowest: {lowest.map((r) => `${catalog.muscleName.get(r.muscleId) ?? r.muscleId} ${Math.round(r.score)}%`).join(" · ")}
+              </p>
+            )}
+          </div>
+        )}
+        {switchRow && (
+          <div className="flex min-h-14 items-center gap-3 rounded-2xl bg-white/15 py-1.5 pr-1.5 pl-3">
+            <p className="min-w-0 flex-1 text-sm leading-tight font-semibold">{switchRow.text}</p>
+            <button
+              type="button"
+              onClick={() => void switchRow.onPress()}
+              className={`display h-11 shrink-0 rounded-xl px-4 text-base font-extrabold ${switchRow.label === "Switch" ? "bg-white text-primary" : "border-2 border-white/60 text-white"}`}
+            >
+              {switchRow.label}
+            </button>
+          </div>
         )}
         <div className="mt-1 flex gap-2">
           <button
             type="button"
             onClick={go}
             disabled={starting || !up.items.length}
-            className="display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full bg-white text-xl font-extrabold tracking-[0.08em] text-primary disabled:opacity-60"
+            className={`display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full text-xl font-extrabold tracking-[0.08em] disabled:opacity-60 ${
+              startAnyway ? "border-2 border-white/70 text-white" : "bg-white text-primary"
+            }`}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
-            {starting ? "Starting…" : "Start"}
+            {!startAnyway && <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>}
+            {starting ? "Starting…" : startAnyway ? "Start anyway" : "Start"}
           </button>
           {up.mode !== "ai" && (
             <button
@@ -110,9 +188,13 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
       <section className="flex flex-col">
         <div className="flex items-baseline justify-between pb-1">
           <h2 className="display text-xl font-extrabold">
-            {up.items.length} exercise{up.items.length === 1 ? "" : "s"} · ~{profile.session_minutes} min
+            {up.items.length} exercise{up.items.length === 1 ? "" : "s"} · ~{up.light?.minutes ?? profile.session_minutes} min
           </h2>
-          {up.mode === "plan" ? (
+          {up.swaps.length > 0 ? (
+            <button type="button" aria-pressed={showSwaps} className="display min-h-11 text-sm font-extrabold text-accent" onClick={() => setShowSwaps(!showSwaps)}>
+              {showSwaps ? "⇄ Hide swaps" : `⇄ ${up.swaps.length} swapped`}
+            </button>
+          ) : up.mode === "plan" ? (
             <button type="button" className="display min-h-11 text-sm font-extrabold tracking-[0.06em] text-accent" onClick={() => setChoice({ mode: "fresh", seed: 0 })}>
               Fresh muscles only
             </button>
@@ -149,7 +231,10 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
                       {it.superset_group !== null && <span className="mr-1.5 text-accent">{supersetLetter(it.superset_group)}</span>}
                       {name(it.exercise_id)}
                     </span>
-                    <span className="text-sm font-medium text-muted">{doseLabel(catalog, it)}</span>
+                    <span className="text-sm font-medium text-muted">
+                      {doseLabel(catalog, it)}
+                      {showSwaps && wasFrom.has(it.exercise_id) && <span className="text-accent-soft"> · ⇄ was {name(wasFrom.get(it.exercise_id)!)}</span>}
+                    </span>
                   </span>
                   {sLabel &&
                     (s?.change === "new" ? (
@@ -162,6 +247,9 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
               );
             })}
           </ul>
+        )}
+        {showSwaps && dropped.length > 0 && (
+          <p className="pt-2 text-sm font-medium text-muted">Not available at {gym?.name ?? "this gym"}: {dropped.map((s) => name(s.from)).join(", ")}</p>
         )}
       </section>
 
