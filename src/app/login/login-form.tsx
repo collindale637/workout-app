@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { supabaseConfigured } from "@/lib/supabase/env";
@@ -25,6 +25,21 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Coming back to this page from the browser's back/forward cache (e.g. after signing out) must
+  // never show the previous person's email or a button stuck on "One sec…".
+  useEffect(() => {
+    function reset(e: PageTransitionEvent) {
+      if (!e.persisted) return;
+      setEmail("");
+      setPassword("");
+      setShowPassword(false);
+      setBusy(false);
+      setError(null);
+    }
+    window.addEventListener("pageshow", reset);
+    return () => window.removeEventListener("pageshow", reset);
+  }, []);
 
   if (!supabaseConfigured) {
     return (
@@ -61,6 +76,10 @@ export function LoginForm() {
         return setError("Account created, but it needs email confirmation. Ask Collin to turn off \"Confirm email\" in Supabase.");
       }
     }
+    // Signed in: don't leave the password (or a stuck busy button) behind in this form.
+    setPassword("");
+    setShowPassword(false);
+    setBusy(false);
     router.replace("/");
     router.refresh();
   }

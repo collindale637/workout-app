@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { useData, useProfile, usePendingCount } from "@/lib/db/provider";
@@ -9,7 +8,6 @@ import { GOAL_LABELS } from "@/lib/profile";
 import { useAiUsage } from "@/lib/ai/client";
 
 export function MoreMenu() {
-  const router = useRouter();
   const { db, status, requestSync } = useData();
   const { profile } = useProfile();
   const pending = usePendingCount();
@@ -20,7 +18,8 @@ export function MoreMenu() {
   async function signOut() {
     if (pending > 0 && !confirm(`${pending} change(s) haven't synced yet and will be lost if you sign out now. Sign out anyway?`)) return;
     await getSupabaseBrowser().auth.signOut();
-    router.replace("/login");
+    // Hard navigation (not router.replace) so the login page loads fresh, with an empty form.
+    window.location.replace("/login");
   }
 
   return (
