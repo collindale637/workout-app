@@ -26,6 +26,37 @@ export const isPerHand = (ex: { name: string } | null | undefined) =>
 
 export const weightStep = (units: Units) => (units === "kg" ? 2.5 : 5);
 
+/** Wheel number: "100", "102.5", "92.25". */
+export const wheelNumber = (v: number) => (Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100));
+
+/**
+ * Values for the dock's weight wheel, in display units: 0 to 1,000 lb (450 kg) in plate steps. A value off the
+ * steps (typed 102.5) is slotted in so it can be shown. Bodyweight lifts start at BW (null) instead of 0; any
+ * other lift starts with "—" (null) only while no weight is set.
+ */
+export function weightWheel(shown: number | null, bodyweight: boolean, units: Units) {
+  const step = weightStep(units);
+  const max = units === "kg" ? 450 : 1000;
+  const grid: number[] = [];
+  for (let v = bodyweight ? step : 0; v <= max + 1e-9; v += step) grid.push(Math.round(v * 100) / 100);
+  if (shown !== null && shown > 0 && !grid.some((g) => Math.abs(g - shown) < 1e-6)) {
+    grid.push(shown);
+    grid.sort((a, b) => a - b);
+  }
+  const values: (number | null)[] = bodyweight || shown === null ? [null, ...grid] : grid;
+  const index = shown === null || (bodyweight && shown === 0) ? 0 : values.findIndex((v) => v !== null && Math.abs(v - shown) < 1e-6);
+  return { values, index: Math.max(0, index) };
+}
+
+/** Values for the reps wheel: 1 to 50 (plus any typed value above that), with "—" (null) only while unset. */
+export function repsWheel(reps: number | null) {
+  const grid = Array.from({ length: 50 }, (_, i) => i + 1);
+  if (reps !== null && reps > 50) grid.push(reps);
+  const values: (number | null)[] = reps === null || reps < 1 ? [null, ...grid] : grid;
+  const index = reps === null || reps < 1 ? 0 : values.indexOf(reps);
+  return { values, index: Math.max(0, index) };
+}
+
 /** "185", "92.5", "BW" */
 /** Axis label: whole numbers, with one decimal only when the tick needs it (180.5). */
 export function formatTick(v: number) {

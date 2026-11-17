@@ -10,7 +10,7 @@ import { RPE_SCALE } from "@/lib/defaults";
  * defaultRpe null = no default (cardio): nothing is outlined until you pick.
  */
 export function RpeSlider({
-  value, defaultRpe, resetKey, onChange, tone = "blue", bleed = true, pill = false,
+  value, defaultRpe, resetKey, onChange, tone = "blue", bleed = true, pill = false, plain = false,
 }: {
   value: number | null;
   defaultRpe: number | null;
@@ -21,6 +21,8 @@ export function RpeSlider({
   bleed?: boolean;
   /** Round chips (workout dock, UX spec 5.4); otherwise rounded squares. */
   pill?: boolean;
+  /** Bare numbers with only the picked one in a white circle (workout dock, Nov 2026 redesign). Blue tone only. */
+  plain?: boolean;
 }) {
   const strip = useRef<HTMLDivElement>(null);
   const shown = value ?? defaultRpe ?? 6;
@@ -45,7 +47,7 @@ export function RpeSlider({
           ? blue ? "bg-white text-primary" : "bg-primary text-white"
           : isDefault
             ? blue ? "border-2 border-dashed border-white/70 text-white" : "border-2 border-dashed border-accent-strong text-accent-soft"
-            : blue ? "bg-white/15 text-white" : "bg-card-2 text-muted";
+            : blue ? (plain ? "text-[#C6D0FF]" : "bg-white/15 text-white") : "bg-card-2 text-muted";
         return (
           <button
             key={r}
@@ -53,7 +55,7 @@ export function RpeSlider({
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? null : r)}
-            className={`display num relative shrink-0 font-extrabold ${pill ? "rounded-full" : blue ? "rounded-[11px]" : "rounded-xl"} ${blue ? "h-[42px] w-12 text-[17px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']" : "h-12 w-[3.25rem] text-lg"} ${cls}`}
+            className={`display num relative shrink-0 font-extrabold ${pill ? "rounded-full" : blue ? "rounded-[11px]" : "rounded-xl"} ${blue ? `h-10 ${plain ? "w-10 text-[19px]" : "w-12 text-[17px]"} after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']` : "h-12 w-[3.25rem] text-lg"} ${cls}`}
           >
             {r}
           </button>

@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/units";
 
 /*
-  The fixed blue panel at the bottom of the live workout (lifts only): rest/last-time row, weight and reps,
-  RPE and Log. Every row has a fixed height so Log never moves. Swipe it down (or tap the handle) to shrink it
-  to one row ("hidden"), up to bring it back. UX spec Part 1 + 5.4.
+  The fixed blue panel at the bottom of the live workout (lifts only): rest/last-time row, weight and reps
+  wheels (white selected bar), RPE and Log. Every row has a fixed height so Log never moves. Swipe it down
+  (or tap the handle) to shrink it to one row ("hidden"), up to bring it back. Hidden, a raised ring sits
+  half out of the bar: the rest countdown (tap to skip) or, when not resting, set progress.
+  UX spec Part 1 + 5.4, redesigned Nov 2026 (wheels + raised ring mockups).
 */
 
 /** Bright green that reads on the blue dock; the rest numbers turn this at 0:00. */
@@ -20,8 +22,8 @@ export type DockSet = {
   hint: { text: string; tone: "plain" | "good" | "warn" };
   /** Right of the status row: the same set last time, or "First time". */
   last: { main: string; rpe: string | null } | null;
-  weight: StepperProps;
-  reps: StepperProps;
+  weight: WheelProps;
+  reps: WheelProps;
   /** The RPE slider, or null for a warm-up (the row keeps its height and says so). */
   rpe: React.ReactNode | null;
   logLabel: string;
@@ -29,6 +31,8 @@ export type DockSet = {
   /** Hidden bar: micro line ("SET 2 OF 3", "WARM-UP") and big line ("70 LB × 10"). */
   micro: string;
   big: string;
+  /** Hidden bar ring when not resting: set N of total. */
+  progress: { set: number; total: number };
 };
 
 export type DockUpNext = {
@@ -64,6 +68,8 @@ export function SetDock({
   const suppressClick = useRef(false);
   const [dy, setDy] = useState(0);
   const [dragging, setDragging] = useState(false);
+  // Hidden with a set: the raised ring takes the handle's place.
+  const ring = hidden && content.kind === "set";
 
   // Same gesture style as Sheet in kit.tsx. A drag that starts in the RPE strip never moves the dock.
   const onTouchStart = (e: React.TouchEvent) => {
@@ -117,7 +123,7 @@ export function SetDock({
         <div
           data-no-sheet-drag
           role={toast.warn ? "alert" : "status"}
-          className="absolute inset-x-3 bottom-[calc(100%+8px)] flex h-12 items-center gap-2 rounded-2xl border border-line bg-card-2 pr-0.5 pl-4 text-ink"
+          className={`absolute inset-x-3 ${ring ? "bottom-[calc(100%+48px)]" : "bottom-[calc(100%+8px)]"} flex h-12 items-center gap-2 rounded-2xl border border-line bg-card-2 pr-0.5 pl-4 text-ink`}
         >
           <span className="num min-w-0 flex-1 truncate text-sm font-bold">
             <span className={toast.warn ? "text-warn" : "text-good"}>{toast.warn ? "!" : "✓"}</span> {toast.text}
@@ -129,9 +135,11 @@ export function SetDock({
           )}
         </div>
       )}
-      <button type="button" onClick={() => onHiddenChange(!hidden)} aria-label={hidden ? "Show the set panel" : "Hide the set panel"} className="flex h-5 w-full items-center justify-center">
-        <span className="h-[5px] w-10 rounded-full bg-white/45" />
-      </button>
+      {!ring && (
+        <button type="button" onClick={() => onHiddenChange(!hidden)} aria-label={hidden ? "Show the set panel" : "Hide the set panel"} className="flex h-5 w-full items-center justify-center">
+          <span className="h-[5px] w-10 rounded-full bg-white/45" />
+        </button>
+      )}
 
       {hidden ? <HiddenRow rest={rest} content={content} onShow={() => onHiddenChange(false)} /> : <ShownRows rest={rest} content={content} />}
     </div>
@@ -139,27 +147,73 @@ export function SetDock({
 }
 
 function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: DockSet | DockUpNext; onShow: () => void }) {
-  const upNext = content.kind === "upnext";
-  return (
-    <div className="relative flex h-14 items-center gap-3 px-2 pb-1">
-      <button type="button" onClick={onShow} className="flex min-w-0 shrink -translate-y-[3px] flex-col items-start text-left" aria-label="Show the set panel">
-        <span className={`display num text-[11px] leading-none font-bold tracking-[0.12em] ${upNext ? "text-[#C9F7DA]" : "text-[#DCE4FF]"}`}>
-          {upNext ? "✓ DONE · UP NEXT" : content.micro}
-        </span>
-        {upNext ? (
+  if (content.kind === "upnext") {
+    return (
+      <div className="flex h-14 items-center gap-3 px-2 pb-1">
+        <button type="button" onClick={onShow} className="flex min-w-0 shrink -translate-y-[3px] flex-col items-start text-left" aria-label="Show the set panel">
+          <span className="display num text-[11px] leading-none font-bold tracking-[0.12em] text-[#C9F7DA]">✓ DONE · UP NEXT</span>
           <span className="display mt-1 block w-full truncate text-[24px] leading-none font-extrabold">{content.nextName}</span>
-        ) : (
-          <span className="display num mt-1 block w-full truncate text-[26px] leading-none font-extrabold">{content.big}</span>
-        )}
+        </button>
+        <div className="flex-1" />
+        <button type="button" onClick={content.onStart} className={`${white} h-12 shrink-0 px-5 text-lg`}>
+          Start
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="relative grid h-[76px] grid-cols-[minmax(0,1fr)_92px_minmax(0,1fr)] items-end gap-1 px-2 pb-2.5">
+      <RaisedRing rest={rest} progress={content.progress} onShow={onShow} />
+      <button type="button" onClick={onShow} className="flex min-w-0 flex-col items-start text-left" aria-label="Show the set panel">
+        <span className="display num max-w-full truncate text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{content.micro}</span>
+        <span className="display num mt-1 block max-w-full truncate text-[24px] leading-none font-extrabold">{content.big}</span>
       </button>
-      {!upNext && rest && (
-        <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[56%]"><RestRing left={rest.left} total={rest.total} /></div>
-      )}
-      <div className="flex-1" />
-      <button type="button" onClick={upNext ? content.onStart : content.onLog} className={`${white} h-12 shrink-0 px-5 text-lg`}>
-        {upNext ? "Start" : content.logLabel}
+      <span />
+      <button type="button" onClick={content.onLog} className={`${white} h-[50px] max-w-full justify-self-end truncate px-4 text-lg`}>
+        {content.logLabel}
       </button>
     </div>
+  );
+}
+
+/**
+ * Hidden-bar hero: a 92 px blue disc lifted half out of the bar with an 80 px ring inside.
+ * Resting: the countdown drains, tap skips (or clears a finished 0:00). Not resting: set progress, tap opens the panel.
+ */
+function RaisedRing({ rest, progress, onShow }: { rest: DockRest | null; progress: { set: number; total: number }; onShow: () => void }) {
+  const done = rest ? rest.left <= 0 : false;
+  const R = 37;
+  const C = 2 * Math.PI * R;
+  const total = Math.max(1, progress.total);
+  const pct = rest ? (done ? 0 : Math.min(1, rest.left / Math.max(1, rest.total))) : Math.min(1, (progress.set - 1) / total);
+  const label = rest
+    ? done ? "Rest finished. Tap to clear" : `Rest ${formatDuration(rest.left)} left. Tap to skip rest`
+    : `Set ${progress.set} of ${total}. Show the set panel`;
+  return (
+    <button
+      type="button"
+      onClick={rest ? rest.onSkip : onShow}
+      aria-label={label}
+      role={rest ? "timer" : undefined}
+      className="absolute top-[-36px] left-1/2 h-[92px] w-[92px] -translate-x-1/2 rounded-full bg-primary p-1.5 shadow-[0_-6px_18px_rgba(0,0,0,0.35)] active:scale-95"
+    >
+      <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90" aria-hidden="true">
+        <circle cx="40" cy="40" r={R} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="6" />
+        <circle
+          cx="40" cy="40" r={R} fill="none" strokeWidth="6" strokeLinecap="round"
+          stroke={done ? REST_DONE : "#fff"} strokeDasharray={C} strokeDashoffset={C * (1 - (done ? 1 : pct))}
+          className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+        />
+      </svg>
+      <span className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
+        <span className="display num text-[24px] leading-none font-extrabold" style={done ? { color: REST_DONE } : undefined}>
+          {rest ? formatDuration(rest.left) : `${progress.set}/${total}`}
+        </span>
+        <span className="display mt-0.5 text-[10px] leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">
+          {rest ? (done ? "DONE" : "SKIP") : "SETS"}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -210,9 +264,9 @@ function ShownRows({ rest, content }: { rest: DockRest | null; content: DockSet 
   return (
     <>
       {status}
-      <div className="grid h-16 grid-cols-2 gap-2">
-        <Stepper {...content.weight} />
-        <Stepper {...content.reps} />
+      <div className="grid h-[150px] grid-cols-2 gap-2.5">
+        <Wheel {...content.weight} />
+        <Wheel {...content.reps} />
       </div>
       <div className="mt-2 flex h-[42px] items-center gap-2">
         {content.rpe ? (
@@ -231,55 +285,92 @@ function ShownRows({ rest, content }: { rest: DockRest | null; content: DockSet 
   );
 }
 
-export type StepperProps = { label: string; value: string; onMinus: () => void; onPlus: () => void; onTap: () => void };
+/** One wheel row, in px. Three rows show: the one above, the picked one on the white bar, the one below. */
+const ROW = 50;
 
-export function Stepper({ label: l, value, onMinus, onPlus, onTap }: StepperProps) {
-  // 4+ characters ("1,005", "102.5") shrink so the ± buttons never overlap the number.
-  const big = value.length >= 4 ? "text-[30px]" : "text-[40px]";
-  return (
-    <div className="flex items-center gap-1 rounded-[14px] bg-white/10 p-1">
-      <button
-        type="button"
-        onClick={onMinus}
-        aria-label={`Less ${l}`}
-        className="flex h-14 w-[52px] shrink-0 items-center justify-center rounded-full text-xl font-bold shadow-[inset_0_0_0_2px_rgba(255,255,255,0.7),inset_0_0_0_7px_transparent,inset_0_0_0_8px_rgba(255,255,255,0.28)]"
-      >
-        −
-      </button>
-      <button type="button" onClick={onTap} className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center" aria-label={`${l} ${value}. Tap to type`}>
-        <span className={`display num leading-none font-extrabold ${big}`}>{value}</span>
-        <span className="display mt-0.5 max-w-full truncate text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{l}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onPlus}
-        aria-label={`More ${l}`}
-        className="flex h-14 w-[52px] shrink-0 items-center justify-center rounded-full bg-white text-xl font-bold text-primary shadow-[inset_0_0_0_7px_#fff,inset_0_0_0_8px_rgba(31,75,255,0.4)]"
-      >
-        +
-      </button>
-    </div>
-  );
-}
+export type WheelProps = {
+  /** Shown on the white bar beside the number ("LB", "LB EACH", "REPS"). */
+  label: string;
+  /** Every value the wheel can land on, as shown ("100", "102.5", "BW", "—"). */
+  options: string[];
+  /** Which option is picked. */
+  index: number;
+  onPick: (index: number) => void;
+  /** Tapping the picked value opens the type-it-in sheet. */
+  onTap: () => void;
+};
 
-/** Collapsed-dock rest countdown: a draining ring with the time inside; the numbers and ring turn green at 0:00. */
-function RestRing({ left, total }: { left: number; total: number }) {
-  const done = left <= 0;
-  const R = 29;
-  const C = 2 * Math.PI * R;
-  const pct = Math.min(1, left / Math.max(1, total));
+/** Scroll-wheel picker: flick for big jumps, tap a value to land on it, tap the picked value to type one. */
+export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
+  const box = useRef<HTMLDivElement>(null);
+  const frame = useRef(0);
+  const scrolling = useRef(false);
+  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Follow the value when it changes from outside (typed, next set, undo), but never fight a finger mid-flick.
+  useEffect(() => {
+    const el = box.current;
+    if (!el || scrolling.current) return;
+    if (Math.round(el.scrollTop / ROW) !== index) el.scrollTop = index * ROW;
+  }, [index, options.length]);
+  useEffect(() => () => {
+    cancelAnimationFrame(frame.current);
+    if (idle.current) clearTimeout(idle.current);
+  }, []);
+
+  const onScroll = () => {
+    scrolling.current = true;
+    if (idle.current) clearTimeout(idle.current);
+    idle.current = setTimeout(() => (scrolling.current = false), 160);
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      const i = Math.max(0, Math.min(options.length - 1, Math.round(el.scrollTop / ROW)));
+      if (i !== index) onPick(i);
+    });
+  };
+
   return (
-    <div className="relative h-[68px] w-[68px] shrink-0" role="timer" aria-label={done ? "Rest finished" : `Rest ${formatDuration(left)} left`}>
-      <svg viewBox="0 0 68 68" className="absolute inset-0 -rotate-90" aria-hidden="true">
-        <circle cx="34" cy="34" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="5" />
-        <circle
-          cx="34" cy="34" r={R} fill="none" strokeWidth="5" strokeLinecap="round"
-          stroke={done ? REST_DONE : "#fff"} strokeDasharray={C} strokeDashoffset={C * (1 - (done ? 1 : pct))}
-          className="transition-[stroke-dashoffset] duration-1000 ease-linear"
-        />
-      </svg>
-      <span className="display num absolute inset-0 flex items-center justify-center text-[24px] leading-none font-extrabold" style={done ? { color: REST_DONE } : undefined}>
-        {formatDuration(left)}
+    <div className="relative h-[150px] overflow-hidden rounded-[18px] bg-black/15">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-[50px] h-[50px] rounded-[14px] bg-white shadow-[0_6px_16px_rgba(0,0,30,0.25)]" />
+      <div
+        ref={box}
+        data-no-sheet-drag
+        role="spinbutton"
+        tabIndex={0}
+        aria-label={l}
+        aria-valuetext={options[index]}
+        aria-valuenow={index}
+        aria-valuemin={0}
+        aria-valuemax={options.length - 1}
+        onScroll={onScroll}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            const i = Math.max(0, Math.min(options.length - 1, index + (e.key === "ArrowUp" ? -1 : 1)));
+            if (i !== index) onPick(i);
+          } else if (e.key === "Enter") onTap();
+        }}
+        className="relative h-full touch-pan-y snap-y snap-mandatory overflow-y-auto overscroll-contain py-[50px] [mask-image:linear-gradient(transparent,#000_30%,#000_70%,transparent)] [scrollbar-width:none] focus-visible:outline-2 focus-visible:outline-white [&::-webkit-scrollbar]:hidden"
+      >
+        {options.map((o, i) => {
+          const on = i === index;
+          return (
+            <button
+              key={`${i}-${o}`}
+              type="button"
+              tabIndex={-1}
+              onClick={() => (on ? onTap() : box.current?.scrollTo({ top: i * ROW, behavior: "smooth" }))}
+              className={`display num block h-[50px] w-full snap-center pr-5 leading-none font-extrabold ${on ? `text-primary ${o.length >= 5 ? "text-[34px]" : "text-[42px]"}` : "text-[30px] text-white/45"}`}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+      <span aria-hidden="true" className="display pointer-events-none absolute top-[67px] right-3 max-w-[40%] truncate text-[12px] leading-none font-bold tracking-[0.08em] text-primary/75">
+        {l}
       </span>
     </div>
   );
