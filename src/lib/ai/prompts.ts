@@ -92,7 +92,7 @@ export function taskBlock(req: AiRequest) {
       const o = req.options!;
       return `TASK: build a training plan.
 Settings: goal ${GOAL_WORDS[o.goal] ?? o.goal}; ${o.days_per_week} training days a week; ${o.weeks} weeks; ${o.session_minutes}-minute sessions.
-Return exactly ${o.days_per_week} distinct training days, in the order they should be done. The week repeats for ${o.weeks} weeks, so "progression" should explain how to progress week to week (and when to deload, if the plan is longer than 5 weeks).
+Return exactly ${o.days_per_week} distinct training days, in the order they should be done. The week repeats for ${o.weeks} weeks, so "progression" should explain how to progress week to week (and when to deload, if the plan is longer than 5 weeks), in at most 120 words of complete sentences.
 "summary": two or three sentences on what the plan is and why it fits this person. Leave "changes" empty.
 
 What they asked for: """${ask}"""`;
@@ -165,7 +165,7 @@ export const PLAN_TOOL = {
       goal: { type: "string", enum: GOAL_ENUM },
       weeks: { type: "integer" },
       summary: { type: "string" },
-      progression: { type: "string" },
+      progression: { type: "string", description: "How to progress week to week, at most 120 words, complete sentences." },
       changes: { type: "array", items: { type: "string" } },
       days: {
         type: "array",
@@ -200,7 +200,7 @@ export const IMPORT_TOOL = {
       goal: { type: ["string", "null"], enum: [...GOAL_ENUM, null] },
       weeks: nullableInt,
       summary: { type: "string" },
-      progression: { type: "string" },
+      progression: { type: "string", description: "How to progress week to week, at most 120 words, complete sentences." },
       problems: nullableStr,
       days: {
         type: "array",

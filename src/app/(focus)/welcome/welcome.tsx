@@ -8,7 +8,8 @@ import { useGymActions } from "@/lib/gyms";
 import { useGeneratorInputs } from "@/lib/smart";
 import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
-import { buildPlanDays } from "@/lib/generator";
+import { buildPlanDays, previewSession } from "@/lib/generator";
+import { useCatalog } from "@/lib/hooks";
 import { EXPERIENCE_LABELS, GOAL_LABELS } from "@/lib/profile";
 import { CARDIO_PREF_LABELS, GOAL_BLURBS, recommendSplit, splitChoices } from "@/lib/onboarding";
 import { TEMPLATE_LABELS, GYM_NAME_MAX, TEMPLATE_SHORT_NAME } from "@/lib/defaults";
@@ -175,7 +176,7 @@ export function Welcome() {
                 <Chip key={m} active={minutes === m} onClick={() => setMinutes(m)}>{m}</Chip>
               ))}
             </div>
-            <p className="text-sm font-medium text-muted">About {Math.max(3, Math.round((minutes - 5) / (goal === "strength" ? 11 : 8)))} exercises a session at this length.</p>
+            <SessionHint goal={goal} experience={experience} minutes={minutes} cardio={cardio} />
           </div>
           <Next onClick={() => go(3)} />
         </div>
@@ -197,6 +198,21 @@ export function Welcome() {
 
       {step === 5 && <PlanStep days={days} goal={goal} experience={experience} cardio={cardio} onDone={finish} />}
     </main>
+  );
+}
+
+/** "About 6 exercises (18 sets) plus 15 min of cardio": built by the plan generator, so it matches the plan. */
+function SessionHint({ goal, experience, minutes, cardio }: { goal: Goal; experience: Experience; minutes: number; cardio: CardioPref }) {
+  const catalog = useCatalog();
+  const shape = useMemo(
+    () => (catalog ? previewSession(catalog, { goal, experience, sessionMinutes: minutes, cardioPref: cardio }) : null),
+    [catalog, goal, experience, minutes, cardio],
+  );
+  if (!shape) return <p className="text-sm font-medium text-muted">&nbsp;</p>;
+  return (
+    <p className="text-sm font-medium text-muted">
+      About {shape.lifts} exercises ({shape.sets} sets){shape.cardioMinutes ? ` plus ${shape.cardioMinutes} min of cardio` : ""} a session at this length.
+    </p>
   );
 }
 

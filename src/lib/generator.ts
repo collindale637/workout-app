@@ -122,7 +122,9 @@ export function dayStyle(name: string): { cardio: CardioMode | null; focus: DayF
 
 export function cardioMinutes(mode: CardioMode, goal: Goal, sessionMinutes: number) {
   if (mode === "main") return Math.max(20, Math.round(sessionMinutes * 0.6 / 5) * 5);
-  if (mode === "block") return goal === "fat_loss" ? 20 : 15;
+  // A block is about a third of the session (10 min at least), never more than the goal's usual block:
+  // a 30-minute fat-loss day gets 10 minutes of cardio, not 20 with the lifting squeezed into the rest.
+  if (mode === "block") return Math.min(goal === "fat_loss" ? 20 : 15, Math.max(10, Math.round(sessionMinutes / 3 / 5) * 5));
   return 0;
 }
 
@@ -201,6 +203,17 @@ const TECHNICAL = new Set(["T-Bar_Row_with_Handle", "Lying_T-Bar_Row", "Bent_Ove
 export const isBodyweightPull = (ex: Pick<Exercise, "name" | "movement_pattern" | "mechanic">, loadable: boolean) =>
   ex.movement_pattern === "vertical_pull" && ex.mechanic === "compound" && !loadable && !/assist|band|inverted/i.test(ex.name);
 const isSwing = (name: string) => /swing/i.test(name);
+/** Weighted pull-ups and chins: a strength lift, done for low reps by people past the beginner stage. */
+const isWeightedPull = (id: string) => /^Weighted_(Pull|Chin)/i.test(id);
+const SMITH = /smith/i;
+/** Bench angle of a press, so a day gets one incline and one flat press rather than two of the same. */
+const pressAngle = (name: string) => (/incline/i.test(name) ? "incline" : /decline/i.test(name) ? "decline" : "flat");
+/**
+ * Exercise tiers (Batch 11): staple (STAPLES 1, can lead the day), common (STAPLES 2 or flagged common),
+ * specialist (everything else). Specialist lifts are rare for beginners and never lead a session.
+ */
+export const tierOf = (ex: Pick<Exercise, "id" | "is_common" | "owner_id">): "staple" | "common" | "specialist" =>
+  STAPLES[ex.id] === 1 ? "staple" : STAPLES[ex.id] === 2 || ex.is_common || ex.owner_id ? "common" : "specialist";
 /** Cardio that pounds the joints: fine in short bursts, a lot for a beginner or a 15–20 minute block. */
 const HIGH_IMPACT = /jump|rope|run|sprint|burpee/i;
 
@@ -375,6 +388,21 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     const tier = STAPLES[c.ex.id];
     if (tier === 1) s += chosen.length < 2 && !offTarget ? 0.8 : 0.5;
     else if (tier === 2) s += 0.35;
+    // The day's lead lift is a staple (bench, squat, row, pull-up…), not JM press or a machine dip.
+    if (i < mains && !c.iso && !isCore(c) && tier !== 1) s -= 0.8;
+    // Specialist lifts by experience: rare for beginners, occasional otherwise.
+    if (tierOf(c.ex) === "specialist") s -= opts.experience === "beginner" ? 1.2 : 0.3;
+    // Weighted pull-ups are a low-rep strength lift: not for beginners or fat-loss circuits.
+    if (isWeightedPull(c.ex.id) && (opts.experience === "beginner" || opts.goal === "fat_loss")) return -Infinity;
+    // At a full gym, anyone past the beginner stage squats and presses with a free bar before a Smith machine.
+    if (bigGym && preferFree && SMITH.test(c.ex.name) && !c.iso) s -= 0.7;
+    // Presses: no two at the same bench angle, and never two inclines without a flat press.
+    if (c.ex.movement_pattern === "horizontal_push" && !c.iso) {
+      const angles = chosen.filter((o) => o.ex.movement_pattern === "horizontal_push" && !o.iso).map((o) => pressAngle(o.ex.name));
+      const a = pressAngle(c.ex.name);
+      if (a !== "flat" && angles.includes(a) && !angles.includes("flat")) return -Infinity;
+      if (angles.includes(a)) s -= 1.5;
+    }
     if (c.ex.movement_pattern === "other") s -= 0.2;
     if (!c.ex.is_common && !c.ex.owner_id) s -= 1.2;
     if (opts.prefs?.get(c.ex.id)?.favorite) s += 0.5;
@@ -438,7 +466,8 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   // Main lifts first, then other compounds (bigger muscles first), then isolation, core last.
   const weight = (c: Candidate) => Math.max(...c.primary.map((m) => MUSCLE_PRIORITY[m] ?? 0.5));
   const rank = (c: Candidate) =>
-    isCore(c) ? 4 : c.iso ? 3 : !c.loadable ? 2 : STAPLES[c.ex.id] === 1 ? 0 : 1;
+    // Pull-ups and chins come straight after the main lifts (they're hardest when tired), before other compounds.
+    isCore(c) ? 4 : c.iso ? 3 : bwPull(c) || isWeightedPull(c.ex.id) ? 0.5 : !c.loadable ? 2 : STAPLES[c.ex.id] === 1 ? 0 : 1;
   const freeFirst = (c: Candidate) => (preferFree && c.free ? 0 : 1);
   const legOrder = (c: Candidate) => (knee(c) ? (isUnilateral(c.ex.name) ? 0.7 : 0) : hip(c) ? 1 : 0.5);
   const uni = (c: Candidate) => (isUnilateral(c.ex.name) ? 1 : 0);
@@ -448,7 +477,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   const mainItems = new Set<GenItem>();
   const items: GenItem[] = chosen.map((c) => {
     // Heavy 3–5 rep work belongs on free weights; a machine or cable lift gets the "compound" dose instead.
-    const role = isCore(c) ? "core" : c.iso ? "isolation" : canMain(c) && mainLeft-- > 0 ? "main" : "compound";
+    const role = isCore(c) ? "core" : c.iso ? "isolation" : canMain(c) && STAPLES[c.ex.id] === 1 && mainLeft-- > 0 ? "main" : "compound";
     const d = dose(opts.goal, role, opts.experience, opts.focus ?? null);
     const item: GenItem = { exercise_id: c.ex.id, ...d, superset_group: null, notes: null };
     if (isHold(c.ex.name)) return { ...item, rep_min: opts.experience === "beginner" ? 20 : 30, rep_max: opts.experience === "beginner" ? 30 : 45, notes: "seconds" };
@@ -457,6 +486,7 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     if (role !== "main" && HEAVY_ONLY.has(c.ex.id)) return { ...item, rep_min: 5, rep_max: 8, rest_sec: Math.max(150, d.rest_sec), notes: "Stop each set with 2 reps in the tank" };
     // Swings are a power move: quick reps, short rest.
     if (isSwing(c.ex.name)) return { ...item, rep_min: 10, rep_max: 15, rest_sec: 60 };
+    if (isWeightedPull(c.ex.id)) return { ...item, rep_min: 5, rep_max: 8, rest_sec: Math.max(120, d.rest_sec) };
     if (bwPull(c)) {
       if (opts.experience === "beginner") return { ...item, rep_min: 3, rep_max: 6, notes: "Use a band or a slow lowering if you can't do 3 yet" };
       if (!heavy) return { ...item, rep_min: 5, rep_max: 10 };
@@ -471,7 +501,8 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
   // muscle (chest press with a row, not with a fly), and heavy deadlifts stay on their own.
   if (opts.goal === "fat_loss" && opts.focus !== "power") {
     const byItem = new Map(chosen.map((c) => [c.ex.id, c]));
-    const open = items.slice(1).filter((it) => !HEAVY_ONLY.has(it.exercise_id) && !isCore(byItem.get(it.exercise_id)!));
+    // Pull-ups and chins stay on their own too: hard enough already, and they'd fight a curl for the biceps.
+    const open = items.slice(1).filter((it) => !HEAVY_ONLY.has(it.exercise_id) && !isCore(byItem.get(it.exercise_id)!) && !bwPull(byItem.get(it.exercise_id)!) && !isWeightedPull(it.exercise_id));
     let group = 1;
     while (open.length >= 2) {
       const a = open.shift()!;
@@ -491,6 +522,13 @@ export function generateWorkout(cat: GenCatalog, opts: GenOptions): { items: Gen
     const order = new Map(items.map((it, k) => [it, k]));
     const anchor = (it: GenItem) => (it.superset_group === null ? order.get(it)! : Math.min(...items.filter((x) => x.superset_group === it.superset_group).map((x) => order.get(x)!)));
     items.sort((x, y) => anchor(x) - anchor(y) || order.get(x)! - order.get(y)!);
+    // Pairing can pull a curl or fly ahead of the pull-ups: put them back right after the main lifts.
+    const pulls = items.filter((it) => it.superset_group === null && (isWeightedPull(it.exercise_id) || bwPull(byItem.get(it.exercise_id)!)));
+    if (pulls.length) {
+      for (const it of pulls) items.splice(items.indexOf(it), 1);
+      const lastMain = items.reduce((k, it, idx) => (mainItems.has(it) ? idx : k), 0);
+      items.splice(lastMain + 1, 0, ...pulls);
+    }
   }
 
   if (mode !== "main") fitToTime(items, chosen, liftMinutes, opts.experience, setCap, heavy, mainItems);
@@ -531,6 +569,19 @@ function fitToTime(items: GenItem[], chosen: Candidate[], minutes: number, exper
     const it = [...items].filter((x) => x.sets > (isMain(x) ? 3 : 2)).sort((a, b) => b.sets - a.sets || items.indexOf(b) - items.indexOf(a))[0];
     if (!it) break;
     for (const x of group(it)) x.sets = Math.max(isMain(x) ? 3 : 2, x.sets - 1);
+  }
+  // Still over (short sessions, heavy days with long rests): heavy lifts drop to 2 sets, then the last
+  // accessory goes, as long as two exercises are left.
+  for (let guard = 0; guard < 10 && total() > minutes * 1.08; guard++) {
+    const it = [...items].reverse().find((x) => isMain(x) && x.sets > 2);
+    if (!it) break;
+    it.sets--;
+  }
+  for (let guard = 0; guard < 10 && total() > minutes * 1.08 && items.length > 2; guard++) {
+    const last = [...items].reverse().find((x) => !isMain(x));
+    if (!last) break;
+    for (const x of group(last)) items.splice(items.indexOf(x), 1);
+    if (last.superset_group != null) for (const x of items) if (x.superset_group === last.superset_group) x.superset_group = null;
   }
   if (experience === "beginner") return;
   const setsOn = (m: string) => items.reduce((a, it) => a + (cand.get(it.exercise_id)!.primary.includes(m) ? it.sets : 0), 0);
@@ -802,6 +853,28 @@ export function adaptToGym<T extends { exercise_id: string }>(
 }
 
 export type DayTemplate = { name: string; target_muscle_ids: string[] };
+
+const PREVIEW_TARGETS = ["chest", "lats", "upper_back", "side_delts", "quads", "hamstrings", "glutes", "abs"];
+
+/**
+ * What a session of this length looks like, from the generator itself (onboarding's hint): a full-body
+ * day at a full gym, median of a few shuffles. Lifts counts exercises; cardio is the block's minutes.
+ */
+export function previewSession(
+  cat: GenCatalog,
+  opts: { goal: Goal; experience: Experience; sessionMinutes: number; cardioPref?: CardioPref },
+): { lifts: number; sets: number; cardioMinutes: number } {
+  const runs = [0, 1, 2].map((seed) =>
+    generateWorkout(cat, { ...opts, targets: PREVIEW_TARGETS, gymEquipment: null, prefs: new Map(), seed } as GenOptions),
+  );
+  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+  const lifts = runs.map((r) => r.items.filter((i) => !/min$/.test(i.notes ?? "")));
+  return {
+    lifts: median(lifts.map((l) => l.length)),
+    sets: median(lifts.map((l) => l.reduce((a, i) => a + i.sets, 0))),
+    cardioMinutes: runs[0].cardioMinutes,
+  };
+}
 
 /**
  * Builds every day of a plan from a split. Repeated days (Push A / Push B) steer away from each
