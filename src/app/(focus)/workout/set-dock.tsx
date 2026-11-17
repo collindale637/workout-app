@@ -139,7 +139,7 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
   const upNext = content.kind === "upnext";
   return (
     <div className="flex h-14 items-center gap-3 px-2 pb-1">
-      <button type="button" onClick={onShow} className="flex min-w-0 flex-1 flex-col items-start text-left" aria-label="Show the set panel">
+      <button type="button" onClick={onShow} className="flex min-w-0 shrink flex-col items-start text-left" aria-label="Show the set panel">
         <span className={`display num text-[11px] leading-none font-bold tracking-[0.12em] ${upNext ? "text-[#C9F7DA]" : "text-[#DCE4FF]"}`}>
           {upNext ? "✓ DONE · UP NEXT" : content.micro}
         </span>
@@ -149,12 +149,14 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
           <span className="display num mt-1 block w-full truncate text-[26px] leading-none font-extrabold">{content.big}</span>
         )}
       </button>
-      {!upNext && rest && (
-        <div className="flex shrink-0 flex-col items-center" role="timer" aria-label={`Rest ${formatDuration(rest.left)} left`}>
-          <span className="display text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">REST</span>
-          <span className="display num mt-1 text-[34px] leading-none font-extrabold">{formatDuration(rest.left)}</span>
-        </div>
-      )}
+      <div className="flex min-w-0 flex-1 justify-center">
+        {!upNext && rest && (
+          <div className="flex flex-col items-center" role="timer" aria-label={`Rest ${formatDuration(rest.left)} left`}>
+            <span className="display text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">REST</span>
+            <span className="display num mt-1 text-[34px] leading-none font-extrabold">{formatDuration(rest.left)}</span>
+          </div>
+        )}
+      </div>
       <button type="button" onClick={upNext ? content.onStart : content.onLog} className={`${white} h-12 shrink-0 px-5 text-lg`}>
         {upNext ? "Start" : content.logLabel}
       </button>
