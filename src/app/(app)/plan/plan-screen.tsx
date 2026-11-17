@@ -5,7 +5,10 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useCatalog } from "@/lib/hooks";
-import { useActivePlan, usePlans } from "@/lib/smart";
+import { useActivePlan, usePlan, usePlans } from "@/lib/smart";
+import { headline, headlineText } from "@/lib/plan-preview";
+import { isCardioExercise } from "@/lib/cardio";
+import { doseLabel } from "@/components/planned";
 import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
@@ -144,8 +147,7 @@ function ActivePlanCard() {
                     {isNext && <span className="display shrink-0 text-xs font-extrabold tracking-[0.1em] text-accent">UP NEXT</span>}
                   </div>
                   <span className="truncate text-sm font-medium text-muted">
-                    {list.length} exercise{list.length === 1 ? "" : "s"} · {list.slice(0, 3).map((e) => catalog.byId.get(e.exercise_id)?.name ?? e.exercise_id).join(", ")}
-                    {list.length > 3 ? "…" : ""}
+                    {headlineText(headline(list, { isCardio: (id) => isCardioExercise(catalog.byId.get(id)), nameOf: (id) => catalog.byId.get(id)?.name ?? id })) || "No exercises yet"}
                   </span>
                 </div>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 text-muted" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
@@ -286,6 +288,7 @@ function PastPlans({ plans }: { plans: Plan[] }) {
       <Sheet open={open !== null} onClose={() => setOpen(null)} title={open?.name}>
         {open && (
           <div className="flex flex-col gap-2">
+            <PastPlanView planId={open.id} />
             <button type="button" className={btn.primary} onClick={async () => { await actions.setActive(open.id, true); setOpen(null); }}>
               Make it my active plan
             </button>
@@ -304,5 +307,29 @@ function PastPlans({ plans }: { plans: Plan[] }) {
         )}
       </Sheet>
     </section>
+  );
+}
+
+/** Read-only look at a past plan: each day and its exercises with their doses. */
+function PastPlanView({ planId }: { planId: string }) {
+  const plan = usePlan(planId);
+  const catalog = useCatalog();
+  if (!plan || !catalog) return null;
+  return (
+    <div className="flex max-h-[45dvh] flex-col gap-3 overflow-y-auto pb-1">
+      {plan.days.map((d) => (
+        <div key={d.id} className="flex flex-col gap-1">
+          <h3 className="display text-lg font-extrabold">{d.name}</h3>
+          <ul className="flex flex-col">
+            {(plan.exercises.get(d.id) ?? []).map((it) => (
+              <li key={it.id} className="flex items-baseline justify-between gap-3 py-0.5">
+                <span className="truncate text-[15px] font-semibold">{catalog.byId.get(it.exercise_id)?.name ?? it.exercise_id}</span>
+                <span className="display num shrink-0 text-[15px] font-bold text-muted">{doseLabel(catalog, it)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
