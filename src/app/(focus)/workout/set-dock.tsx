@@ -9,6 +9,9 @@ import { formatDuration } from "@/lib/units";
   to one row ("hidden"), up to bring it back. UX spec Part 1 + 5.4.
 */
 
+/** Bright green that reads on the blue dock; the rest numbers turn this at 0:00. */
+const REST_DONE = "#5CF2A0";
+
 export type DockRest = { left: number; total: number; onAdd: () => void; onSkip: () => void };
 
 export type DockSet = {
@@ -139,7 +142,7 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
   const upNext = content.kind === "upnext";
   return (
     <div className="flex h-14 items-center gap-3 px-2 pb-1">
-      <button type="button" onClick={onShow} className="flex min-w-0 shrink flex-col items-start text-left" aria-label="Show the set panel">
+      <button type="button" onClick={onShow} className="flex min-w-0 shrink -translate-y-[3px] flex-col items-start text-left" aria-label="Show the set panel">
         <span className={`display num text-[11px] leading-none font-bold tracking-[0.12em] ${upNext ? "text-[#C9F7DA]" : "text-[#DCE4FF]"}`}>
           {upNext ? "✓ DONE · UP NEXT" : content.micro}
         </span>
@@ -149,14 +152,7 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
           <span className="display num mt-1 block w-full truncate text-[26px] leading-none font-extrabold">{content.big}</span>
         )}
       </button>
-      <div className="flex min-w-0 flex-1 justify-center">
-        {!upNext && rest && (
-          <div className="flex flex-col items-center" role="timer" aria-label={`Rest ${formatDuration(rest.left)} left`}>
-            <span className="display text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">REST</span>
-            <span className="display num mt-1 text-[34px] leading-none font-extrabold">{formatDuration(rest.left)}</span>
-          </div>
-        )}
-      </div>
+      <div className="flex min-w-0 flex-1 justify-center">{!upNext && rest && <RestRing left={rest.left} total={rest.total} />}</div>
       <button type="button" onClick={upNext ? content.onStart : content.onLog} className={`${white} h-12 shrink-0 px-5 text-lg`}>
         {upNext ? "Start" : content.logLabel}
       </button>
@@ -263,6 +259,29 @@ export function Stepper({ label: l, value, onMinus, onPlus, onTap }: StepperProp
   );
 }
 
+/** Collapsed-dock rest countdown: a draining ring with the time inside; the numbers and ring turn green at 0:00. */
+function RestRing({ left, total }: { left: number; total: number }) {
+  const done = left <= 0;
+  const R = 24;
+  const C = 2 * Math.PI * R;
+  const pct = Math.min(1, left / Math.max(1, total));
+  return (
+    <div className="relative h-14 w-14 shrink-0" role="timer" aria-label={done ? "Rest finished" : `Rest ${formatDuration(left)} left`}>
+      <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90" aria-hidden="true">
+        <circle cx="28" cy="28" r={R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="5" />
+        <circle
+          cx="28" cy="28" r={R} fill="none" strokeWidth="5" strokeLinecap="round"
+          stroke={done ? REST_DONE : "#fff"} strokeDasharray={C} strokeDashoffset={C * (1 - (done ? 1 : pct))}
+          className="transition-[stroke-dashoffset] duration-1000 ease-linear"
+        />
+      </svg>
+      <span className="display num absolute inset-0 flex items-center justify-center text-[19px] leading-none font-extrabold" style={done ? { color: REST_DONE } : undefined}>
+        {formatDuration(left)}
+      </span>
+    </div>
+  );
+}
+
 /** Rest countdown: REST, a draining track, time left, +15 and Skip rest. */
 export function RestBar({ left, total, onAdd, onSkip }: DockRest) {
   const pct = Math.min(1, left / Math.max(1, total));
@@ -275,7 +294,7 @@ export function RestBar({ left, total, onAdd, onSkip }: DockRest) {
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
         <div className="h-full rounded-full bg-white transition-[width] duration-1000 ease-linear" style={{ width: `${pct * 100}%` }} />
       </div>
-      <span className="display num w-12 shrink-0 text-right text-2xl font-extrabold">{formatDuration(left)}</span>
+      <span className="display num w-12 shrink-0 text-right text-2xl font-extrabold" style={left <= 0 ? { color: REST_DONE } : undefined}>{formatDuration(left)}</span>
       <button type="button" onClick={onAdd} className="display -mr-1 h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-[#DCE4FF]">+15</button>
       <button type="button" onClick={onSkip} className="display h-11 min-w-11 shrink-0 rounded-xl px-2 text-base font-extrabold whitespace-nowrap text-white">Skip rest</button>
     </div>

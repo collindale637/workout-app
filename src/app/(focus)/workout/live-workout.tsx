@@ -465,7 +465,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   // ---- The bottom set panel (lifts only; cardio and an empty workout keep the blue card at the top). ----
   const dock = !extra && current && ex && !isCardio ? current : null;
   const restProps =
-    rest && restLeft > 0
+    rest && now < rest.endsAt + 10 * 60 * 1000 // stays on screen as a green 0:00 for up to 10 minutes after it ends
       ? { left: restLeft, total: rest.total, onAdd: () => void db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 }), onSkip: () => void db.setMeta("rest", null) }
       : null;
   const setChipLabel = current
