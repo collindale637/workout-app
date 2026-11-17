@@ -48,7 +48,14 @@ const SLOP = 6;
 const white =
   "display flex items-center justify-center rounded-full bg-white font-extrabold tracking-[0.04em] text-primary active:translate-y-px";
 
-export function SetDock({ hidden, onHiddenChange, rest, content }: { hidden: boolean; onHiddenChange: (h: boolean) => void; rest: DockRest | null; content: DockSet | DockUpNext }) {
+/** "✓ Set 2 logged · 70 lb × 10" with Undo, shown for 5 s after a log (the screen owns the timer). */
+export type DockToast = { text: string; onUndo: () => void };
+
+export function SetDock({
+  hidden, onHiddenChange, rest, content, toast = null,
+}: {
+  hidden: boolean; onHiddenChange: (h: boolean) => void; rest: DockRest | null; content: DockSet | DockUpNext; toast?: DockToast | null;
+}) {
   const drag = useRef<{ y: number; t: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const [dy, setDy] = useState(0);
@@ -101,8 +108,21 @@ export function SetDock({ hidden, onHiddenChange, rest, content }: { hidden: boo
       style={{ transform: dy ? `translateY(${dy}px)` : undefined, transition: dragging ? "none" : "transform 0.2s ease-out" }}
       className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md touch-none rounded-t-[22px] bg-primary px-3 text-white shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
     >
-      {/* TODO(Batch 9): the "✓ Set 2 logged · 70 lb × 10 · Undo" toast floats 8 px above the dock in both states:
-          <div className="absolute inset-x-3 bottom-[calc(100%+8px)] h-12 rounded-2xl border border-line bg-card-2">…</div>, 5 s. */}
+      {/* Floats 8 px above the dock in both states. data-no-sheet-drag: touching it never drags the dock. */}
+      {toast && (
+        <div
+          data-no-sheet-drag
+          role="status"
+          className="absolute inset-x-3 bottom-[calc(100%+8px)] flex h-12 items-center gap-2 rounded-2xl border border-line bg-card-2 pr-0.5 pl-4 text-ink"
+        >
+          <span className="num min-w-0 flex-1 truncate text-sm font-bold">
+            <span className="text-good">✓</span> {toast.text}
+          </span>
+          <button type="button" onClick={toast.onUndo} className="display h-11 min-w-11 shrink-0 rounded-xl px-3 text-base font-extrabold text-accent active:bg-line">
+            Undo
+          </button>
+        </div>
+      )}
       <button type="button" onClick={() => onHiddenChange(!hidden)} aria-label={hidden ? "Show the set panel" : "Hide the set panel"} className="flex h-5 w-full items-center justify-center">
         <span className="h-[5px] w-10 rounded-full bg-white/45" />
       </button>
