@@ -1,12 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { describeNeeds, isAvailable } from "@/lib/availability";
+import { cuesFor } from "@/lib/exercise-cues";
 import { exerciseImageUrl } from "@/lib/exercise-images";
 import { ImageCarousel } from "./image-carousel";
 import type { Catalog } from "@/lib/hooks";
 
 /** Pictures, muscles, equipment and how-to for one exercise. */
 export function ExerciseInfo({ catalog, id, gymEquipment, gymName }: { catalog: Catalog; id: string; gymEquipment: Set<string> | null; gymName?: string }) {
+  const [more, setMore] = useState(false);
   const ex = catalog.byId.get(id);
   if (!ex) return <p className="text-muted">Exercise not found.</p>;
   const muscles = catalog.musclesOf.get(id) ?? [];
@@ -36,11 +39,21 @@ export function ExerciseInfo({ catalog, id, gymEquipment, gymName }: { catalog: 
           </div>
         )}
       </div>
-      {ex.instructions.length > 0 && (
-        <ol className="flex list-decimal flex-col gap-2 pl-5 text-base font-medium text-ink/90 marker:font-bold marker:text-accent">
-          {ex.instructions.map((s, i) => <li key={i}>{s}</li>)}
-        </ol>
-      )}
+      {ex.instructions.length > 0 && (() => {
+        const { cues, hasMore } = cuesFor(ex.instructions);
+        return (
+          <div className="flex flex-col gap-2">
+            <ol className="flex list-decimal flex-col gap-2 pl-5 text-base font-medium text-ink/90 marker:font-bold marker:text-accent">
+              {(more ? ex.instructions : cues).map((s, i) => <li key={`${more}-${i}`}>{s}</li>)}
+            </ol>
+            {hasMore && (
+              <button type="button" aria-expanded={more} onClick={() => setMore(!more)} className="display flex min-h-11 items-center self-start text-base font-extrabold tracking-[0.04em] text-accent">
+                {more ? "Less" : "More"}
+              </button>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
