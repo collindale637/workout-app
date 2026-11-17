@@ -18,6 +18,7 @@ import { GymSwitcher } from "@/components/gym-switcher";
 import { BodyweightSheet } from "@/components/bodyweight-sheet";
 import { Card, Chip, btn } from "@/components/ui/kit";
 import type { Units } from "@/lib/db/types";
+import { useWeeklyTarget } from "@/lib/smart";
 import { HistoryList } from "./history";
 
 const DAY = 86_400_000;
@@ -26,6 +27,7 @@ export function ProgressScreen() {
   const data = useProgressData();
   const { profile } = useProfile();
   const now = useNow(60_000);
+  const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
   const units: Units = profile?.units ?? "lb";
   const [logging, setLogging] = useState(false);
 
@@ -43,8 +45,8 @@ export function ProgressScreen() {
           <Link href="/" className={`${btn.primary} mt-2`}>Go to Today</Link>
         </Card>
       )}
-      {!empty && <ThisWeek data={data} goalDays={profile.days_per_week} now={now} />}
-      {!empty && <Consistency data={data} goalDays={profile.days_per_week} now={now} />}
+      {!empty && <ThisWeek data={data} goalDays={weeklyTarget} now={now} />}
+      {!empty && <Consistency data={data} goalDays={weeklyTarget} now={now} />}
       {!empty && <RecentPRs data={data} units={units} now={now} />}
       {data.sessions.size > 0 && <Lifts data={data} units={units} now={now} />}
       {data.muscleSets.length > 0 && <MuscleVolume data={data} goal={profile.goal} now={now} />}

@@ -50,6 +50,27 @@ export function loadFor(needs: ExerciseEquipment[], gymRows: Pick<GymEquipment, 
 
 /** `estimate` (pounds) is a starting weight for a lift with no history; it is only used when there is none. */
 export function suggestNext(last: LoggedSet[], repMin: number | null, repMax: number | null, load: Load, estimate: number | null = null): Suggestion {
+  return fitToGym(rawSuggestion(last, repMin, repMax, load, estimate), load);
+}
+
+const MAX_SUGGESTED_REPS = 30;
+
+/**
+ * Keeps a suggestion inside what this gym can actually load. Over the heaviest weight (say last time was
+ * at another gym), it suggests the heaviest and asks for proportionally more reps to make up the difference;
+ * under the lightest, it suggests the lightest. A kettlebell ladder is left to stepUp/stepDown.
+ */
+export function fitToGym(s: Suggestion, load: Load): Suggestion {
+  if (s.weight === null || load.ladder) return s;
+  if (load.max !== undefined && s.weight > load.max) {
+    const reps = s.reps === null ? null : Math.min(MAX_SUGGESTED_REPS, Math.max(s.reps, Math.ceil((s.reps * s.weight) / load.max)));
+    return { ...s, weight: load.max, reps, change: s.change === "up" ? "same" : s.change };
+  }
+  if (load.min !== undefined && s.weight < load.min) return { ...s, weight: load.min };
+  return s;
+}
+
+function rawSuggestion(last: LoggedSet[], repMin: number | null, repMax: number | null, load: Load, estimate: number | null): Suggestion {
   const working = last.filter((s) => s.type === "working" && (s.reps ?? 0) > 0);
   const top = repMax ?? repMin;
   const bottom = repMin ?? repMax;

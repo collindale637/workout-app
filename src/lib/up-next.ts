@@ -124,9 +124,18 @@ export function useUpNext(): UpNext | null | undefined {
     }
 
     const fresh = pickFreshTargets(recovery.map, catalog.muscles);
+    if (fresh.tooFew) {
+      // Fewer than two muscles are fresh: say so and offer core and cardio (or rest) instead of a lifting day.
+      const core = ["abs", "obliques"];
+      const { items } = generateWorkout(catalog, { ...base, targets: core, cardio: "block" });
+      return {
+        mode: "fresh", title: "Core & cardio", subtitle: "Most muscles are still recovering (under 85%). Core and cardio today, or take a rest day.",
+        targets: core, items, swaps: [], day: null, plan, seed, source: "generated",
+      };
+    }
     const { items } = generateWorkout(catalog, { ...base, targets: fresh.targets });
     return {
-      mode: "fresh", title: fresh.template.name, subtitle: "Built from your freshest muscles",
+      mode: "fresh", title: fresh.template.name, subtitle: "Only muscles that are 85%+ recovered",
       targets: fresh.targets, items, swaps: [], day: null, plan, seed, source: "generated",
     };
   }, [inputs, plan, choice, loaded]);

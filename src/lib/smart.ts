@@ -124,6 +124,12 @@ export function usePlan(planId: string | null | undefined) {
 
 export const useActivePlan = () => usePlan(undefined);
 
+/** Training days a week to aim for: the active plan's day count, else what the profile says. */
+export function useWeeklyTarget(profileDays: number | undefined): number {
+  const active = useActivePlan();
+  return active?.days.length || profileDays || 4;
+}
+
 /** Last time's sets for these exercises (finished workouts only), for weight suggestions. */
 export function useLastSets(exerciseIds: string[]) {
   const { db } = useData();

@@ -83,6 +83,17 @@ describe("target fresh muscles", () => {
     expect(r.targets).not.toContain("quads");
   });
 
+  it("only trains muscles at 85%+ and flags a day with too few", () => {
+    const r = pickFreshTargets(rec({ quads: 70, hamstrings: 84, glutes: 85 }), muscles);
+    expect(r.targets).not.toContain("quads");
+    expect(r.targets).not.toContain("hamstrings");
+    const tired = Object.fromEntries(muscles.map((m) => [m.id, 50]));
+    const all = pickFreshTargets(rec(tired), muscles);
+    expect(all.tooFew).toBe(true);
+    expect(all.targets).toEqual([]);
+    expect(pickFreshTargets(rec({}), muscles).tooFew).toBe(false);
+  });
+
   it("chest and back fatigued: never a lone biceps day", () => {
     const r = pickFreshTargets(rec({ chest: 30, lats: 30, upper_back: 30, front_delts: 50, rear_delts: 55 }), muscles);
     expect(r.targets.length).toBeGreaterThanOrEqual(3);
