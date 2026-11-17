@@ -15,18 +15,19 @@ import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
 import { RPE_SCALE } from "@/lib/defaults";
-import { formatDuration, formatMax, formatWeight, fromDisplayWeight, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
+import { formatDuration, formatMax, formatWeight, fromDisplayWeight, isPerHand, toDisplayWeight, volumeLb, weightStep, weightUnit } from "@/lib/units";
 import { bestE1rm } from "@/lib/progress";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
 import { ExerciseInfo } from "@/components/exercise-info";
-import { Sheet, btn, field, label } from "@/components/ui/kit";
+import { Sheet, btn, doneDisc, field, label } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
-import { ReorderList, type ReorderItem } from "@/components/reorder-list";
+import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
+import { RestBar, SetDock, type DockSet, type DockUpNext } from "./set-dock";
 import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 
 type Draft = { weight: number | null; reps: number | null; rpe: number | null; type: SetType };
@@ -148,6 +149,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const [addCardioOpen, setAddCardioOpen] = useState(false);
   // After the last set of an exercise, the blue card shows "Up next" (set to that exercise's id) until you start the next one.
   const [upNextFrom, setUpNextFrom] = useState<string | null>(null);
+  // The bottom set panel (lifts): hidden = shrunk to one row. Stays as you left it until the screen is reopened.
+  const [dockHidden, setDockHidden] = useState(false);
+  // "⋯" on a row or the title: Swap / How-to / Notes / Remove in one sheet.
+  const [actionsFor, setActionsFor] = useState<WorkoutExercise | null>(null);
 
   if (!wexs || !sets || !catalog) return null;
 
@@ -313,6 +318,23 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     return draft.weight === null ? "LIGHT · AN EASY WEIGHT" : `LIGHT · ABOUT ${d.pct}% OF WORKING`;
   })();
 
+  /** Swap / How-to / Notes / Remove for one exercise: the swipe-left buttons and the ⋯ sheet use the same list. */
+  const rowActions = (w: WorkoutExercise): RowAction[] => [
+    { key: "swap", label: "Swap", icon: <RowIcon name="swap" />, className: "bg-primary text-white", onPress: () => setPicker({ mode: "swap", wex: w }) },
+    { key: "how", label: "How-to", icon: <RowIcon name="how" />, className: "bg-[#2a3150] text-white", onPress: () => setInfoFor(w.exercise_id) },
+    { key: "notes", label: "Notes", icon: <RowIcon name="notes" />, className: "bg-[#3b4a8c] text-white", onPress: () => setNotesFor(w) },
+    {
+      key: "remove",
+      label: "Remove",
+      icon: <RowIcon name="remove" />,
+      className: "bg-danger text-white",
+      onPress: async () => {
+        if (confirm(isCardioWex(w) ? "Remove this cardio and its results?" : "Remove this exercise and its sets?")) await actions.removeWex(w.id);
+      },
+    },
+  ];
+  const menuLabel = (w: WorkoutExercise) => `${catalog.byId.get(w.exercise_id)?.name ?? w.exercise_id}: swap, how-to, notes, remove`;
+
   const listItems: ReorderItem[] = wexs.map((w, i) => {
     const e = catalog.byId.get(w.exercise_id);
     const cardioWex = isCardioWex(w);
@@ -326,14 +348,15 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       ariaLabel: `${e?.name ?? w.exercise_id}. Tap to open. Swipe left for options. Hold to drag.`,
       liClassName: linkedAbove ? "-mt-2" : "",
       before: linkedAbove ? <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" /> : undefined,
-      faceClassName: `flex min-h-16 items-center rounded-2xl border-2 py-2 pr-3 pl-4 ${isCur ? "border-accent-strong bg-[#0f1638]" : "border-line bg-card"}`,
+      // Outlines are inset rings (box-shadow), so they keep the 14px corners and survive the drag shadow.
+      faceClassName: `flex min-h-16 items-center rounded-[14px] py-2 pr-2 pl-4 ring-inset ${isCur ? "bg-[#0f1638] ring-2 ring-[var(--accent-strong)]" : "bg-card ring-1 ring-[#262d49]"}`,
       onTap: () => {
         setUpNextFrom(null);
         setCurrentId(w.id);
       },
       face: (
         <>
-          <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${done(w) ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
+          <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${done(w) ? doneDisc : numberDisc}`}>
             {done(w) ? "✓" : i + 1}
           </span>
           <span className="min-w-0 flex-1">
@@ -359,30 +382,102 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               ) : null}
             </span>
           </span>
+        </>
+      ),
+      trailing: (
+        <>
+          <button
+            type="button"
+            aria-label={menuLabel(w)}
+            // Not a tap on the row, and never the start of a swipe or drag.
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setActionsFor(w);
+            }}
+            className="-mx-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted active:bg-card-2"
+          >
+            <Dots />
+          </button>
           <svg className="shrink-0 text-[#454d6e]" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
           </svg>
         </>
       ),
-      actions: [
-        { key: "swap", label: "Swap", icon: <RowIcon name="swap" />, className: "bg-primary text-white", onPress: () => setPicker({ mode: "swap", wex: w }) },
-        { key: "how", label: "How-to", icon: <RowIcon name="how" />, className: "bg-[#2a3150] text-white", onPress: () => setInfoFor(w.exercise_id) },
-        { key: "notes", label: "Notes", icon: <RowIcon name="notes" />, className: "bg-[#3b4a8c] text-white", onPress: () => setNotesFor(w) },
-        {
-          key: "remove",
-          label: "Remove",
-          icon: <RowIcon name="remove" />,
-          className: "bg-danger text-white",
-          onPress: async () => {
-            if (confirm(cardioWex ? "Remove this cardio and its results?" : "Remove this exercise and its sets?")) await actions.removeWex(w.id);
-          },
-        },
-      ],
+      actions: rowActions(w),
     };
   });
 
+  // ---- The bottom set panel (lifts only; cardio and an empty workout keep the blue card at the top). ----
+  const dock = !extra && current && ex && !isCardio ? current : null;
+  const restProps =
+    rest && restLeft > 0
+      ? { left: restLeft, total: rest.total, onAdd: () => void db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 }), onSkip: () => void db.setMeta("rest", null) }
+      : null;
+  const setChipLabel = current
+    ? draft.type === "warmup"
+      ? "WARM-UP"
+      : draft.type === "drop"
+        ? "DROP SET"
+        : setNumber > (current.target_sets ?? 3)
+          ? `EXTRA SET ${setNumber}`
+          : `SET ${setNumber} OF ${current.target_sets ?? 3}`
+    : "";
+  const logLabel = `Log ${draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}`;
+  const dockContent: DockSet | DockUpNext | null = (() => {
+    if (!dock || !ex) return null;
+    if (upNextWex && upNextTarget) {
+      return {
+        kind: "upnext",
+        doneName: ex.name,
+        nextName: upNextEx?.name ?? upNextTarget.exercise_id,
+        detail: upNextDetail,
+        startLabel: `Start ${isCardioWex(upNextTarget) ? "cardio" : "exercise"}`,
+        onStart: () => {
+          setCurrentId(upNextTarget.id);
+          setUpNextFrom(null);
+        },
+        onInfo: () => setInfoFor(upNextTarget.exercise_id),
+      };
+    }
+    const hist = history?.get(dock.exercise_id);
+    const prev = hist?.last.filter((x) => x.type !== "warmup") ?? [];
+    const same = prev[setNumber - 1] ?? prev[prev.length - 1] ?? null;
+    const unit = weightUnit(units);
+    const weightLabel = isBodyweight && draft.weight === null ? "BODYWEIGHT" : `${unit.toUpperCase()}${isPerHand(ex) ? " EACH" : ""}`;
+    const weightValue = draft.weight === null ? (isBodyweight ? "BW" : "—") : formatWeight(draft.weight, units);
+    return {
+      kind: "set",
+      hint: warmHint
+        ? { text: warmHint, tone: "plain" }
+        : upHint
+          ? { text: upHint, tone: upHint.startsWith("▼") ? "warn" : "good" }
+          : estHint
+            ? { text: estHint, tone: "plain" }
+            : { text: hist?.lastDate ? `LAST TIME · ${lastTimeLabel(hist.lastDate)}` : "LAST TIME", tone: "plain" },
+      last: same ? { main: `${same.weight === null ? "BW" : `${formatWeight(same.weight, units)} ${unit}`} × ${same.reps ?? "—"}`, rpe: same.rpe !== null ? String(same.rpe) : null } : null,
+      weight: { label: weightLabel, value: weightValue, onMinus: () => bumpWeight(-1), onPlus: () => bumpWeight(1), onTap: () => setTyping("weight") },
+      reps: { label: "REPS", value: draft.reps === null ? "—" : String(draft.reps), onMinus: () => bumpReps(-1), onPlus: () => bumpReps(1), onTap: () => setTyping("reps") },
+      // Warm-ups are easy by design, so no RPE for them.
+      rpe:
+        draft.type === "warmup" ? null : (
+          <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={dock.id} onChange={(rpe) => setDraft({ ...draft, rpe })} bleed={false} pill />
+        ),
+      logLabel,
+      onLog: () => void log(),
+      micro: setChipLabel,
+      big: `${draft.weight === null ? (isBodyweight ? "BW" : "—") : `${formatWeight(draft.weight, units)} ${unit.toUpperCase()}`} × ${draft.reps ?? "—"}`,
+    };
+  })();
+  const mainPad = dock
+    ? dockHidden
+      ? "pb-[calc(92px+env(safe-area-inset-bottom))]"
+      : "pb-[calc(260px+env(safe-area-inset-bottom))]"
+    : "pb-10";
+
   return (
-    <main className="flex min-h-dvh flex-col pb-10">
+    <main className={`flex min-h-dvh flex-col ${mainPad}`}>
       {/* Current set panel */}
       <div className="safe-top px-5 text-white">
         <div className="flex h-11 items-center justify-between">
@@ -398,6 +493,41 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         </div>
       </div>
 
+      {dock && ex ? (
+        <section className="px-5 pt-1.5">
+          <div className="flex items-start gap-2">
+            <button type="button" onClick={() => setInfoFor(dock.exercise_id)} className="min-w-0 flex-1 text-left">
+              <h1 className="display min-w-0 flex-1 pt-1 text-[32px] leading-[0.95] font-extrabold">{ex.name}</h1>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionsFor(dock)}
+              aria-label={menuLabel(dock)}
+              className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-card-2 text-accent-soft"
+            >
+              <Dots />
+            </button>
+          </div>
+          <p className="mt-1.5 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-muted">
+            <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-9 items-center gap-1.5 rounded-full bg-card-2 pr-2.5 pl-3 text-accent-soft after:absolute after:-inset-2 after:content-[''] active:bg-line" aria-label="Change set type: working, warm-up or drop">
+              {setChipLabel}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuFor(dock)}
+              className="relative ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-line px-3 text-muted after:absolute after:-inset-1 after:content-[''] active:bg-card-2"
+              aria-label="Edit sets, reps and rest"
+            >
+              TARGET {targetLabel.toUpperCase()} ✎
+            </button>
+            {dock.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
+          </p>
+          {gym && !isAvailable(catalog.needs.get(dock.exercise_id) ?? [], equipment) && (
+            <p className="mt-1 text-sm font-bold text-warn">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
+          )}
+        </section>
+      ) : (
       <section className="mx-3 mt-1.5 rounded-[28px] bg-primary px-5 py-[18px] text-white shadow-[0_10px_30px_rgba(31,75,255,0.25)]">
         {extra ? (
           <CardioPanel
@@ -439,8 +569,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             <p className="display mt-3.5 text-[13px] font-bold tracking-[0.14em] text-[#DCE4FF]">UP NEXT</p>
             <h1 className="display mt-1 text-[34px] leading-[0.95] font-extrabold">{upNextEx?.name ?? upNextTarget.exercise_id}</h1>
             <p className="mt-1.5 text-[15px] font-semibold text-[#DCE4FF]">{upNextDetail}</p>
-            {rest && restLeft > 0 && (
-              <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
+            {restProps && (
+              <div className="-mx-2 mt-2">
+                <RestBar {...restProps} />
+              </div>
             )}
             <div className="mt-3.5 flex gap-2">
               <button
@@ -492,64 +624,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             }}
             onGoToOther={() => setCurrentId(otherTimer?.wexId ?? (otherTimer?.sessionId ? `cardio:${otherTimer.sessionId}` : null))}
           />
-        ) : current && ex ? (
-          <>
-            <button type="button" onClick={() => setInfoFor(current.exercise_id)} className="mt-1 block text-left">
-              <h1 className="display text-[34px] leading-[0.95] font-extrabold">{ex.name}</h1>
-            </button>
-            <p className="mt-1.5 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">
-              <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-9 items-center gap-1.5 rounded-full bg-white/15 pr-2.5 pl-3 after:absolute after:-inset-2 after:content-[''] active:bg-white/25" aria-label="Change set type: working, warm-up or drop">
-                {draft.type === "warmup" ? "WARM-UP" : draft.type === "drop" ? "DROP SET" : setNumber > (current.target_sets ?? 3) ? `EXTRA SET ${setNumber}` : `SET ${setNumber} OF ${current.target_sets ?? 3}`}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMenuFor(current)}
-                className="relative ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border-[1.5px] border-dashed border-white/45 px-3 after:absolute after:-inset-1 after:content-[''] active:bg-white/15"
-                aria-label="Edit sets, reps and rest"
-              >
-                TARGET {targetLabel.toUpperCase()} ✎
-              </button>
-              {current.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
-            </p>
-            {gym && !isAvailable(catalog.needs.get(current.exercise_id) ?? [], equipment) && (
-              <p className="mt-1 text-sm font-bold text-[#FFD2B3]">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
-            )}
-
-            {warmHint && <p className="mt-2 -mb-1.5 text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">{warmHint}</p>}
-            {!warmHint && upHint && <p className={`mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] ${upHint.startsWith("▼") ? "text-[#FFD2B3]" : "text-[#C9F7DA]"}`}>{upHint}</p>}
-            {!warmHint && !upHint && estHint && <p className="mt-2 -mb-1.5 w-[calc(50%-5px)] text-center text-sm font-bold tracking-[0.08em] text-[#DCE4FF]">{estHint}</p>}
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
-              <Stepper
-                label={isBodyweight && draft.weight === null ? "BODYWEIGHT" : weightUnit(units).toUpperCase()}
-                value={draft.weight === null ? (isBodyweight ? "BW" : "—") : formatWeight(draft.weight, units)}
-                onMinus={() => bumpWeight(-1)}
-                onPlus={() => bumpWeight(1)}
-                onTap={() => setTyping("weight")}
-              />
-              <Stepper label="REPS" value={draft.reps === null ? "—" : String(draft.reps)} onMinus={() => bumpReps(-1)} onPlus={() => bumpReps(1)} onTap={() => setTyping("reps")} />
-            </div>
-
-            {/* Warm-ups are easy by design, so no RPE for them. */}
-            {draft.type !== "warmup" && (
-              <div className="mt-2.5">
-                <div className="mb-1.5 text-xs leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">RPE · HOW HARD?</div>
-                <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={current.id} onChange={(rpe) => setDraft({ ...draft, rpe })} />
-              </div>
-            )}
-
-            {rest && restLeft > 0 && (
-              <RestBar left={restLeft} total={rest.total} onAdd={() => db.setMeta("rest", { ...rest, endsAt: rest.endsAt + 15000, total: rest.total + 15 })} onSkip={() => db.setMeta("rest", null)} />
-            )}
-
-            <button
-              type="button"
-              onClick={log}
-              className="display mt-3.5 flex h-15 w-full items-center justify-center rounded-2xl bg-white text-xl font-extrabold tracking-[0.04em] text-primary shadow-[inset_0_-4px_0_#C9D3FF] active:translate-y-px"
-            >
-              Log {draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}
-            </button>
-          </>
         ) : (
           <div className="py-6">
             <h1 className="display text-4xl font-extrabold">{workout.name ?? "Workout"}</h1>
@@ -557,6 +631,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           </div>
         )}
       </section>
+      )}
 
       <div className="flex flex-col gap-3 px-5 pt-4">
         {current && !isCardio && (
@@ -593,8 +668,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             const on = extra?.key === it.key;
             return (
               <li key={it.key}>
-                <button type="button" onClick={() => setCurrentId(it.key)} className={`flex min-h-16 w-full items-center gap-3 rounded-2xl border-2 py-2 pr-4 pl-4 text-left ${on ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}>
-                  <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${it.session && !t ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>{it.session && !t ? "✓" : "+"}</span>
+                <button type="button" onClick={() => setCurrentId(it.key)} className={`flex min-h-16 w-full items-center gap-3 rounded-[14px] py-2 pr-4 pl-4 text-left ring-inset ${on ? "bg-primary/10 ring-2 ring-[var(--accent-strong)]" : "bg-card ring-1 ring-[#262d49]"}`}>
+                  <span className={`display flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base font-extrabold ${it.session && !t ? doneDisc : numberDisc}`}>{it.session && !t ? "✓" : "+"}</span>
                   <span className="min-w-0">
                     <span className="block truncate text-base font-bold">{cardioLabel(it.type)}</span>
                     <span className="block truncate text-sm font-medium text-muted">
@@ -618,7 +693,33 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         </div>
       </div>
 
+      {dock && dockContent && <SetDock hidden={dockHidden} onHiddenChange={setDockHidden} rest={restProps} content={dockContent} />}
+
       {/* Sheets */}
+      <Sheet open={actionsFor !== null} onClose={() => setActionsFor(null)} title={actionsFor ? catalog.byId.get(actionsFor.exercise_id)?.name : undefined}>
+        {actionsFor && (
+          <div className="flex flex-col gap-2">
+            {rowActions(actionsFor).map((a) => (
+              <button
+                key={a.key}
+                type="button"
+                onClick={() => {
+                  setActionsFor(null);
+                  a.onPress();
+                }}
+                className="flex min-h-14 items-center gap-3 rounded-2xl bg-card-2 px-3 py-2 text-left active:bg-line"
+              >
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${a.className}`}>{a.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-base font-bold ${a.key === "remove" ? "text-danger" : ""}`}>{a.label}</span>
+                  <span className="block truncate text-sm font-medium text-muted">{ACTION_HELP[a.key]}</span>
+                </span>
+              </button>
+            ))}
+            <p className="pt-1 text-sm text-muted">Shortcut: swipe a row left for the same four.</p>
+          </div>
+        )}
+      </Sheet>
       <Sheet open={picker !== null} onClose={() => setPicker(null)} title={picker?.mode === "swap" ? "Swap for…" : "Add exercises"}>
         {picker && (
           <SmartExercisePicker
@@ -816,38 +917,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         />
       </Sheet>
     </main>
-  );
-}
-
-function Stepper({ label: l, value, onMinus, onPlus, onTap }: { label: string; value: string; onMinus: () => void; onPlus: () => void; onTap: () => void }) {
-  return (
-    <div className="flex items-center gap-1 rounded-2xl bg-white/10 p-1">
-      <button type="button" onClick={onMinus} aria-label={`Less ${l}`} className="flex h-[52px] w-11 shrink-0 items-center justify-center rounded-full border-2 border-white/60 text-xl font-bold">−</button>
-      <button type="button" onClick={onTap} className="flex min-h-[52px] min-w-0 flex-1 flex-col items-center justify-center" aria-label={`${l} ${value}. Tap to type`}>
-        <span className="display num text-[40px] leading-none font-extrabold">{value}</span>
-        <span className="display mt-0.5 truncate text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{l}</span>
-      </button>
-      <button type="button" onClick={onPlus} aria-label={`More ${l}`} className="flex h-[52px] w-11 shrink-0 items-center justify-center rounded-full bg-white text-xl font-bold text-primary">+</button>
-    </div>
-  );
-}
-
-/** Slim rest countdown inside the blue card, just above Log. */
-function RestBar({ left, total, onAdd, onSkip }: { left: number; total: number; onAdd: () => void; onSkip: () => void }) {
-  const pct = Math.min(1, left / Math.max(1, total));
-  useEffect(() => {
-    if (left === 1 && "vibrate" in navigator) navigator.vibrate?.([200, 100, 200]);
-  }, [left]);
-  return (
-    <div className="mt-2 flex h-11 items-center gap-3" role="timer" aria-label={`Rest ${formatDuration(left)} left`}>
-      <span className="display w-10 shrink-0 text-sm font-extrabold tracking-[0.1em] text-[#DCE4FF]">REST</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/20">
-        <div className="h-full rounded-full bg-white transition-[width] duration-1000 ease-linear" style={{ width: `${pct * 100}%` }} />
-      </div>
-      <span className="display num w-12 shrink-0 text-right text-2xl font-extrabold">{formatDuration(left)}</span>
-      <button type="button" onClick={onAdd} className="display -mr-1 h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-[#DCE4FF]">+15</button>
-      <button type="button" onClick={onSkip} className="display h-11 min-w-11 rounded-xl px-2 text-base font-extrabold text-white">Skip</button>
-    </div>
   );
 }
 
@@ -1282,5 +1351,23 @@ function SmartExercisePicker({
         onReason={(k) => setWhy(k as SwapWhy)}
       />
     </div>
+  );
+}
+
+const ACTION_HELP: Record<string, string> = {
+  swap: "Pick a different exercise",
+  how: "Cues and pictures",
+  notes: "Seat height, how it felt",
+  remove: "Take it out of this workout",
+};
+
+/** Row number disc in the workout list, with a faint inner ring (UX spec 5.4). */
+const numberDisc = "bg-card-2 text-muted shadow-[inset_0_0_0_5px_var(--card-2),inset_0_0_0_6px_rgba(255,255,255,0.16)]";
+
+function Dots() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+    </svg>
   );
 }
