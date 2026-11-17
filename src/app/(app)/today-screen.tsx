@@ -13,6 +13,7 @@ import { formatDuration, formatWeight } from "@/lib/units";
 import { dateKey } from "@/lib/progress";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { WeighInCard } from "@/components/weigh-in-card";
+import { doneDisc } from "@/components/ui/kit";
 import { QuickCardio } from "./quick-cardio";
 import { SyncBadge } from "@/components/sync-badge";
 import { UpNextCard } from "./up-next-card";
@@ -75,12 +76,12 @@ export function TodayScreen() {
               <span className={`text-xs font-bold ${d.isToday ? "text-accent" : "text-muted"}`}>{d.letter}</span>
               <span
                 className={`display flex h-10 w-10 items-center justify-center rounded-full text-base ${
-                  d.done ? "bg-primary font-extrabold text-white" : d.isToday ? "border-[3px] border-accent-strong font-extrabold text-accent-soft" : "bg-card-2 font-bold text-muted"
+                  d.done ? doneDisc : d.isToday ? "border-[3px] border-accent-strong font-extrabold text-accent-soft" : "bg-card-2 font-bold text-muted"
                 } ${d.done && d.isToday ? "ring-[3px] ring-accent-strong ring-offset-2 ring-offset-bg" : ""}`}
                 aria-label={d.done ? "Trained" : undefined}
               >
                 {d.done ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>
                 ) : (
                   d.date
                 )}
