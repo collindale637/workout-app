@@ -5,6 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { markDirty } from "@/lib/db/sync";
 import { useActiveGym, useCatalog, type Catalog } from "@/lib/hooks";
+import { injuryExcluded, withInjuries } from "@/lib/injuries";
 import { useNow } from "@/lib/use-now";
 import { useFatigueAdjustments } from "@/lib/fatigue-adjust";
 import { computeRecovery, WINDOW_DAYS, type FatigueSet, type MuscleRecovery } from "@/lib/recovery";
@@ -31,6 +32,24 @@ export function usePrefs() {
     [db, requestSync],
   );
   return { prefs, setPref, loaded: rows !== undefined };
+}
+
+/** Your "Never suggest" list plus everything your flagged body areas rule out (see injuries.ts). */
+export function useEffectivePrefs() {
+  const { prefs, loaded } = usePrefs();
+  const catalog = useCatalog();
+  const { profile } = useProfile();
+  const areas = profile?.avoid_areas;
+  const effective = useMemo(() => {
+    if (!catalog || !areas?.length) return prefs;
+    const ruledOut = injuryExcluded(
+      catalog.exercises.filter((e) => e.is_active),
+      (id) => (catalog.musclesOf.get(id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id),
+      areas,
+    );
+    return withInjuries(prefs, ruledOut);
+  }, [catalog, prefs, areas]);
+  return { prefs: effective, loaded };
 }
 
 export type RecoverySet = FatigueSet & { weight: number | null; reps: number | null; workoutId: string };
@@ -204,7 +223,7 @@ export function useGeneratorInputs() {
   const catalog = useCatalog();
   const { profile } = useProfile();
   const { gym, equipment, equipmentRows, loaded } = useActiveGym();
-  const { prefs, loaded: prefsLoaded } = usePrefs();
+  const { prefs, loaded: prefsLoaded } = useEffectivePrefs();
   const recovery = useRecovery();
   const lastDone = useLastDone();
   const ready = Boolean(catalog && profile && loaded && prefsLoaded && recovery && lastDone);
