@@ -239,7 +239,7 @@ function MonthCalendar({ data, now }: { data: Data; now: number }) {
             onClick={() => setPicked(d.key)}
             aria-pressed={sel === d.key}
             aria-label={`${d.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}: ${kindLabel(d)}`}
-            className={`display flex h-11 items-center justify-center rounded-[10px] text-[15px] font-extrabold ${kindCls(d)} ${
+            className={`display num flex aspect-square w-full items-center justify-center rounded-[10px] pt-px text-[15px] leading-none font-extrabold tabular-nums ${kindCls(d)} ${
               d.key === todayKey ? "ring-2 ring-accent-strong ring-offset-2 ring-offset-card" : ""
             } ${sel === d.key && d.key !== todayKey ? "outline-2 outline-offset-1 outline-white" : ""}`}
           >
