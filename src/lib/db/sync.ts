@@ -24,13 +24,14 @@ const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "ex
   sets: ["id", "workout_exercise_id", "set_no", "type", "weight", "reps", "rpe", "completed_at"],
   cardio_sessions: ["id", "workout_id", "workout_exercise_id", "type", "started_at", "duration_sec", "distance", "avg_hr", "rpe", "incline", "intervals", "notes"],
   body_metrics: ["id", "date", "bodyweight"],
+  dev_notes: ["id", "body", "app_version", "device", "created_at"],
 };
 
 /** Upload order: parents first. Deletes run in reverse. */
 const PUSH_ORDER: SyncTable[] = [
   "exercises", "exercise_tags", "exercise_prefs", "gyms", "gym_equipment", "profiles",
   "plans", "plan_days", "plan_exercises",
-  "workouts", "workout_exercises", "sets", "cardio_sessions", "body_metrics",
+  "workouts", "workout_exercises", "sets", "cardio_sessions", "body_metrics", "dev_notes",
 ];
 
 /** Tables pulled incrementally by updated_at. */

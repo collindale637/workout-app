@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql", "20261122000100_height_sex.sql", "20261123000100_ai_jobs.sql", "20261124000100_injuries.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql", "20261122000100_height_sex.sql", "20261123000100_ai_jobs.sql", "20261124000100_injuries.sql", "20261125000100_dev_notes.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -36,6 +36,7 @@ await db.exec(readFileSync(root + "20261121000100_cardio_incline.sql", "utf8"));
 await db.exec(readFileSync(root + "20261122000100_height_sex.sql", "utf8"));
 await db.exec(readFileSync(root + "20261123000100_ai_jobs.sql", "utf8"));
 await db.exec(readFileSync(root + "20261124000100_injuries.sql", "utf8"));
+await db.exec(readFileSync(root + "20261125000100_dev_notes.sql", "utf8"));
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
   (select count(*) from exercises) exercises, (select count(*) from exercises where is_common) common,
@@ -135,6 +136,22 @@ r.push(["A saves areas and a note", await as(A, `update profiles set avoid_areas
 r.push(["unknown area rejected", await as(A, `update profiles set avoid_areas = array['knees','soul'] returning id`)]);
 r.push(["over-long note rejected", await as(A, `update profiles set injury_note = repeat('x', 301) returning id`)]);
 r.push(["B can't change A's areas", await as(B, `update profiles set avoid_areas = array['neck'] where id = '${A}' returning id`)]);
+r.push(["A sends a note", await as(A, `insert into dev_notes (id, body, app_version) values ('eeeeeeee-0000-0000-0000-000000000001', 'Rest timer stuck at 0:00', 'abc1234') returning body`)]);
+r.push(["sync retry of the same note", await as(A, `insert into dev_notes (id, body) values ('eeeeeeee-0000-0000-0000-000000000001', 'Rest timer stuck at 0:00') on conflict (id) do update set body = excluded.body returning id`)]);
+r.push(["empty note rejected", await as(A, `insert into dev_notes (body) values ('   ') returning id`)]);
+r.push(["B can't read A's notes", await as(B, `select count(*)::int n from dev_notes`)]);
+r.push(["B can't send as A", await as(B, `insert into dev_notes (owner_id, body) values ('${A}', 'spoof') returning id`)]);
+r.push(["B sends a note", await as(B, `insert into dev_notes (body) values ('Add a dark-mode toggle') returning body`)]);
+await db.exec(`insert into app_admins (user_id) values ('${A}')`);
+r.push(["admin A: is_app_admin", await as(A, `select public.is_app_admin() ok`)]);
+r.push(["B: is_app_admin", await as(B, `select public.is_app_admin() ok`)]);
+r.push(["admin A sees every note + sender", await as(A, `select count(*)::int n, count(distinct sender)::int senders from public.dev_notes_inbox()`)]);
+r.push(["B can't open the inbox", await as(B, `select count(*) from public.dev_notes_inbox()`)]);
+r.push(["B can't read the admin list", await as(B, `select count(*)::int n from app_admins`)]);
+r.push(["B can't make himself admin", await as(B, `insert into app_admins (user_id) values ('${B}') returning user_id`)]);
+r.push(["B can't mark notes done", await as(B, `select public.dev_note_set_done('eeeeeeee-0000-0000-0000-000000000001', true)`)]);
+r.push(["admin A marks a note done", await as(A, `select public.dev_note_set_done('eeeeeeee-0000-0000-0000-000000000001', true)`)]);
+r.push(["…and it shows as done", await as(A, `select count(*)::int done from public.dev_notes_inbox() where done_at is not null`)]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
 

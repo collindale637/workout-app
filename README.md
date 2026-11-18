@@ -125,6 +125,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261122000100_height_sex.sql` | `profiles.height_in` (inches) and `profiles.sex` (male / female, optional): used to suggest starting weights | ✓ |
 | `20261123000100_ai_jobs.sql` | `ai_jobs` table: AI plan builds run on the server and the draft waits for you if you leave the screen | ✓ |
 | `20261124000100_injuries.sql` | `profiles.avoid_areas` (knees, lower back…) and `profiles.injury_note`: "Anything to avoid?" steers plans, swaps and AI | ✓ |
+| `20261125000100_dev_notes.sql` | `dev_notes` table ("Note to developer", owner-only) + admin inbox: `app_admins` (rows added by hand), `is_app_admin()`, `dev_notes_inbox()`, `dev_note_set_done()` | ✓ |
 
 ## One-time setup
 

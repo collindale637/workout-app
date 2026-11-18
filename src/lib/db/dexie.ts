@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
-  BodyMetric,
+  BodyMetric, DevNote,
   CardioSession,
   Equipment,
   Exercise,
@@ -47,6 +47,7 @@ export class LocalDB extends Dexie {
   plan_exercises!: EntityTable<PlanExercise, "id">;
   exercise_prefs!: EntityTable<ExercisePref, "exercise_id">;
   body_metrics!: EntityTable<BodyMetric, "id">;
+  dev_notes!: EntityTable<DevNote, "id">;
   outbox!: Dexie.Table<OutboxEntry, [string, string]>;
   tombstones!: Dexie.Table<Tombstone, [string, string]>;
   meta!: Dexie.Table<{ key: string; value: unknown }, string>;
@@ -82,6 +83,10 @@ export class LocalDB extends Dexie {
     // Phase 4: bodyweight log; workout_exercises by exercise is already indexed for progress charts.
     this.version(3).stores({
       body_metrics: "id, date",
+    });
+    // Notes to the developer (More tab), kept so the phone can say how many you've sent.
+    this.version(4).stores({
+      dev_notes: "id, created_at",
     });
   }
 
