@@ -123,7 +123,7 @@ export function TargetsEditor({
 function Stepper({ title, value, onLess, onMore }: { title: string; value: string; onLess: () => void; onMore: () => void }) {
   return (
     <div className="flex flex-col items-center gap-1 rounded-2xl bg-card-2 px-2 py-2.5">
-      <span className={`${label} self-start pl-2`}>{title}</span>
+      <span className={label}>{title}</span>
       <div className="flex items-center">
         <button type="button" aria-label={`Less ${title.toLowerCase()}`} className="h-11 w-11 rounded-full border-2 border-line text-xl font-bold active:bg-line" onClick={onLess}>−</button>
         <span className="display num w-16 text-center text-2xl font-extrabold">{value}</span>
