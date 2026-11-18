@@ -19,7 +19,7 @@ import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
 import { ExerciseInfo } from "@/components/exercise-info";
-import { ConfirmSheet, Sheet, btn, doneDisc, field, label } from "@/components/ui/kit";
+import { ConfirmSheet, Sheet, btn, doneDisc, field } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
@@ -31,6 +31,7 @@ import { useWorkoutComparison } from "@/lib/compare-data";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
 import { slideAwayThen } from "@/lib/slide-away";
+import { TargetsEditor } from "@/components/targets-editor";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
 import { RestBar, SetDock, type DockSet, type DockToast, type DockUpNext } from "./set-dock";
 import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
@@ -827,6 +828,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               return next ? isCardioWex(next) : false;
             })()}
             onClose={() => setMenuFor(null)}
+            onSwap={() => { setPicker({ mode: "swap", wex: menuFor }); setMenuFor(null); }}
+            onInfo={() => { setInfoFor(menuFor.exercise_id); setMenuFor(null); }}
             actions={actions}
             workoutId={workout.id}
           />
@@ -1138,52 +1141,22 @@ function RowIcon({ name }: { name: "swap" | "how" | "notes" | "remove" }) {
   );
 }
 
-/** Sets, reps and rest for one exercise, plus linking it as a superset (opened from the target on the blue card). */
+/** Sets, reps (two wheels) and rest for one exercise, plus Swap / How-to / Superset (opened from the target on the blue card). */
 function ExerciseMenu({
-  wex, isLast, nextIsCardio, onClose, actions, workoutId,
+  wex, isLast, nextIsCardio, onClose, onSwap, onInfo, actions, workoutId,
 }: {
-  wex: WorkoutExercise; isLast: boolean; nextIsCardio: boolean; onClose: () => void;
+  wex: WorkoutExercise; isLast: boolean; nextIsCardio: boolean; onClose: () => void; onSwap: () => void; onInfo: () => void;
   actions: ReturnType<typeof useWorkoutActions>; workoutId: string;
 }) {
-  const [sets, setSets] = useState(wex.target_sets ?? 3);
-  const [min, setMin] = useState(wex.rep_min ?? 8);
-  const [max, setMax] = useState(wex.rep_max ?? 12);
-  const [rest, setRest] = useState(wex.rest_sec ?? 90);
-  const item = "flex min-h-13 w-full items-center gap-3 rounded-2xl bg-card-2 px-4 text-left text-base font-bold";
-  const small = (v: number, set: (n: number) => void, l: string, stepBy = 1) => (
-    <div className="flex flex-col items-center gap-1">
-      <span className={label}>{l}</span>
-      <div className="flex items-center gap-2">
-        <button type="button" className="h-10 w-10 rounded-full border-2 border-line text-xl font-bold" onClick={() => set(Math.max(stepBy === 15 ? 0 : 1, v - stepBy))}>−</button>
-        <span className="display num w-12 text-center text-2xl font-extrabold">{stepBy === 15 ? formatDuration(v) : v}</span>
-        <button type="button" className="h-10 w-10 rounded-full border-2 border-line text-xl font-bold" onClick={() => set(v + stepBy)}>+</button>
-      </div>
-    </div>
-  );
+  const canLink = (!isLast && !nextIsCardio) || wex.superset_group !== null;
   return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card-2 p-3">
-        {small(sets, setSets, "SETS")}
-        {small(rest, setRest, "REST", 15)}
-        {small(min, setMin, "REPS FROM")}
-        {small(max, setMax, "REPS TO")}
-        <button
-          type="button"
-          className={`${btn.secondary} col-span-2`}
-          onClick={async () => {
-            await actions.updateWex(wex.id, { target_sets: sets, rep_min: Math.min(min, max), rep_max: Math.max(min, max), rest_sec: rest });
-            onClose();
-          }}
-        >
-          Save targets
-        </button>
-      </div>
-      {((!isLast && !nextIsCardio) || wex.superset_group !== null) && (
-        <button type="button" className={item} onClick={async () => { await actions.toggleSuperset(workoutId, wex.id); onClose(); }}>
-          🔗 {wex.superset_group !== null ? "Remove from superset" : "Superset with the next exercise"}
-        </button>
-      )}
-    </div>
+    <TargetsEditor
+      initial={{ sets: wex.target_sets ?? 3, repMin: wex.rep_min ?? 8, repMax: wex.rep_max ?? 12, rest: wex.rest_sec ?? 90 }}
+      onSave={(t) => actions.updateWex(wex.id, { target_sets: t.sets, rep_min: t.repMin, rep_max: t.repMax, rest_sec: t.rest })}
+      onSwap={onSwap}
+      onInfo={onInfo}
+      superset={canLink ? { linked: wex.superset_group !== null, onToggle: async () => { await actions.toggleSuperset(workoutId, wex.id); onClose(); } } : undefined}
+    />
   );
 }
 
