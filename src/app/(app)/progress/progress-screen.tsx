@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { useHistory } from "@/lib/history";
 import { useNow } from "@/lib/use-now";
 import { useProgressData } from "@/lib/progress-data";
 import {
-  activityCalendar, cardioByType, cardioWeeks, dateKey, prEvents, topLifts, weekStart,
+  cardioByType, cardioWeeks, dateKey, prEvents, topLifts, weekStart,
   weeklySets, weeklyTarget, weightTrend, type CalendarDay, type PREvent,
 } from "@/lib/progress";
 import { cardioLabel } from "@/lib/cardio";
@@ -65,12 +65,12 @@ export function ProgressScreen() {
             <Card className="flex flex-col gap-2 p-5">
               <h2 className="display text-2xl font-extrabold">Your charts start here</h2>
               <p className="text-base font-medium text-muted">
-                Finish a workout or log some cardio and this fills in: your last four weeks, PRs, estimated maxes, sets per muscle, cardio and bodyweight.
+                Finish a workout or log some cardio and this fills in: your training calendar, PRs, estimated maxes, sets per muscle, cardio and bodyweight.
               </p>
               <Link href="/" className={`${btn.primary} mt-2`}>Go to Today</Link>
             </Card>
           ) : (
-            <WeeksCalendar data={data} now={now} />
+            <MonthCalendar data={data} now={now} />
           )}
           {!empty && <RecentPRs data={data} units={units} now={now} />}
           <RecentHistory />
@@ -131,20 +131,48 @@ function Stat({ value, label, sub }: { value: string; label: string; sub?: strin
 // ---------------------------------------------------------------------------
 
 /**
- * The last four weeks, one row per week (Sunday first, like Today), each day coloured for lifting, cardio or both.
- * Tap a day to see what you did and open it.
+ * A month calendar (Sunday first, like Today): lifting / cardio / both colours, today ringed. ‹ › or a sideways swipe
+ * changes month, back to the month of your first session; "Today" jumps back. Tap a day to see what you did.
  */
-function WeeksCalendar({ data, now }: { data: Data; now: number }) {
-  const weeks = useMemo(() => activityCalendar(data.liftDays, data.cardioDays, now, 4), [data, now]);
+function MonthCalendar({ data, now }: { data: Data; now: number }) {
   const todayKey = dateKey(new Date(now));
+  const thisMonth = useMemo(() => monthIndex(new Date(now)), [now]);
+  const firstMonth = useMemo(() => {
+    const keys = [...data.liftDays, ...data.cardioDays].sort();
+    return keys.length ? monthIndex(new Date(`${keys[0]}T12:00:00`)) : thisMonth;
+  }, [data, thisMonth]);
+  const [month, setMonth] = useState<number | null>(null);
+  const shown = month ?? thisMonth;
   const [picked, setPicked] = useState<string | null>(null);
-  const sel = picked ?? todayKey;
-  const history = useHistory(60);
-  const items = (history ?? []).filter((h) => dateKey(new Date(h.at)) === sel);
-  const selDate = weeks.flat().find((d) => d.key === sel)?.date ?? new Date(now);
+  const sel = picked ?? (shown === thisMonth ? todayKey : null);
+  const history = useHistory(5000);
+  const items = sel ? (history ?? []).filter((h) => dateKey(new Date(h.at)) === sel) : [];
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const suppressTap = useRef(false);
+
+  const go = (m: number) => {
+    const next = Math.max(firstMonth, Math.min(thisMonth, m));
+    if (next === shown) return;
+    setMonth(next);
+    setPicked(null);
+  };
+
+  const year = Math.floor(shown / 12);
+  const mon = shown % 12;
+  const first = new Date(year, mon, 1);
+  const daysIn = new Date(year, mon + 1, 0).getDate();
+  const cells: CalendarDay[] = Array.from({ length: daysIn }, (_, i) => {
+    const date = new Date(year, mon, i + 1);
+    const key = dateKey(date);
+    const l = data.liftDays.has(key);
+    const c = data.cardioDays.has(key);
+    return { key, date, kind: l && c ? "both" : l ? "lift" : c ? "cardio" : null, future: key > todayKey };
+  });
+  const trained = cells.filter((d) => d.kind).length;
+  const selDate = sel ? new Date(`${sel}T12:00:00`) : null;
   const kindCls = (d: CalendarDay) =>
     d.future
-      ? "border border-dashed border-line text-muted/60"
+      ? "text-muted/40"
       : d.kind === "both"
         ? "bg-[linear-gradient(90deg,var(--chart-1)_50%,var(--chart-2)_50%)] text-white"
         : d.kind === "lift"
@@ -152,63 +180,112 @@ function WeeksCalendar({ data, now }: { data: Data; now: number }) {
           : d.kind === "cardio"
             ? "bg-chart-2 text-white"
             : "bg-card-2 text-muted";
+  const navBtn = "display flex h-11 w-11 items-center justify-center rounded-full text-2xl font-extrabold text-ink disabled:text-muted/30";
 
   return (
     <Card className="flex flex-col gap-2 p-4">
-      <h2 className="display text-xl font-extrabold">Last 4 weeks</h2>
-      <div className="grid grid-cols-7 gap-1.5 text-center" role="grid" aria-label="Training calendar, last 4 weeks">
+      <div className="flex items-center gap-1">
+        <button type="button" aria-label="Previous month" className={navBtn} disabled={shown <= firstMonth} onClick={() => go(shown - 1)}>‹</button>
+        <div className="flex min-w-0 flex-1 flex-col items-center">
+          <h2 className="display text-xl leading-tight font-extrabold uppercase" aria-live="polite">
+            {first.toLocaleDateString([], { month: "long" })}
+            {year !== new Date(now).getFullYear() ? ` ${year}` : ""}
+          </h2>
+          <span className="text-xs font-semibold text-muted">{trained ? `${trained} day${trained === 1 ? "" : "s"} trained` : "No training logged"}</span>
+        </div>
+        <button type="button" aria-label="Next month" className={navBtn} disabled={shown >= thisMonth} onClick={() => go(shown + 1)}>›</button>
+      </div>
+      <div
+        className="grid touch-pan-y grid-cols-7 gap-1.5 text-center select-none"
+        role="grid"
+        aria-label={`Training calendar, ${first.toLocaleDateString([], { month: "long", year: "numeric" })}`}
+        onPointerDown={(e) => {
+          // The release can land outside the grid (or not reach it at all), so listen on the window for it.
+          swipe.current = { x: e.clientX, y: e.clientY };
+          const end = (ev: PointerEvent) => {
+            window.removeEventListener("pointerup", end);
+            window.removeEventListener("pointercancel", end);
+            const st = swipe.current;
+            swipe.current = null;
+            if (!st || ev.type === "pointercancel") return;
+            const dx = ev.clientX - st.x;
+            if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(ev.clientY - st.y) * 1.5) {
+              // The swipe shouldn't also pick a day; the click (if any) comes right after this, so clear it next tick.
+              suppressTap.current = true;
+              setTimeout(() => (suppressTap.current = false), 0);
+              go(shown + (dx < 0 ? 1 : -1));
+            }
+          };
+          window.addEventListener("pointerup", end);
+          window.addEventListener("pointercancel", end);
+        }}
+        onClickCapture={(e) => {
+          if (suppressTap.current) {
+            suppressTap.current = false;
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }}
+      >
         {["S", "M", "T", "W", "T", "F", "S"].map((l, i) => (
           <span key={i} className="display text-[11px] font-bold tracking-[0.1em] text-muted">{l}</span>
         ))}
-        {weeks.flat().map((d) => {
-          const first = d.date.getDate() === 1;
-          return (
-            <button
-              key={d.key}
-              type="button"
-              disabled={d.future}
-              onClick={() => setPicked(d.key)}
-              aria-pressed={sel === d.key}
-              aria-label={`${d.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}: ${kindLabel(d)}`}
-              className={`display flex h-11 flex-col items-center justify-center rounded-[10px] text-[15px] leading-none font-extrabold ${kindCls(d)} ${
-                d.key === todayKey ? "ring-2 ring-accent-strong ring-offset-2 ring-offset-card" : ""
-              } ${sel === d.key && d.key !== todayKey ? "outline-2 outline-offset-1 outline-white" : ""}`}
-            >
-              {first && <span className="text-[9px] tracking-[0.08em] opacity-80">{d.date.toLocaleDateString([], { month: "short" }).toUpperCase()}</span>}
-              {d.date.getDate()}
-            </button>
-          );
-        })}
+        {Array.from({ length: first.getDay() }, (_, i) => <span key={`b${i}`} aria-hidden="true" />)}
+        {cells.map((d) => (
+          <button
+            key={d.key}
+            type="button"
+            disabled={d.future}
+            onClick={() => setPicked(d.key)}
+            aria-pressed={sel === d.key}
+            aria-label={`${d.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}: ${kindLabel(d)}`}
+            className={`display flex h-11 items-center justify-center rounded-[10px] text-[15px] font-extrabold ${kindCls(d)} ${
+              d.key === todayKey ? "ring-2 ring-accent-strong ring-offset-2 ring-offset-card" : ""
+            } ${sel === d.key && d.key !== todayKey ? "outline-2 outline-offset-1 outline-white" : ""}`}
+          >
+            {d.date.getDate()}
+          </button>
+        ))}
       </div>
       <div className="flex items-center gap-4 px-1 text-xs font-semibold text-muted">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-chart-1" />Lifting</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-chart-2" />Cardio</span>
-      </div>
-      <div className="mt-1 flex flex-col gap-1 rounded-2xl bg-card-2 px-3 py-2" aria-live="polite">
-        <span className="text-xs font-bold tracking-[0.08em] text-muted">
-          {selDate.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" }).toUpperCase()}
-        </span>
-        {items.length === 0 ? (
-          <span className="py-1 text-sm font-semibold text-muted">{sel === todayKey ? "Nothing logged yet today." : "Rest day."}</span>
-        ) : (
-          items.map((h) =>
-            h.kind === "workout" ? (
-              <Link key={h.workout.id} href={`/progress/session?id=${h.workout.id}`} className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold">
-                <span className="min-w-0 truncate"><b className="font-bold text-ink">{h.workout.name ?? "Workout"}</b> · {h.sets} sets</span>
-                <span className="display shrink-0 text-xs font-extrabold tracking-[0.06em] text-accent">VIEW ›</span>
-              </Link>
-            ) : (
-              <Link key={h.cardio.id} href={`/progress/session?cardio=${h.cardio.id}`} className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold">
-                <span className="min-w-0 truncate"><b className="font-bold text-ink">{cardioLabel(h.cardio.type)}</b> · {Math.round(h.cardio.duration_sec / 60)} min</span>
-                <span className="display shrink-0 text-xs font-extrabold tracking-[0.06em] text-accent">VIEW ›</span>
-              </Link>
-            ),
-          )
+        {shown !== thisMonth && (
+          <button type="button" onClick={() => { setMonth(null); setPicked(null); }} className="display -my-3 ml-auto flex min-h-11 items-center text-sm font-extrabold tracking-[0.06em] text-accent">
+            TODAY
+          </button>
         )}
       </div>
+      {selDate && (
+        <div className="mt-1 flex flex-col gap-1 rounded-2xl bg-card-2 px-3 py-2" aria-live="polite">
+          <span className="text-xs font-bold tracking-[0.08em] text-muted">
+            {selDate.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", ...(selDate.getFullYear() !== new Date(now).getFullYear() ? { year: "numeric" } : {}) }).toUpperCase()}
+          </span>
+          {items.length === 0 ? (
+            <span className="py-1 text-sm font-semibold text-muted">{sel === todayKey ? "Nothing logged yet today." : "Rest day."}</span>
+          ) : (
+            items.map((h) =>
+              h.kind === "workout" ? (
+                <Link key={h.workout.id} href={`/progress/session?id=${h.workout.id}`} className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold">
+                  <span className="min-w-0 truncate"><b className="font-bold text-ink">{h.workout.name ?? "Workout"}</b> · {h.sets} sets</span>
+                  <span className="display shrink-0 text-xs font-extrabold tracking-[0.06em] text-accent">VIEW ›</span>
+                </Link>
+              ) : (
+                <Link key={h.cardio.id} href={`/progress/session?cardio=${h.cardio.id}`} className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold">
+                  <span className="min-w-0 truncate"><b className="font-bold text-ink">{cardioLabel(h.cardio.type)}</b> · {Math.round(h.cardio.duration_sec / 60)} min</span>
+                  <span className="display shrink-0 text-xs font-extrabold tracking-[0.06em] text-accent">VIEW ›</span>
+                </Link>
+              ),
+            )
+          )}
+        </div>
+      )}
     </Card>
   );
 }
+
+/** Months counted from year 0, so stepping back and forward is just ±1. */
+const monthIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
 
 const kindLabel = (d: CalendarDay) =>
   d.future ? "coming up" : d.kind === "both" ? "lifting + cardio" : d.kind === "lift" ? "lifting" : d.kind === "cardio" ? "cardio" : "rest";
