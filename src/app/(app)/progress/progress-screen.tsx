@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useProfile } from "@/lib/db/provider";
 import { useHistory } from "@/lib/history";
 import { useNow } from "@/lib/use-now";
 import { useProgressData } from "@/lib/progress-data";
 import {
-  activityCalendar, cardioByType, cardioWeeks, dateKey, daysPerWeek, prEvents, topLifts, weekStart, weekStreak,
+  cardioByType, cardioWeeks, dateKey, prEvents, topLifts, weekStart,
   weeklySets, weeklyTarget, weightTrend, type CalendarDay, type PREvent,
 } from "@/lib/progress";
 import { cardioLabel } from "@/lib/cardio";
@@ -18,44 +18,81 @@ import { GymSwitcher } from "@/components/gym-switcher";
 import { BodyweightSheet } from "@/components/bodyweight-sheet";
 import { Card, Chip, btn } from "@/components/ui/kit";
 import type { Units } from "@/lib/db/types";
-import { useWeeklyTarget } from "@/lib/smart";
 import { HistoryList } from "./history";
 
 const DAY = 86_400_000;
 
+type Tab = "overview" | "lifts" | "cardio" | "body";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "lifts", label: "Lifts" },
+  { id: "cardio", label: "Cardio" },
+  { id: "body", label: "Body" },
+];
+
+/** Progress (Batch 14, layout B): four tabs so nothing is a long scroll. */
 export function ProgressScreen() {
   const data = useProgressData();
   const { profile } = useProfile();
   const now = useNow(60_000);
-  const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
   const units: Units = profile?.units ?? "lb";
   const [logging, setLogging] = useState(false);
+  const [tab, setTab] = useState<Tab>("overview");
 
   if (!data || !profile) return <Shell />;
   const empty = data.workouts.length === 0 && data.cardio.length === 0;
 
   return (
     <Shell>
-      {empty && (
-        <Card className="flex flex-col gap-2 p-5">
-          <h2 className="display text-2xl font-extrabold">Your charts start here</h2>
-          <p className="text-base font-medium text-muted">
-            Finish a workout or log some cardio and this fills in: estimated maxes, PRs, sets per muscle, cardio totals and a calendar of the days you trained.
-          </p>
-          <Link href="/" className={`${btn.primary} mt-2`}>Go to Today</Link>
-        </Card>
+      <div className="flex gap-1 rounded-2xl bg-card-2 p-1" role="tablist" aria-label="Progress sections">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`display h-11 flex-1 rounded-xl text-[15px] font-extrabold tracking-[0.06em] uppercase ${tab === t.id ? "bg-primary text-white" : "text-muted"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <>
+          {empty ? (
+            <Card className="flex flex-col gap-2 p-5">
+              <h2 className="display text-2xl font-extrabold">Your charts start here</h2>
+              <p className="text-base font-medium text-muted">
+                Finish a workout or log some cardio and this fills in: your training calendar, PRs, estimated maxes, sets per muscle, cardio and bodyweight.
+              </p>
+              <Link href="/" className={`${btn.primary} mt-2`}>Go to Today</Link>
+            </Card>
+          ) : (
+            <MonthCalendar data={data} now={now} />
+          )}
+          {!empty && <RecentPRs data={data} units={units} now={now} />}
+          <RecentHistory />
+        </>
       )}
-      {!empty && <ThisWeek data={data} goalDays={weeklyTarget} now={now} />}
-      {!empty && <Consistency data={data} goalDays={weeklyTarget} now={now} />}
-      {!empty && <RecentPRs data={data} units={units} now={now} />}
-      {data.sessions.size > 0 && <Lifts data={data} units={units} now={now} />}
-      {data.muscleSets.length > 0 && <MuscleVolume data={data} goal={profile.goal} now={now} />}
-      {data.cardio.length > 0 && <Cardio data={data} units={units} now={now} />}
-      <Bodyweight data={data} units={units} now={now} onLog={() => setLogging(true)} />
-      <RecentHistory />
+      {tab === "lifts" && (
+        <>
+          {data.sessions.size > 0 && <Lifts data={data} units={units} now={now} />}
+          {data.muscleSets.length > 0 && <MuscleVolume data={data} goal={profile.goal} now={now} />}
+          {data.sessions.size === 0 && <EmptyTab text="Finish a workout and your lifts show up here: estimated maxes, PRs and sets per muscle." />}
+        </>
+      )}
+      {tab === "cardio" &&
+        (data.cardio.length > 0 ? <Cardio data={data} units={units} now={now} /> : <EmptyTab text="Log some cardio (Quick cardio on Today, or in a workout) and your totals show up here." />)}
+      {tab === "body" && <Bodyweight data={data} units={units} now={now} onLog={() => setLogging(true)} />}
       <BodyweightSheet open={logging} onClose={() => setLogging(false)} />
     </Shell>
   );
+}
+
+function EmptyTab({ text }: { text: string }) {
+  return <p className="rounded-3xl border border-dashed border-line px-5 py-8 text-center text-base font-medium text-muted">{text}</p>;
 }
 
 type Data = NonNullable<ReturnType<typeof useProgressData>>;
@@ -93,106 +130,162 @@ function Stat({ value, label, sub }: { value: string; label: string; sub?: strin
 
 // ---------------------------------------------------------------------------
 
-function ThisWeek({ data, goalDays, now }: { data: Data; goalDays: number; now: number }) {
-  const startMs = weekStart(now).getTime();
-  const stats = useMemo(() => {
-    const start = new Date(startMs);
-    const days = new Set<string>();
-    for (const k of [...data.liftDays, ...data.cardioDays]) if (k >= dateKey(start)) days.add(k);
-    const sets = data.muscleSets.filter((s) => s.type !== "warmup" && new Date(s.at) >= start).length;
-    const cardioMin = data.cardio.filter((c) => new Date(c.at) >= start).reduce((a, c) => a + c.durationSec / 60, 0);
-    return { days: days.size, sets, cardioMin: Math.round(cardioMin) };
-  }, [data, startMs]);
-  return (
-    <section aria-label="This week" className="flex flex-col gap-2">
-      <div className="flex justify-between px-1 text-xs font-bold tracking-[0.1em] text-muted">
-        <span>THIS WEEK</span>
-        <span>{stats.days >= goalDays ? "GOAL HIT ✓" : `${Math.max(0, goalDays - stats.days)} TO GO`}</span>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <Stat value={`${stats.days}/${goalDays}`} label="DAYS" />
-        <Stat value={String(stats.sets)} label="HARD SETS" />
-        <Stat value={String(stats.cardioMin)} label="CARDIO MIN" />
-      </div>
-    </section>
-  );
-}
+/**
+ * A month calendar (Sunday first, like Today): lifting / cardio / both colours, today ringed. ‹ › or a sideways swipe
+ * changes month, back to the month of your first session; "Today" jumps back. Tap a day to see what you did.
+ */
+function MonthCalendar({ data, now }: { data: Data; now: number }) {
+  const todayKey = dateKey(new Date(now));
+  const thisMonth = useMemo(() => monthIndex(new Date(now)), [now]);
+  const firstMonth = useMemo(() => {
+    const keys = [...data.liftDays, ...data.cardioDays].sort();
+    return keys.length ? monthIndex(new Date(`${keys[0]}T12:00:00`)) : thisMonth;
+  }, [data, thisMonth]);
+  const [month, setMonth] = useState<number | null>(null);
+  const shown = month ?? thisMonth;
+  const [picked, setPicked] = useState<string | null>(null);
+  const sel = picked ?? (shown === thisMonth ? todayKey : null);
+  const history = useHistory(5000);
+  const items = sel ? (history ?? []).filter((h) => dateKey(new Date(h.at)) === sel) : [];
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const suppressTap = useRef(false);
 
-// ---------------------------------------------------------------------------
+  const go = (m: number) => {
+    const next = Math.max(firstMonth, Math.min(thisMonth, m));
+    if (next === shown) return;
+    setMonth(next);
+    setPicked(null);
+  };
 
-const WEEKS = 16;
-
-function Consistency({ data, goalDays, now }: { data: Data; goalDays: number; now: number }) {
-  const cal = useMemo(() => activityCalendar(data.liftDays, data.cardioDays, now, WEEKS), [data, now]);
-  const perWeek = daysPerWeek(cal);
-  const streak = weekStreak(perWeek, goalDays);
-  const total = perWeek.reduce((a, b) => a + b, 0);
-  const avg = total / WEEKS;
-  const [showDays, setShowDays] = useState(false);
-  const months = cal.map((w, i) => {
-    const first = w.find((d) => d.date.getDate() === 1) ?? (i === 0 ? w[0] : null);
-    return first ? first.date.toLocaleDateString([], { month: "short" }) : "";
+  const year = Math.floor(shown / 12);
+  const mon = shown % 12;
+  const first = new Date(year, mon, 1);
+  const daysIn = new Date(year, mon + 1, 0).getDate();
+  const cells: CalendarDay[] = Array.from({ length: daysIn }, (_, i) => {
+    const date = new Date(year, mon, i + 1);
+    const key = dateKey(date);
+    const l = data.liftDays.has(key);
+    const c = data.cardioDays.has(key);
+    return { key, date, kind: l && c ? "both" : l ? "lift" : c ? "cardio" : null, future: key > todayKey };
   });
+  const trained = cells.filter((d) => d.kind).length;
+  const selDate = sel ? new Date(`${sel}T12:00:00`) : null;
+  const kindCls = (d: CalendarDay) =>
+    d.future
+      ? "text-muted/40"
+      : d.kind === "both"
+        ? "bg-[linear-gradient(90deg,var(--chart-1)_50%,var(--chart-2)_50%)] text-white"
+        : d.kind === "lift"
+          ? "bg-chart-1 text-white"
+          : d.kind === "cardio"
+            ? "bg-chart-2 text-white"
+            : "bg-card-2 text-muted";
+  const navBtn = "display flex h-11 w-11 items-center justify-center rounded-full text-2xl font-extrabold text-ink disabled:text-muted/30";
 
   return (
-    <div role="button" tabIndex={0} aria-expanded={showDays} onClick={() => setShowDays((v) => !v)} className="cursor-pointer">
-    <Card className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="display text-2xl font-extrabold">Consistency</h2>
-          <p className="text-sm font-medium text-muted">Last {WEEKS} weeks · {avg.toFixed(1)} days a week</p>
+    <Card className="flex flex-col gap-2 p-4">
+      <div className="flex items-center gap-1">
+        <button type="button" aria-label="Previous month" className={navBtn} disabled={shown <= firstMonth} onClick={() => go(shown - 1)}>‹</button>
+        <div className="flex min-w-0 flex-1 flex-col items-center">
+          <h2 className="display text-xl leading-tight font-extrabold uppercase" aria-live="polite">
+            {first.toLocaleDateString([], { month: "long" })}
+            {year !== new Date(now).getFullYear() ? ` ${year}` : ""}
+          </h2>
+          <span className="text-xs font-semibold text-muted">{trained ? `${trained} day${trained === 1 ? "" : "s"} trained` : "No training logged"}</span>
         </div>
-        <div className="text-right">
-          <div className="display text-3xl leading-none font-extrabold">{streak}</div>
-          <div className="text-xs font-bold tracking-[0.1em] text-muted">{streak === 1 ? "WEEK" : "WEEKS"} AT {goalDays}+</div>
-        </div>
+        <button type="button" aria-label="Next month" className={navBtn} disabled={shown >= thisMonth} onClick={() => go(shown + 1)}>›</button>
       </div>
-      <div className="flex gap-[3px]" role="img" aria-label={`Training calendar: ${total} days trained in the last ${WEEKS} weeks`}>
-        <div className="flex flex-col gap-[3px] pt-4 pr-1">
-          {["S", "M", "T", "W", "T", "F", "S"].map((l, i) => (
-            <span key={i} className="flex aspect-square w-3 items-center text-[10px] font-bold text-muted">{i % 2 ? l : ""}</span>
-          ))}
-        </div>
-        {cal.map((week, w) => (
-          <div key={w} className="flex min-w-0 flex-1 flex-col gap-[3px]">
-            <span className="h-3.5 overflow-visible text-[10px] font-bold whitespace-nowrap text-muted">{months[w]}</span>
-            {week.map((d) => (
-              <div
-                key={d.key}
-                aria-label={`${d.date.toLocaleDateString([], { month: "short", day: "numeric" })}: ${kindLabel(d)}`}
-                className={`relative flex aspect-square w-full items-center justify-center rounded-[4px] ${
-                  d.future ? "bg-transparent" : d.kind === "lift" || d.kind === "both" ? "bg-chart-1" : "bg-card-2"
-                }`}
-              >
-                {(d.kind === "cardio" || d.kind === "both") && (
-                  <span className={`h-[45%] w-[45%] rounded-full bg-chart-2 ${d.kind === "both" ? "ring-2 ring-card" : ""}`} />
-                )}
-              </div>
-            ))}
-          </div>
+      <div
+        className="grid touch-pan-y grid-cols-7 gap-1.5 text-center select-none"
+        role="grid"
+        aria-label={`Training calendar, ${first.toLocaleDateString([], { month: "long", year: "numeric" })}`}
+        onPointerDown={(e) => {
+          // The release can land outside the grid (or not reach it at all), so listen on the window for it.
+          swipe.current = { x: e.clientX, y: e.clientY };
+          const end = (ev: PointerEvent) => {
+            window.removeEventListener("pointerup", end);
+            window.removeEventListener("pointercancel", end);
+            const st = swipe.current;
+            swipe.current = null;
+            if (!st || ev.type === "pointercancel") return;
+            const dx = ev.clientX - st.x;
+            if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(ev.clientY - st.y) * 1.5) {
+              // The swipe shouldn't also pick a day; the click (if any) comes right after this, so clear it next tick.
+              suppressTap.current = true;
+              setTimeout(() => (suppressTap.current = false), 0);
+              go(shown + (dx < 0 ? 1 : -1));
+            }
+          };
+          window.addEventListener("pointerup", end);
+          window.addEventListener("pointercancel", end);
+        }}
+        onClickCapture={(e) => {
+          if (suppressTap.current) {
+            suppressTap.current = false;
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }}
+      >
+        {["S", "M", "T", "W", "T", "F", "S"].map((l, i) => (
+          <span key={i} className="display text-[11px] font-bold tracking-[0.1em] text-muted">{l}</span>
+        ))}
+        {Array.from({ length: first.getDay() }, (_, i) => <span key={`b${i}`} aria-hidden="true" />)}
+        {cells.map((d) => (
+          <button
+            key={d.key}
+            type="button"
+            disabled={d.future}
+            onClick={() => setPicked(d.key)}
+            aria-pressed={sel === d.key}
+            aria-label={`${d.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}: ${kindLabel(d)}`}
+            className={`display num flex aspect-square w-full items-center justify-center rounded-[10px] pt-px text-[15px] leading-none font-extrabold tabular-nums ${kindCls(d)} ${
+              d.key === todayKey ? "ring-2 ring-accent-strong ring-offset-2 ring-offset-card" : ""
+            } ${sel === d.key && d.key !== todayKey ? "outline-2 outline-offset-1 outline-white" : ""}`}
+          >
+            {d.date.getDate()}
+          </button>
         ))}
       </div>
-      {showDays && (
-        <ul className="divide-y divide-line">
-          {cal.flat().filter((d) => !d.future && d.kind !== null).reverse().slice(0, 30).map((d) => (
-            <li key={d.key} className="flex justify-between py-2 text-sm font-semibold">
-              <span>{d.date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</span>
-              <span className="text-muted">{kindLabel(d)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-muted">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-[3px] bg-chart-1" />Lifting</span>
-          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-chart-2" />Cardio</span>
-        </div>
-        <span className="num">{showDays ? "Hide days" : `${total} days trained · tap for the list`}</span>
+      <div className="flex items-center gap-4 px-1 text-xs font-semibold text-muted">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-chart-1" />Lifting</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-chart-2" />Cardio</span>
+        {shown !== thisMonth && (
+          <button type="button" onClick={() => { setMonth(null); setPicked(null); }} className="display -my-3 ml-auto flex min-h-11 items-center text-sm font-extrabold tracking-[0.06em] text-accent">
+            TODAY
+          </button>
+        )}
       </div>
+      {selDate && (
+        <div className="mt-1 flex flex-col gap-1 rounded-2xl bg-card-2 px-3 py-2" aria-live="polite">
+          <span className="text-xs font-bold tracking-[0.08em] text-muted">
+            {selDate.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric", ...(selDate.getFullYear() !== new Date(now).getFullYear() ? { year: "numeric" } : {}) }).toUpperCase()}
+          </span>
+          {items.length === 0 ? (
+            <span className="py-1 text-sm font-semibold text-muted">{sel === todayKey ? "Nothing logged yet today." : "Rest day."}</span>
+          ) : (
+            items.map((h) =>
+              h.kind === "workout" ? (
+                <Link key={h.workout.id} href={`/progress/session?id=${h.workout.id}`} className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold">
+                  <span className="min-w-0 truncate"><b className="font-bold text-ink">{h.workout.name ?? "Workout"}</b> · {h.sets} sets</span>
+                  <span className="display shrink-0 text-xs font-extrabold tracking-[0.06em] text-accent">VIEW ›</span>
+                </Link>
+              ) : (
+                <Link key={h.cardio.id} href={`/progress/session?cardio=${h.cardio.id}`} className="flex min-h-11 items-center justify-between gap-3 text-sm font-semibold">
+                  <span className="min-w-0 truncate"><b className="font-bold text-ink">{cardioLabel(h.cardio.type)}</b> · {Math.round(h.cardio.duration_sec / 60)} min</span>
+                  <span className="display shrink-0 text-xs font-extrabold tracking-[0.06em] text-accent">VIEW ›</span>
+                </Link>
+              ),
+            )
+          )}
+        </div>
+      )}
     </Card>
-    </div>
   );
 }
+
+/** Months counted from year 0, so stepping back and forward is just ±1. */
+const monthIndex = (d: Date) => d.getFullYear() * 12 + d.getMonth();
 
 const kindLabel = (d: CalendarDay) =>
   d.future ? "coming up" : d.kind === "both" ? "lifting + cardio" : d.kind === "lift" ? "lifting" : d.kind === "cardio" ? "cardio" : "rest";
@@ -301,11 +394,22 @@ function MuscleVolume({ data, goal, now }: { data: Data; goal: Parameters<typeof
     })),
   })).filter((g) => g.rows.length);
   const max = Math.max(24, ...[...counts.values()]);
-  const dayOfWeek = new Date(now).getDay();
+  const [info, setInfo] = useState(false);
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionTitle title="Sets per muscle" />
+      <div className="flex items-center justify-between px-1">
+        <h2 className="display text-2xl font-extrabold">Sets per muscle</h2>
+        <button
+          type="button"
+          aria-label="What this shows"
+          aria-expanded={info}
+          onClick={() => setInfo((v) => !v)}
+          className="display flex h-11 w-11 items-center justify-center rounded-full text-sm font-extrabold text-muted"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-line">i</span>
+        </button>
+      </div>
       <Card className="flex flex-col gap-4 p-4">
         <div className="grid grid-cols-2 gap-2">
           <Chip active={which === "this"} onClick={() => setWhich("this")}>This week</Chip>
@@ -325,10 +429,9 @@ function MuscleVolume({ data, goal, now }: { data: Data; goal: Parameters<typeof
             ))}
           </div>
         ))}
-        <p className="text-xs font-medium text-muted">
-          Hard sets (warm-ups don&apos;t count); a muscle that only helps counts half. The faint band is a rough weekly target for your goal.
-          {which === "this" && dayOfWeek < 6 ? " The week isn't over yet." : ""} Way over the band (⚠) can be more than you recover from.
-        </p>
+        {info && (
+          <p className="text-xs font-medium text-muted">Hard sets this week. A muscle that only helps counts half; the faint band is the usual weekly range for your goal.</p>
+        )}
       </Card>
     </section>
   );
