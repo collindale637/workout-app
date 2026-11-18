@@ -12,6 +12,7 @@ import { Sheet, btn, field, label } from "@/components/ui/kit";
 import { GOAL_LABELS } from "@/lib/profile";
 import { useAiUsage } from "@/lib/ai/client";
 import { useIsAppAdmin } from "@/lib/dev-notes";
+import { DumbbellIcon, GymIcon, InboxIcon, MailIcon, PowerIcon, ProfileIcon, SparkleIcon, SyncIcon } from "@/components/icons";
 
 /** A coloured square icon at the start of a row (settings-app style). */
 function Badge({ children, tone }: { children: React.ReactNode; tone: string }) {
@@ -74,17 +75,17 @@ export function MoreMenu() {
 
       <Group title="YOU">
         <Link href="/more/profile" className={rowCls}>
-          <Badge tone="bg-[#2a1d45] text-[#c9a6ff]">☺</Badge>
+          <Badge tone="bg-[#2a1d45] text-[#c9a6ff]"><ProfileIcon /></Badge>
           <RowText title="Profile & settings" detail={`${profile?.display_name ?? "You"} · ${profile ? GOAL_LABELS[profile.goal] : ""} · RPE ${profile?.default_rpe ?? 8}`} />
           <Chevron />
         </Link>
         <Link href="/more/gyms" className={rowCls}>
-          <Badge tone="bg-[#142c2a] text-[#5fe0c4]">⌂</Badge>
+          <Badge tone="bg-[#142c2a] text-[#5fe0c4]"><GymIcon /></Badge>
           <RowText title="Gyms" detail={`${gymCount ?? 0} gym${gymCount === 1 ? "" : "s"} · equipment checklists`} />
           <Chevron />
         </Link>
         <Link href="/more/library" className={rowCls}>
-          <Badge tone="bg-[#1d2645] text-accent">≡</Badge>
+          <Badge tone="bg-[#1d2645] text-accent"><DumbbellIcon /></Badge>
           <RowText title="Exercise library" detail="Browse, search, add your own" />
           <Chevron />
         </Link>
@@ -92,13 +93,13 @@ export function MoreMenu() {
 
       <Group title="HELP MAKE IT BETTER">
         <button type="button" className={rowCls} onClick={() => setNoteOpen(true)}>
-          <Badge tone="bg-[#3a2414] text-[#ffb27a]">✉</Badge>
+          <Badge tone="bg-[#3a2414] text-[#ffb27a]"><MailIcon /></Badge>
           <RowText title="Note to developer" detail={notesSent ? `Report a bug or suggest an idea · ${notesSent} sent` : "Report a bug or suggest an idea"} />
           <Chevron />
         </button>
         {admin && (
           <Link href="/more/notes" className={rowCls}>
-            <Badge tone="bg-[#16204a] text-accent-soft">✦</Badge>
+            <Badge tone="bg-[#16204a] text-accent-soft"><InboxIcon /></Badge>
             <RowText title="Notes from the family" detail="Bugs and ideas everyone has sent" />
             <Chevron />
           </Link>
@@ -107,7 +108,7 @@ export function MoreMenu() {
 
       <Group title="APP">
         <div className="flex min-h-14 items-center gap-3 px-4 py-2">
-          <Badge tone="bg-[#13301f] text-good">⟳</Badge>
+          <Badge tone="bg-[#13301f] text-good"><SyncIcon /></Badge>
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="text-base font-bold">Sync</span>
             <span className="text-sm font-medium text-muted" role="status">
@@ -127,7 +128,7 @@ export function MoreMenu() {
         {usage && (
           <div className="flex min-h-14 flex-col justify-center gap-1.5 px-4 py-2.5">
             <div className="flex items-center gap-3">
-              <Badge tone="bg-[#1d2645] text-accent">✦</Badge>
+              <Badge tone="bg-[#1d2645] text-accent"><SparkleIcon /></Badge>
               <span className="flex-1 text-base font-bold">AI this month</span>
               <span className="display num text-lg font-extrabold">
                 ${usage.household_usd.toFixed(2)} <span className="text-sm font-bold text-muted">/ ${usage.cap_usd.toFixed(0)}</span>
@@ -147,7 +148,7 @@ export function MoreMenu() {
           </div>
         )}
         <button type="button" className={`${rowCls} text-danger`} onClick={signOut}>
-          <Badge tone="bg-[#3a1418] text-danger">⏻</Badge>
+          <Badge tone="bg-[#3a1418] text-danger"><PowerIcon /></Badge>
           <span className="flex-1 text-base font-bold">Sign out</span>
         </button>
       </Group>

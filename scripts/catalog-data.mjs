@@ -439,7 +439,7 @@ export const INACTIVE = new Set([
   "Isometric_Neck_Exercise_-_Front_And_Back", "Isometric_Neck_Exercise_-_Sides",
   "Lying_Face_Down_Plate_Neck_Resistance", "Lying_Face_Up_Plate_Neck_Resistance", "Seated_Head_Harness_Neck_Resistance",
   "Linear_3-Part_Start_Technique", "Linear_Acceleration_Wall_Drill", "Moving_Claw_Series", "Prone_Manual_Hamstring",
-  "Kneeling_Arm_Drill", "Bodyweight_Flyes", "Otis-Up", "Cocoons", "Lunge_Sprint",
+  "Kneeling_Arm_Drill", "Bodyweight_Flyes", "Otis-Up", "Cocoons", "Lunge_Sprint", "Crucifix",
 ]);
 
 // Splits. Day targets use muscle ids.

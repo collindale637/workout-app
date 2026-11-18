@@ -39,7 +39,7 @@ describe("batch 12: per-hand volume", () => {
     expect(volumeBy(sets, wexs, (id) => id === "db_press")).toBe(50 * 10 * 2 + 100 * 10);
   });
   it("one-dumbbell lifts aren't per-hand", () => {
-    for (const n of ["One-Arm Dumbbell Row", "Goblet Squat With Dumbbell", "Dumbbell Pullover", "Concentration Curls With Dumbbell"]) expect(isPerHand({ name: n }), n).toBe(false);
+    for (const n of ["One-Arm Dumbbell Row", "Goblet Squat With Dumbbell", "Dumbbell Pullover", "Concentration Curls With Dumbbell", "Overhead Dumbbell Extension", "Seated Overhead Dumbbell Extension"]) expect(isPerHand({ name: n }), n).toBe(false);
     expect(isPerHand({ name: "Dumbbell Bench Press" })).toBe(true);
   });
   it("notes bodyweight sets", () => {
