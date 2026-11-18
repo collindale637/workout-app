@@ -11,6 +11,7 @@ import { syncLine } from "@/lib/sync-status";
 import { Sheet, btn, field, label } from "@/components/ui/kit";
 import { GOAL_LABELS } from "@/lib/profile";
 import { useAiUsage } from "@/lib/ai/client";
+import { useIsAppAdmin } from "@/lib/dev-notes";
 
 /** A coloured square icon at the start of a row (settings-app style). */
 function Badge({ children, tone }: { children: React.ReactNode; tone: string }) {
@@ -55,6 +56,8 @@ export function MoreMenu() {
   const lastSynced = useLiveQuery(() => db.getMeta<string>("lastSyncedAt"), [db]);
   const { usage } = useAiUsage();
   const [noteOpen, setNoteOpen] = useState(false);
+  // Only the admin account (Collin) gets the inbox row; the server enforces it too.
+  const admin = useIsAppAdmin();
 
   async function signOut() {
     if (pending > 0 && !confirm(`${pending} change(s) haven't synced yet and will be lost if you sign out now. Sign out anyway?`)) return;
@@ -93,6 +96,13 @@ export function MoreMenu() {
           <RowText title="Note to developer" detail={notesSent ? `Report a bug or suggest an idea · ${notesSent} sent` : "Report a bug or suggest an idea"} />
           <Chevron />
         </button>
+        {admin && (
+          <Link href="/more/notes" className={rowCls}>
+            <Badge tone="bg-[#16204a] text-accent-soft">✦</Badge>
+            <RowText title="Notes from the family" detail="Bugs and ideas everyone has sent" />
+            <Chevron />
+          </Link>
+        )}
       </Group>
 
       <Group title="APP">

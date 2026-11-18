@@ -20,3 +20,66 @@ create policy "owner all" on public.dev_notes for all to authenticated
   using (owner_id = (select auth.uid())) with check (owner_id = (select auth.uid()));
 
 comment on table public.dev_notes is 'Bugs and ideas sent from the More tab. Read them all in the dashboard (service role).';
+
+-- Marked done from the inbox.
+alter table public.dev_notes add column if not exists done_at timestamptz;
+
+-- ---- The inbox: only app admins (Collin) can see everyone's notes ----
+-- Who is an admin. RLS on with no policies, so nobody can read or change it through the API; rows are added by hand
+-- in the SQL editor (insert into public.app_admins (user_id) values ('<uuid>');). The functions below check it.
+create table if not exists public.app_admins (
+  user_id uuid primary key references auth.users (id) on delete cascade
+);
+alter table public.app_admins enable row level security;
+revoke all on public.app_admins from anon, authenticated;
+
+create or replace function public.is_app_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.app_admins a where a.user_id = (select auth.uid()));
+$$;
+
+-- Every note with who sent it. Raises for anyone who isn't an admin.
+create or replace function public.dev_notes_inbox()
+returns table (id uuid, body text, app_version text, device text, created_at timestamptz, done_at timestamptz, sender text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from public.app_admins a where a.user_id = (select auth.uid())) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return query
+    select n.id, n.body, n.app_version, n.device, n.created_at, n.done_at, coalesce(p.display_name, 'Someone')
+    from public.dev_notes n left join public.profiles p on p.id = n.owner_id
+    order by n.created_at desc
+    limit 500;
+end;
+$$;
+
+create or replace function public.dev_note_set_done(note_id uuid, done boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not exists (select 1 from public.app_admins a where a.user_id = (select auth.uid())) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  update public.dev_notes set done_at = case when done then now() else null end where id = note_id;
+end;
+$$;
+
+revoke execute on function public.is_app_admin() from public, anon;
+revoke execute on function public.dev_notes_inbox() from public, anon;
+revoke execute on function public.dev_note_set_done(uuid, boolean) from public, anon;
+grant execute on function public.is_app_admin() to authenticated;
+grant execute on function public.dev_notes_inbox() to authenticated;
+grant execute on function public.dev_note_set_done(uuid, boolean) to authenticated;

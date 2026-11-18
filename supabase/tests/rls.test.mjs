@@ -141,6 +141,17 @@ r.push(["sync retry of the same note", await as(A, `insert into dev_notes (id, b
 r.push(["empty note rejected", await as(A, `insert into dev_notes (body) values ('   ') returning id`)]);
 r.push(["B can't read A's notes", await as(B, `select count(*)::int n from dev_notes`)]);
 r.push(["B can't send as A", await as(B, `insert into dev_notes (owner_id, body) values ('${A}', 'spoof') returning id`)]);
+r.push(["B sends a note", await as(B, `insert into dev_notes (body) values ('Add a dark-mode toggle') returning body`)]);
+await db.exec(`insert into app_admins (user_id) values ('${A}')`);
+r.push(["admin A: is_app_admin", await as(A, `select public.is_app_admin() ok`)]);
+r.push(["B: is_app_admin", await as(B, `select public.is_app_admin() ok`)]);
+r.push(["admin A sees every note + sender", await as(A, `select count(*)::int n, count(distinct sender)::int senders from public.dev_notes_inbox()`)]);
+r.push(["B can't open the inbox", await as(B, `select count(*) from public.dev_notes_inbox()`)]);
+r.push(["B can't read the admin list", await as(B, `select count(*)::int n from app_admins`)]);
+r.push(["B can't make himself admin", await as(B, `insert into app_admins (user_id) values ('${B}') returning user_id`)]);
+r.push(["B can't mark notes done", await as(B, `select public.dev_note_set_done('eeeeeeee-0000-0000-0000-000000000001', true)`)]);
+r.push(["admin A marks a note done", await as(A, `select public.dev_note_set_done('eeeeeeee-0000-0000-0000-000000000001', true)`)]);
+r.push(["…and it shows as done", await as(A, `select count(*)::int done from public.dev_notes_inbox() where done_at is not null`)]);
 r.push(["bad RPE rejected", await as(A, `update sets set rpe = 11 returning id`)]);
 for (const [k, v] of r) console.log(k.padEnd(40), JSON.stringify(v));
 
