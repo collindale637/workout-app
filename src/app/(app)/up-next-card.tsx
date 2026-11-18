@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
@@ -30,6 +30,12 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
   const [options, setOptions] = useState(false);
   const [pickMuscles, setPickMuscles] = useState(false);
   const [starting, setStarting] = useState(false);
+  // Today stays alive in the background while you're in the workout (cacheComponents keeps page state), so a
+  // discarded workout used to leave this on "Starting…". Effects are torn down when the page is hidden: reset there.
+  useEffect(() => {
+    if (!starting) return;
+    return () => setStarting(false);
+  }, [starting]);
   const [aiOpen, setAiOpen] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [showSwaps, setShowSwaps] = useState(false);

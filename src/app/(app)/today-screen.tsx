@@ -16,6 +16,7 @@ import { GymSwitcher } from "@/components/gym-switcher";
 import { WeighInCard } from "@/components/weigh-in-card";
 import { doneDisc } from "@/components/ui/kit";
 import { QuickCardio } from "./quick-cardio";
+import { TodayCardio } from "./today-cardio";
 import { SyncBadge } from "@/components/sync-badge";
 import { UpNextCard } from "./up-next-card";
 import { DoneTodayCard, useDoneToday, useTrainAgain } from "./done-today-card";
@@ -98,6 +99,7 @@ export function TodayScreen() {
 
       <WeighInCard today={todayKey ? dateKey(new Date(todayKey)) : null} />
 
+      <TodayCardio />
       <CardioTimerBanner />
 
       {open ? (
@@ -129,9 +131,10 @@ export function TodayScreen() {
 function CardioTimerBanner() {
   const { timer } = useCardioTimer();
   const now = useNow(1000);
-  if (!timer) return null;
+  // Quick cardio has its own card (TodayCardio); this banner is for a timer running inside a workout.
+  if (!timer?.workoutId) return null;
   return (
-    <Link href={timer.workoutId ? "/workout" : "/cardio"} className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border-2 border-accent-strong bg-primary/15 px-4 py-2">
+    <Link href="/workout" className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border-2 border-accent-strong bg-primary/15 px-4 py-2">
       <span className="flex min-w-0 flex-col">
         <span className="text-xs font-bold tracking-[0.1em] text-accent-soft">{timer.stoppedAt ? "CARDIO · ENTER RESULTS" : "CARDIO RUNNING"}</span>
         <span className="display truncate text-xl font-extrabold">{cardioLabel(timer.type)}</span>

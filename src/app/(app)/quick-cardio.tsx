@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useCardioTimer } from "@/lib/cardio-timer";
 import { cardioLabel } from "@/lib/cardio";
+import { cardioStartedFeedback } from "./today-cardio";
 import type { CardioType } from "@/lib/db/types";
 
-/** One tap starts a timer; the running banner at the top of Today (and the /cardio screen) take it from there. */
+/** One tap starts a timer; the blue cardio card at the top of Today takes it from there. */
 export const QUICK_CARDIO: CardioType[] = ["walk", "run", "bike", "elliptical"];
 
 /** Colored top band per tile (UX spec 5.2). */
@@ -35,7 +36,10 @@ export function QuickCardio() {
             key={t}
             type="button"
             disabled={busy}
-            onClick={() => start(t, { workoutId: null, wexId: null })}
+            onClick={async () => {
+              await start(t, { workoutId: null, wexId: null });
+              cardioStartedFeedback();
+            }}
             style={{ "--band": BANDS[t] } as React.CSSProperties}
             className="display flex h-[84px] flex-col items-center justify-center gap-1.5 rounded-[14px] border-0 bg-card text-[15px] font-extrabold tracking-[0.03em] uppercase shadow-[inset_0_6px_0_var(--band),inset_0_0_0_2px_var(--border)] transition active:scale-95 disabled:opacity-50"
           >
@@ -46,12 +50,22 @@ export function QuickCardio() {
           </button>
         ))}
       </div>
-      <Link
-        href="/cardio"
-        className="display mt-2 flex min-h-12 items-center justify-center rounded-[20px] border-2 border-dashed border-line text-[15px] font-extrabold tracking-[0.04em] text-muted uppercase"
-      >
-        {busy ? "Cardio timer running · open it" : "Row · Stairs · Swim · HIIT · Other…"}
-      </Link>
+      {busy ? (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="display mt-2 flex min-h-12 items-center justify-center rounded-[20px] border-2 border-dashed border-line text-[15px] font-extrabold tracking-[0.04em] text-muted uppercase"
+        >
+          Cardio running · see top ↑
+        </button>
+      ) : (
+        <Link
+          href="/cardio"
+          className="display mt-2 flex min-h-12 items-center justify-center rounded-[20px] border-2 border-dashed border-line text-[15px] font-extrabold tracking-[0.04em] text-muted uppercase"
+        >
+          Row · Stairs · Swim · HIIT · Other…
+        </Link>
+      )}
     </section>
   );
 }
