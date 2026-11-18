@@ -61,16 +61,26 @@ export function RecoveryScreen() {
 
       <section className="flex flex-col">
         <h2 className="display pb-2 text-xl font-extrabold">Every muscle</h2>
-        <ul className="divide-y divide-line overflow-hidden rounded-3xl border border-line bg-card">
+        {/* Two columns (Batch 13 option A): about half the height of the old one-row-per-muscle list. Lowest first. */}
+        <ul className="grid grid-cols-2 gap-2">
           {list.map((r) => (
             <li key={r.muscleId}>
-              <button type="button" onClick={() => setSelected(r.muscleId)} className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left active:bg-card-2">
-                <span className="w-28 shrink-0 text-base font-bold">{name(r.muscleId)}</span>
-                <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-card-2">
+              <button
+                type="button"
+                onClick={() => setSelected(r.muscleId)}
+                aria-label={`${name(r.muscleId)}: ${r.score}%${r.adjusted ? ", adjusted by you" : ""}`}
+                className="flex min-h-14 w-full flex-col gap-2 rounded-2xl border border-line bg-card px-3 pt-2.5 pb-3 text-left active:bg-card-2"
+              >
+                <span className="flex w-full items-baseline justify-between gap-1.5">
+                  <span className="min-w-0 truncate text-sm font-bold">
+                    {name(r.muscleId)}
+                    {r.adjusted && <span className="ml-1 text-xs text-accent-soft" aria-hidden="true">✎</span>}
+                  </span>
+                  <span className="display num shrink-0 text-lg leading-none font-extrabold">{r.score}%</span>
+                </span>
+                <span className="block h-1.5 w-full overflow-hidden rounded-full bg-card-2" aria-hidden="true">
                   <span className="block h-full rounded-full" style={{ width: `${Math.max(4, r.score)}%`, background: STATE_COLOR[r.state] }} />
                 </span>
-                <span className="display num w-12 text-right text-lg font-extrabold">{r.score}%</span>
-                {r.adjusted && <span className="-ml-1 text-xs text-accent-soft" role="img" aria-label="Adjusted by you" title="Adjusted by you">✎</span>}
               </button>
             </li>
           ))}
