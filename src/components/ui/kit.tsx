@@ -44,7 +44,7 @@ export function PageHeader({ title, back, right }: { title: string; back?: strin
   return (
     <header className="flex min-h-12 items-center gap-2 pt-2">
       {back && (
-        <Link href={back} aria-label="Back" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-accent">
+        <Link href={back} transitionTypes={["nav-back"]} aria-label="Back" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-accent">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
         </Link>
       )}
