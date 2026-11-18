@@ -79,16 +79,17 @@ export function TargetsEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="-mb-1 flex items-center justify-between px-1">
-        <span className={label}>REPS</span>
-        <span className={`text-xs font-bold tracking-[0.06em] text-good transition-opacity ${saved ? "opacity-100" : "opacity-0"}`} role="status">
+      {/* Rep range (design 2): dark card like Sets / Rest, blue selection bar, white numbers. */}
+      <div className="relative rounded-[20px] bg-card-2 px-2 pt-2.5 pb-2">
+        <p className={`${label} text-center`}>REPS</p>
+        <span className={`absolute top-2.5 right-3 text-xs font-bold tracking-[0.06em] text-good transition-opacity ${saved ? "opacity-100" : "opacity-0"}`} role="status">
           {saved ? "✓ SAVED" : ""}
         </span>
-      </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-[20px] bg-primary p-2">
-        <Wheel label="FROM" options={REPS} index={t.repMin - 1} onPick={setMin} onTap={() => {}} />
-        <span className="display text-2xl font-extrabold text-white/70" aria-hidden="true">–</span>
-        <Wheel label="TO" options={REPS} index={t.repMax - 1} onPick={setMax} onTap={() => {}} />
+        <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+          <Wheel tone="dark" label="Reps from" options={REPS} index={t.repMin - 1} onPick={setMin} onTap={() => {}} />
+          <span className="display px-1 text-sm font-extrabold tracking-[0.1em] text-muted" aria-hidden="true">TO</span>
+          <Wheel tone="dark" label="Reps to" options={REPS} index={t.repMax - 1} onPick={setMax} onTap={() => {}} />
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <Stepper title="SETS" value={String(t.sets)} onLess={() => change({ ...t, sets: Math.max(1, t.sets - 1) })} onMore={() => change({ ...t, sets: Math.min(20, t.sets + 1) })} />

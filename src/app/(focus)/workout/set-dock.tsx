@@ -298,6 +298,11 @@ export type WheelProps = {
   onPick: (index: number) => void;
   /** Tapping the picked value opens the type-it-in sheet. */
   onTap: () => void;
+  /**
+   * "blue" (default): on the blue set panel, white bar with blue numbers and the label on it.
+   * "dark": on a dark card, blue bar with white numbers and no label on the bar (the targets sheet).
+   */
+  tone?: "blue" | "dark";
 };
 
 /**
@@ -305,7 +310,8 @@ export type WheelProps = {
  * Built like the iOS picker: the white bar is a window onto a second copy of the list that moves in step with
  * the scroll, so numbers turn blue gradually as they slide under it instead of switching style on the row change.
  */
-export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
+export function Wheel({ label: l, options, index, onPick, onTap, tone = "blue" }: WheelProps) {
+  const dark = tone === "dark";
   const box = useRef<HTMLDivElement>(null);
   const lens = useRef<HTMLDivElement>(null);
   const frame = useRef(0);
@@ -345,10 +351,11 @@ export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
 
   // One size for every row in both layers so the two copies line up exactly; long values ("102.5") shrink together.
   const size = options.some((o) => o.length >= 5) ? "text-[32px]" : "text-[38px]";
-  const row = `display num block h-[50px] w-full pr-5 leading-[50px] font-extrabold ${size}`;
+  // pr-5 leaves room for the label on the bar; the dark tone has none, so its numbers sit dead centre.
+  const row = `display num block h-[50px] w-full ${dark ? "" : "pr-5"} leading-[50px] font-extrabold ${size}`;
 
   return (
-    <div className="relative h-[150px] overflow-hidden rounded-[18px] bg-black/15">
+    <div className={`relative h-[150px] overflow-hidden rounded-[18px] ${dark ? "" : "bg-black/15"}`}>
       <div
         ref={box}
         data-no-sheet-drag
@@ -375,22 +382,22 @@ export function Wheel({ label: l, options, index, onPick, onTap }: WheelProps) {
             type="button"
             tabIndex={-1}
             onClick={() => (i === index ? onTap() : box.current?.scrollTo({ top: i * ROW, behavior: "smooth" }))}
-            className={`${row} snap-center text-white/45`}
+            className={`${row} snap-center ${dark ? "text-accent-soft/35" : "text-white/45"}`}
           >
             {o}
           </button>
         ))}
       </div>
       {/* The white bar: touches pass through to the wheel underneath. */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 top-[50px] h-[50px] overflow-hidden rounded-[14px] bg-white shadow-[0_6px_16px_rgba(0,0,30,0.25)]">
+      <div aria-hidden="true" className={`pointer-events-none absolute inset-x-2 top-[50px] h-[50px] overflow-hidden rounded-[14px] ${dark ? "bg-primary shadow-[0_6px_18px_rgba(31,75,255,0.35)]" : "bg-white shadow-[0_6px_16px_rgba(0,0,30,0.25)]"}`}>
         <div ref={lens} className="-mx-2 will-change-transform">
           {options.map((o, i) => (
-            <span key={`${i}-${o}`} className={`${row} text-center text-primary`}>
+            <span key={`${i}-${o}`} className={`${row} text-center ${dark ? "text-white" : "text-primary"}`}>
               {o}
             </span>
           ))}
         </div>
-        <span className="display absolute top-[17px] right-1.5 max-w-[40%] truncate text-[12px] leading-none font-bold tracking-[0.08em] text-primary/75">{l}</span>
+        {!dark && <span className="display absolute top-[17px] right-1.5 max-w-[40%] truncate text-[12px] leading-none font-bold tracking-[0.08em] text-primary/75">{l}</span>}
       </div>
     </div>
   );
