@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // Short build id, attached to notes sent from the More tab so a bug report says which version it came from.
+  env: { NEXT_PUBLIC_APP_VERSION: (process.env.VERCEL_GIT_COMMIT_SHA ?? "dev").slice(0, 7) },
   partialPrefetching: true,
   turbopack: {
     rules: {

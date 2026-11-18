@@ -217,6 +217,9 @@ export type PlanExercise = {
 /** One bodyweight entry per day. Pounds. */
 export type BodyMetric = { id: string; date: string; bodyweight: number | null; updated_at?: string };
 
+/** A bug or idea sent from the More tab ("Note to developer"). Upload-only: never pulled back. */
+export type DevNote = { id: string; body: string; app_version: string | null; device: string | null; created_at: string };
+
 /** Favorites get picked more often; excluded exercises are never suggested. Keyed by exercise. */
 export type ExercisePref = { exercise_id: string; favorite: boolean; excluded: boolean };
 
@@ -235,7 +238,8 @@ export type SyncTable =
   | "workout_exercises"
   | "sets"
   | "cardio_sessions"
-  | "body_metrics";
+  | "body_metrics"
+  | "dev_notes";
 
 export type OutboxEntry = { table: SyncTable; id: string; rev: number };
 export type Tombstone = { table: SyncTable; id: string };
