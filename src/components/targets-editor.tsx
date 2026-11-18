@@ -81,13 +81,13 @@ export function TargetsEditor({
     <div className="flex flex-col gap-3">
       {/* Rep range (design 2): dark card like Sets / Rest, blue selection bar, white numbers. */}
       <div className="relative rounded-[20px] bg-card-2 px-2 pt-2.5 pb-2">
-        <p className={`${label} pl-2`}>REPS</p>
+        <p className={`${label} text-center`}>REPS</p>
         <span className={`absolute top-2.5 right-3 text-xs font-bold tracking-[0.06em] text-good transition-opacity ${saved ? "opacity-100" : "opacity-0"}`} role="status">
           {saved ? "✓ SAVED" : ""}
         </span>
         <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-1">
           <Wheel tone="dark" label="Reps from" options={REPS} index={t.repMin - 1} onPick={setMin} onTap={() => {}} />
-          <span className="display px-1 text-sm font-extrabold tracking-[0.1em] text-muted" aria-hidden="true">TO</span>
+          <span className="display px-1 text-2xl font-extrabold text-muted" aria-hidden="true">–</span>
           <Wheel tone="dark" label="Reps to" options={REPS} index={t.repMax - 1} onPick={setMax} onTap={() => {}} />
         </div>
       </div>
