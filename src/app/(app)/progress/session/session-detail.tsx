@@ -24,10 +24,12 @@ export function SessionDetail() {
   const id = params.get("id");
   const cardioId = params.get("cardio");
   const justDone = params.get("done") === "1";
-  return id ? <WorkoutDetail id={id} justDone={justDone} /> : cardioId ? <CardioDetail id={cardioId} /> : null;
+  // ‹ goes back where you came from: Today (its done card, the cardio "saved" bar, or finishing a workout) or Progress.
+  const back = justDone || params.get("from") === "today" ? "/" : "/progress";
+  return id ? <WorkoutDetail id={id} justDone={justDone} back={back} /> : cardioId ? <CardioDetail id={cardioId} back={back} /> : null;
 }
 
-function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
+function WorkoutDetail({ id, justDone, back }: { id: string; justDone: boolean; back: string }) {
   const router = useRouter();
   const { db, requestSync } = useData();
   const { profile } = useProfile();
@@ -52,7 +54,7 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
   const actions = useWorkoutActions();
 
   if (data === undefined || !catalog || compared === undefined) return null;
-  if (data === null) return <PageHeader title="Not found" back="/progress" />;
+  if (data === null) return <PageHeader title="Not found" back={back} />;
   const { workout, wexs, sets, cardio, gym } = data;
   const cmp = compared?.comparison ?? null;
   const note = compared?.note ?? null;
@@ -90,7 +92,7 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
     <main className={`flex flex-col gap-4 ${justDone ? "pb-24" : ""}`}>
       <PageHeader
         title={workout.name ?? "Workout"}
-        back="/progress"
+        back={back}
         right={
           justDone ? (
             <span className="display flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-good/15 px-3 text-sm font-extrabold text-good">✓ Saved</span>
@@ -200,7 +202,7 @@ function WorkoutDetail({ id, justDone }: { id: string; justDone: boolean }) {
           if (!confirm("Delete this workout from your history?")) return;
           await deleteWorkout(db, workout.id);
           requestSync(0);
-          router.replace("/progress");
+          router.replace(back);
         }}
       >
         Delete workout
@@ -305,7 +307,7 @@ function TodayVsLast({ lastDate, rows }: { lastDate: string; rows: { label: stri
   );
 }
 
-function CardioDetail({ id }: { id: string }) {
+function CardioDetail({ id, back }: { id: string; back: string }) {
   const router = useRouter();
   const { db } = useData();
   const remove = useRemove();
@@ -313,7 +315,7 @@ function CardioDetail({ id }: { id: string }) {
   const units = profile?.units ?? "lb";
   const c = useLiveQuery(async () => (await db.cardio_sessions.get(id)) ?? null, [db, id]);
   if (c === undefined) return null;
-  if (c === null) return <PageHeader title="Not found" back="/progress" />;
+  if (c === null) return <PageHeader title="Not found" back={back} />;
   const when = new Date(c.started_at);
   const pace = c.distance ? c.duration_sec / toDisplayDistance(c.distance, units) : null;
   const rows: [string, string][] = [
@@ -326,7 +328,7 @@ function CardioDetail({ id }: { id: string }) {
   ];
   return (
     <main className="flex flex-col gap-4">
-      <PageHeader title={cardioLabel(c.type)} back="/progress" />
+      <PageHeader title={cardioLabel(c.type)} back={back} />
       <p className="-mt-2 text-sm font-semibold text-muted">{when.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })} · {when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
       <Card className="divide-y divide-line">
         {rows.map(([k, v]) => (
@@ -344,7 +346,7 @@ function CardioDetail({ id }: { id: string }) {
         onClick={async () => {
           if (!confirm("Delete this cardio session?")) return;
           await remove("cardio_sessions", c.id);
-          router.replace("/progress");
+          router.replace(back);
         }}
       >
         Delete

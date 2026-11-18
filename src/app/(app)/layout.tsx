@@ -8,7 +8,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <>
       {/* Only links that carry a type animate (see the view transition rules in globals.css); tabs stay instant. */}
       <ViewTransition
-        enter={{ "nav-down": "reveal", default: "none" }}
         update={{ "nav-back": "nav-back", default: "none" }}
         default="none"
       >

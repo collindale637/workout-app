@@ -30,6 +30,7 @@ import { setProblem } from "@/lib/set-limits";
 import { useWorkoutComparison } from "@/lib/compare-data";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
+import { slideAwayThen } from "@/lib/slide-away";
 import { CardioPanel, type CardioSave } from "./cardio-panel";
 import { RestBar, SetDock, type DockSet, type DockToast, type DockUpNext } from "./set-dock";
 import type { CardioSession, CardioType, SetType, Units, Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
@@ -526,11 +527,20 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     : "pb-10";
 
   return (
-    <main className={`flex min-h-dvh flex-col ${mainPad}`}>
+    <main data-workout-screen className={`flex min-h-dvh flex-col ${mainPad}`}>
       {/* Current set panel */}
       <div className="safe-top px-5 text-white">
         <div className="flex h-11 items-center justify-between">
-          <Link href="/" transitionTypes={["nav-down"]} aria-label="Minimize workout" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full">
+          <Link
+            href="/"
+            aria-label="Minimize workout"
+            onClick={(e) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+              e.preventDefault();
+              slideAwayThen(e.currentTarget.closest<HTMLElement>("[data-workout-screen]"), () => router.push("/"));
+            }}
+            className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full"
+          >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
           </Link>
           <span className="display num text-sm font-bold tracking-[0.12em] text-[#DCE4FF]">
