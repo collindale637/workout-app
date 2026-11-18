@@ -22,7 +22,7 @@ export const distanceUnit = (units: Units) => (units === "kg" ? "km" : "mi");
 /** Default plus/minus step for the weight buttons. */
 /** Lifts done with a dumbbell in each hand: the weight shown is per dumbbell ("LB EACH"). Label only. */
 export const isPerHand = (ex: { name: string } | null | undefined) =>
-  Boolean(ex && /dumbbell/i.test(ex.name) && !/one[- ]arm|single[- ]arm|goblet|pullover|concentration|one dumbbell|kickback/i.test(ex.name));
+  Boolean(ex && /dumbbell/i.test(ex.name) && !/one[- ]arm|single[- ]arm|goblet|pullover|concentration|one dumbbell|kickback|overhead.*extension/i.test(ex.name));
 
 export const weightStep = (units: Units) => (units === "kg" ? 2.5 : 5);
 

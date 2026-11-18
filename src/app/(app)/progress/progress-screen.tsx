@@ -17,6 +17,7 @@ import { ColumnChart, LineChart, RangeBar, Sparkline } from "@/components/charts
 import { GymSwitcher } from "@/components/gym-switcher";
 import { BodyweightSheet } from "@/components/bodyweight-sheet";
 import { Card, Chip, btn } from "@/components/ui/kit";
+import { InfoIcon } from "@/components/icons";
 import type { Units } from "@/lib/db/types";
 import { HistoryList } from "./history";
 
@@ -405,9 +406,9 @@ function MuscleVolume({ data, goal, now }: { data: Data; goal: Parameters<typeof
           aria-label="What this shows"
           aria-expanded={info}
           onClick={() => setInfo((v) => !v)}
-          className="display flex h-11 w-11 items-center justify-center rounded-full text-sm font-extrabold text-muted"
+          className="flex h-11 w-11 items-center justify-center rounded-full text-accent active:bg-card-2"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-line">i</span>
+          <InfoIcon />
         </button>
       </div>
       <Card className="flex flex-col gap-4 p-4">

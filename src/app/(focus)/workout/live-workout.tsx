@@ -246,6 +246,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     showLogged(saved, before);
     const group = current.superset_group;
     const doneNow = filled(current) + (draft.type === "warmup" ? 0 : 1);
+    // Already past the planned sets (an extra set): stay on this exercise instead of jumping ahead again.
+    const wasDone = draft.type !== "warmup" && filled(current) >= (current.target_sets ?? 3);
     // This set finished the last planned set of the whole workout: no rest, say well done.
     const finishedAll =
       draft.type !== "warmup" &&
@@ -255,6 +257,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       await db.setMeta("rest", null);
       if ("vibrate" in navigator) navigator.vibrate?.([80, 60, 80]);
       setAllDoneOpen(true);
+      return;
+    }
+    if (wasDone) {
+      await startRest(current.rest_sec ?? 90, current.id);
+      setCurrentId(current.id);
+      setUpNextFrom(null);
       return;
     }
     if (group !== null) {
@@ -315,6 +323,15 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       setCurrentId(w.id);
       setUpNextFrom(w.id);
     }
+  }
+
+  /** Adds one more planned set to this exercise and goes back to logging it (even from the "Up next" card). */
+  async function addSet(w: WorkoutExercise) {
+    const target = w.target_sets ?? 3;
+    if (target >= 20) return;
+    await actions.updateWex(w.id, { target_sets: target + 1 });
+    setCurrentId(w.id);
+    setUpNextFrom(null);
   }
 
   async function unskipSet(w: WorkoutExercise, slot: number) {
@@ -581,8 +598,29 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             >
               TARGET {targetLabel.toUpperCase()} ✎
             </button>
-            {dock.superset_group !== null && <span>&nbsp;· SUPERSET</span>}
           </p>
+          {dock.superset_group !== null && (() => {
+            const partners = wexs.filter((w) => w.superset_group === dock.superset_group && w.id !== dock.id);
+            const names = partners.map((w) => catalog.byId.get(w.exercise_id)?.name ?? "partner").join(" + ");
+            return (
+              <div className="mt-2 flex items-center gap-3 rounded-2xl border border-accent-soft/40 bg-primary/15 py-2 pr-2 pl-3.5" role="note">
+                <div className="min-w-0 flex-1">
+                  <p className="display text-sm font-extrabold tracking-[0.12em] text-accent-soft">⇄ SUPERSET {String.fromCharCode(64 + dock.superset_group)}</p>
+                  <p className="truncate text-sm font-semibold text-muted">After each set, switch to {names}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    for (const w of wexs.filter((x) => x.superset_group === dock.superset_group)) void actions.updateWex(w.id, { superset_group: null });
+                  }}
+                  className="display h-10 shrink-0 rounded-full bg-card-2 px-3.5 text-sm font-extrabold tracking-[0.08em] text-ink active:bg-line"
+                  aria-label="Turn off this superset"
+                >
+                  TURN OFF
+                </button>
+              </div>
+            );
+          })()}
           {gym && !isAvailable(catalog.needs.get(dock.exercise_id) ?? [], equipment) && (
             <p className="mt-1 text-sm font-bold text-warn">Heads up: {gym.name} may not have the equipment for this. Swap?</p>
           )}
@@ -708,6 +746,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               onEdit={setEditSet}
               onSkip={(slot) => void skipSet(current, slot)}
               onUnskip={(slot) => void unskipSet(current, slot)}
+              onAddSet={() => void addSet(current)}
             />
 
           </>
@@ -1012,7 +1051,7 @@ function lastTimeLabel(iso: string) {
  * (Skip). Warm-ups are "W" and drop sets are "D"; drop sets still use up a planned set. Last time is paired by set number.
  */
 function SetTable({
-  done, history, units, nextType, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip,
+  done, history, units, nextType, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip, onAddSet,
 }: {
   done: WorkoutSet[];
   history?: { last: WorkoutSet[]; lastDate: string | null };
@@ -1026,6 +1065,7 @@ function SetTable({
   onEdit: (s: WorkoutSet) => void;
   onSkip: (slot: number) => void;
   onUnskip: (slot: number) => void;
+  onAddSet: () => void;
 }) {
   const last = history?.last.filter((s) => s.type !== "warmup") ?? [];
   const u = weightUnit(units) === "kg" ? "kg" : "lbs";
@@ -1122,6 +1162,11 @@ function SetTable({
           </div>
         );
       })}
+      {target < 20 && (
+        <button type="button" onClick={onAddSet} className="display mt-1 flex min-h-11 items-center justify-center gap-1.5 rounded-2xl border border-dashed border-line text-sm font-extrabold tracking-[0.1em] text-accent active:bg-card">
+          + ADD SET
+        </button>
+      )}
       {!last.length && <p className="pt-1 text-sm font-medium text-muted">First time logging this one.</p>}
     </section>
   );
