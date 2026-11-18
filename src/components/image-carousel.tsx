@@ -7,7 +7,10 @@ const SWIPE_SHARE = 0.2;
 const FLING_SPEED = 0.3;
 /** Movement (px) before deciding whether the finger is going sideways or up/down. */
 const DECIDE_AT = 3;
-const SETTLE = "transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+/** Settle: an ease-out that starts at about the finger's speed and glides in (no hard snap). */
+const SETTLE_EASE = "cubic-bezier(0.25, 0.9, 0.35, 1)";
+const SETTLE_MIN = 320;
+const SETTLE_MAX = 560;
 
 type Gesture = {
   x: number;
@@ -38,8 +41,9 @@ export function ImageCarousel({ srcs, altFor }: { srcs: string[]; altFor: (i: nu
     const row = track.current;
     if (!el || !row || count < 2) return;
 
-    const place = (index: number, offset: number, animate: boolean) => {
-      row.style.transition = animate ? SETTLE : "none";
+    /** animate: settle time in ms (0 = follow the finger). */
+    const place = (index: number, offset: number, animate: number) => {
+      row.style.transition = animate ? `transform ${animate}ms ${SETTLE_EASE}` : "none";
       row.style.transform = `translateX(calc(${-index * 100}% + ${offset}px))`;
     };
 
@@ -66,8 +70,9 @@ export function ImageCarousel({ srcs, altFor }: { srcs: string[]; altFor: (i: nu
       const f = frameRef.current;
       // Past the first or last image it pulls with resistance instead of sliding freely.
       const atEdge = (f === 0 && dx > 0) || (f === count - 1 && dx < 0);
-      g.dx = atEdge ? dx * 0.3 : dx;
-      place(f, g.dx, false);
+      // Rubber band: easy at first, stiffer the further you pull.
+      g.dx = atEdge ? dx / (1 + Math.abs(dx) / (g.width * 0.35)) : dx;
+      place(f, g.dx, 0);
       return true;
     };
 
@@ -80,7 +85,11 @@ export function ImageCarousel({ srcs, altFor }: { srcs: string[]; altFor: (i: nu
       if (g.dx < -g.width * SWIPE_SHARE || (g.dx < 0 && g.speed < -FLING_SPEED)) next = Math.min(count - 1, f + 1);
       else if (g.dx > g.width * SWIPE_SHARE || (g.dx > 0 && g.speed > FLING_SPEED)) next = Math.max(0, f - 1);
       frameRef.current = next;
-      place(next, 0, true);
+      // Time it from how far is left and how fast the finger was going, so a flick glides and a slow drag eases in.
+      // Track is at -f·W + dx now and ends at -next·W.
+      const left = Math.abs((f - next) * g.width - g.dx);
+      const speed = Math.max(Math.abs(g.speed), 0.6);
+      place(next, 0, Math.round(Math.min(SETTLE_MAX, Math.max(SETTLE_MIN, (left / speed) * 1.6))));
       setFrame(next);
     };
 

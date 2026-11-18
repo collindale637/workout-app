@@ -115,7 +115,8 @@ export function SetDock({
           e.stopPropagation();
         }
       }}
-      style={{ transform: dy ? `translateY(${dy}px)` : undefined, transition: dragging ? "none" : "transform 0.2s ease-out" }}
+      // viewTransitionName: a fixed panel isn't part of the page's snapshot, so it gets its own to slide down on ⌄.
+      style={{ transform: dy ? `translateY(${dy}px)` : undefined, transition: dragging ? "none" : "transform 0.2s ease-out", viewTransitionName: "workout-dock" }}
       className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md touch-none rounded-t-[22px] bg-primary px-3 text-white shadow-[0_-8px_24px_rgba(0,0,0,0.5)]"
     >
       {/* Floats 8 px above the dock in both states. data-no-sheet-drag: touching it never drags the dock. */}

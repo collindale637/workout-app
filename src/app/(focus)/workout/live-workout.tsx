@@ -446,22 +446,9 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           </span>
         </>
       ),
+      // The whole row swipes (no ⋯ dead spot); the grip is just a hint that it can be held and dragged.
       trailing: (
         <>
-          <button
-            type="button"
-            aria-label={menuLabel(w)}
-            // Not a tap on the row, and never the start of a swipe or drag.
-            onPointerDown={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setActionsFor(w);
-            }}
-            className="-mx-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted active:bg-card-2"
-          >
-            <Dots />
-          </button>
           <svg className="shrink-0 text-[#454d6e]" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
           </svg>
@@ -543,7 +530,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       {/* Current set panel */}
       <div className="safe-top px-5 text-white">
         <div className="flex h-11 items-center justify-between">
-          <Link href="/" aria-label="Minimize workout" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full">
+          <Link href="/" transitionTypes={["nav-down"]} aria-label="Minimize workout" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
           </Link>
           <span className="display num text-sm font-bold tracking-[0.12em] text-[#DCE4FF]">
