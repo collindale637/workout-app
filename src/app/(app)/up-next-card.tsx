@@ -189,6 +189,22 @@ export function UpNextCard({ hasGym }: { hasGym: boolean }) {
             <span className="text-xs font-bold text-white/80">Customize</span>
           </div>
         </div>
+        {seed > 0 && up.mode !== "ai" && (
+          // The generator is seeded, so stepping the seed back rebuilds the earlier workout exactly.
+          <div className="-mb-1 flex items-center justify-center gap-2">
+            <button type="button" className="display min-h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-white" onClick={() => setChoice({ ...choice!, mode: up.mode, dayId: up.day?.id ?? null, seed: seed - 1 })}>
+              ↶ Undo
+            </button>
+            {seed > 1 && (
+              <>
+                <span className="text-white/50" aria-hidden="true">·</span>
+                <button type="button" className="display min-h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-white" onClick={() => setChoice({ ...choice!, mode: up.mode, dayId: up.day?.id ?? null, seed: 0 })}>
+                  Back to original
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="flex flex-col">

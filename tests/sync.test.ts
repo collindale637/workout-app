@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { LocalDB } from "@/lib/db/dexie";
-import { markDeleted, markDirty, syncNow } from "@/lib/db/sync";
+import { markDeleted, markDirty, reconcileDeletes, syncNow } from "@/lib/db/sync";
 
 /** A tiny stand-in for the Supabase client that records writes and serves canned reads. */
 function fakeSupabase(server: Record<string, Record<string, unknown>[]>) {
@@ -140,5 +140,49 @@ describe("sync", () => {
     expect(up.options).toEqual({ onConflict: "owner_id,date" });
     expect(await db.body_metrics.get("bm-server")).toMatchObject({ date: "2026-11-10", bodyweight: 184.2 });
     expect((await db.profile.get(USER))?.cardio_pref).toBe("more");
+  });
+
+  it("drops workouts deleted on another device, but keeps local rows not uploaded yet", async () => {
+    const { client } = fakeSupabase({
+      profiles: [{ id: USER, display_name: "C", default_rpe: "8.0", units: "lb" }],
+      workouts: [{ id: "w-keep", started_at: "2026-11-16T10:00:00Z", updated_at: "2026-11-16T10:00:00Z" }],
+      workout_exercises: [],
+      sets: [],
+    });
+    const wex = (id: string, workout_id: string) => ({ id, workout_id, exercise_id: "Pullups", sort_order: 0, superset_group: null, notes: null, target_sets: 3, rep_min: 6, rep_max: 10, rest_sec: 90 });
+    const set = (id: string, workout_exercise_id: string) => ({ id, workout_exercise_id, set_no: 1, type: "working" as const, weight: null, reps: 8, rpe: null, completed_at: "2026-11-16T10:05:00Z" });
+    await db.workouts.bulkPut([
+      { id: "w-keep", name: null, gym_id: null, plan_day_id: null, started_at: "2026-11-16T10:00:00Z", ended_at: null, notes: null, source: "manual" },
+      { id: "w-gone", name: null, gym_id: null, plan_day_id: null, started_at: "2026-11-15T10:00:00Z", ended_at: "2026-11-15T11:00:00Z", notes: null, source: "manual" },
+    ]);
+    await db.workout_exercises.bulkPut([wex("we-gone", "w-gone"), wex("we-new", "w-keep")]);
+    await db.sets.bulkPut([set("s-gone", "we-gone"), set("s-new", "we-new")]);
+    // Made offline on this phone and not uploaded yet: must survive.
+    await markDirty(db, "workout_exercises", "we-new");
+    await markDirty(db, "sets", "s-new");
+    // Push runs first and uploads them; make the fake server "forget" nothing else.
+    await syncNow(db, client, USER);
+    expect(await db.workouts.get("w-gone")).toBeUndefined();
+    expect(await db.workout_exercises.get("we-gone")).toBeUndefined();
+    expect(await db.sets.get("s-gone")).toBeUndefined();
+    expect(await db.workouts.get("w-keep")).toBeDefined();
+  });
+
+  it("cleanup never drops rows still waiting to upload", async () => {
+    const { client } = fakeSupabase({ sets: [], workout_exercises: [], workouts: [] });
+    await db.workouts.put({ id: "w-new", name: null, gym_id: null, plan_day_id: null, started_at: "2026-11-16T10:00:00Z", ended_at: null, notes: null, source: "manual" });
+    await db.sets.put({ id: "s-new", workout_exercise_id: "we-x", set_no: 1, type: "working", weight: null, reps: 8, rpe: null, completed_at: "2026-11-16T10:05:00Z" });
+    await markDirty(db, "workouts", "w-new");
+    await markDirty(db, "sets", "s-new");
+    await reconcileDeletes(db, client);
+    expect(await db.workouts.get("w-new")).toBeDefined();
+    expect(await db.sets.get("s-new")).toBeDefined();
+  });
+
+  it("doesn't clean up when the server can't see the account (expired login returns empty lists)", async () => {
+    const { client } = fakeSupabase({ profiles: [], workouts: [], workout_exercises: [], sets: [] });
+    await db.workouts.put({ id: "w-old", name: null, gym_id: null, plan_day_id: null, started_at: "2026-11-15T10:00:00Z", ended_at: "2026-11-15T11:00:00Z", notes: null, source: "manual" });
+    await syncNow(db, client, USER);
+    expect(await db.workouts.get("w-old")).toBeDefined();
   });
 });

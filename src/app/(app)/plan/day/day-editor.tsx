@@ -42,6 +42,8 @@ export function DayEditor() {
   const [rename, setRename] = useState<string | null>(null);
   const [musclesOpen, setMusclesOpen] = useState(false);
   const [regenSeed, setRegenSeed] = useState(1);
+  // Lists replaced by Regenerate on this visit, oldest first, so it can be undone.
+  const [before, setBefore] = useState<PlanExercise[][]>([]);
   const [aiOpen, setAiOpen] = useState(false);
 
   const { catalog, profile, gym, gymEquipment, prefs } = inputs;
@@ -71,7 +73,16 @@ export function DayEditor() {
       prefs, seed: regenSeed, cardioPref: profile!.cardio_pref, cardio: style.cardio ?? undefined, focus: style.focus, avoid: new Set(list.map((e) => e.exercise_id)),
     });
     setRegenSeed(regenSeed + 1);
+    setBefore([...before, list]);
     await actions.replaceExercises(day.id, items);
+  }
+
+  /** Puts back the list from before the last regenerate (or the very first one). Rows get new ids. */
+  async function restore(toOriginal: boolean) {
+    const back = toOriginal ? before[0] : before[before.length - 1];
+    if (!back) return;
+    setBefore(toOriginal ? [] : before.slice(0, -1));
+    await actions.replaceExercises(day.id, back);
   }
 
   async function startNow() {
@@ -149,6 +160,21 @@ export function DayEditor() {
           ⟳ Regenerate
         </button>
       </div>
+      {before.length > 0 && (
+        <div className="-mt-2 flex items-center justify-center gap-2">
+          <button type="button" className="display min-h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-accent" onClick={() => void restore(false)}>
+            ↶ Undo regenerate
+          </button>
+          {before.length > 1 && (
+            <>
+              <span className="text-muted" aria-hidden="true">·</span>
+              <button type="button" className="display min-h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-accent" onClick={() => void restore(true)}>
+                Back to original
+              </button>
+            </>
+          )}
+        </div>
+      )}
       <button type="button" className={btn.secondary} onClick={() => setAiOpen(true)}>
         <Sparkle /> Customize with AI
       </button>

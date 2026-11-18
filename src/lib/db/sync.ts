@@ -38,6 +38,12 @@ const INCREMENTAL: Array<"gyms" | "plans" | "plan_days" | "plan_exercises" | "wo
   "gyms", "plans", "plan_days", "plan_exercises", "workouts", "workout_exercises", "sets", "cardio_sessions", "body_metrics",
 ];
 
+/**
+ * Tables checked for rows deleted on another device, children first. body_metrics is left out: two phones
+ * logging the same day merge into one server row (see push), so its ids aren't stable across devices.
+ */
+const RECONCILE = ["sets", "cardio_sessions", "workout_exercises", "workouts", "plan_exercises", "plan_days", "plans", "gyms"] as const;
+
 const pick = (row: Record<string, unknown>, cols: string[]) =>
   Object.fromEntries(cols.filter((c) => c in row).map((c) => [c, row[c] ?? null]));
 
@@ -174,6 +180,10 @@ async function pull(db: LocalDB, sb: SupabaseClient, userId: string) {
     await db.setMeta(sinceKey, rows[rows.length - 1].updated_at);
   }
 
+  // Only when the server just proved we're signed in: with an expired login every list comes back empty
+  // (row level security), which would look like "everything was deleted".
+  if (prof.data) await reconcileDeletes(db, sb);
+
   // Small tables: replace fully (also picks up deletions from other devices).
   const ge = await fetchAll<Record<string, unknown>>((from, to) => sb.from("gym_equipment").select("gym_id, equipment_id, details").range(from, to));
   await db.transaction("rw", db.gym_equipment, async () => {
@@ -204,6 +214,22 @@ async function pull(db: LocalDB, sb: SupabaseClient, userId: string) {
       if (m.data) await db.exercise_muscles.bulkPut(m.data);
       if (e.data) await db.exercise_equipment.bulkPut(e.data);
     }
+  }
+}
+
+/**
+ * Deletes made on another device: incremental pull never sees a row that is gone, so drop local rows the
+ * server no longer has, unless this phone still has them waiting to upload. Children before parents.
+ */
+export async function reconcileDeletes(db: LocalDB, sb: SupabaseClient) {
+  for (const table of RECONCILE) {
+    const ids = new Set(
+      (await fetchAll<{ id: string }>((from, to) => sb.from(table).select("id").order("id").range(from, to))).map((r) => r.id),
+    );
+    const t = db[table] as unknown as { toCollection: () => { primaryKeys: () => Promise<string[]> }; bulkDelete: (k: string[]) => Promise<unknown> };
+    const pendingNow = new Set((await db.outbox.where("table").equals(table).toArray()).map((e) => e.id));
+    const stale = (await t.toCollection().primaryKeys()).filter((id) => !ids.has(id) && !pendingNow.has(id));
+    if (stale.length) await t.bulkDelete(stale);
   }
 }
 
