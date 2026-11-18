@@ -86,7 +86,7 @@ export function DoneTodayCard({ workoutId, trainAgain, onTrainAgain }: { workout
             </span>
             Done for today
           </span>
-          <Link href={`/progress/session?id=${workout.id}`} className="display flex min-h-11 items-center text-sm font-extrabold tracking-[0.06em] text-accent">
+          <Link href={`/progress/session?id=${workout.id}&from=today`} className="display flex min-h-11 items-center text-sm font-extrabold tracking-[0.06em] text-accent">
             View →
           </Link>
         </div>

@@ -127,48 +127,28 @@ body {
 }
 
 /* ---- Page motion (React <ViewTransition> + <Link transitionTypes>) ----
-   ⌄ minimize: the workout slides down and fades while Today settles in underneath.
-   ‹ back: content slides right a little and the parent page comes in from the left. Quick, ease-out. */
-::view-transition-group(.slide-down) {
-  z-index: 10;
-}
-::view-transition-old(.slide-down) {
-  animation: 300ms cubic-bezier(0.4, 0, 1, 1) both workout-down;
-}
-::view-transition-new(.reveal) {
-  animation: 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both reveal-in;
+   ‹ back: the page you're on slides off to the right, the one behind comes in from the left (iOS-style, no fade).
+   ⌄ minimize is done in src/lib/slide-away.ts instead (Safari didn't move the fixed set panel). */
+::view-transition-old(.nav-back),
+::view-transition-new(.nav-back) {
+  mix-blend-mode: normal;
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+  animation-fill-mode: both;
 }
 ::view-transition-old(.nav-back) {
-  --slide-offset: 60px;
-  animation:
-    140ms ease-in both page-fade reverse,
-    300ms cubic-bezier(0.2, 0.8, 0.2, 1) both page-slide reverse;
+  z-index: 1;
+  animation-name: back-out;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
 }
 ::view-transition-new(.nav-back) {
-  --slide-offset: -60px;
-  animation:
-    200ms ease-out 100ms both page-fade,
-    300ms cubic-bezier(0.2, 0.8, 0.2, 1) both page-slide;
+  animation-name: back-in;
 }
-/* The fixed set panel has its own snapshot. The only animated way out of the workout is ⌄, so it always slides down with the screen. */
-::view-transition-group(workout-dock) {
-  z-index: 11;
+@keyframes back-out {
+  to { transform: translateX(100%); }
 }
-::view-transition-old(workout-dock) {
-  animation: 300ms cubic-bezier(0.4, 0, 1, 1) both workout-down;
-}
-@keyframes workout-down {
-  to { transform: translateY(70vh); opacity: 0; }
-}
-@keyframes reveal-in {
-  from { transform: scale(0.97); opacity: 0.4; }
-}
-@keyframes page-fade {
-  from { opacity: 0; }
-}
-@keyframes page-slide {
-  from { translate: var(--slide-offset); }
-  to { translate: 0; }
+@keyframes back-in {
+  from { transform: translateX(-30%); opacity: 0.6; }
 }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*),

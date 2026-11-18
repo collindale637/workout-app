@@ -30,7 +30,7 @@ export function TodayCardio() {
 
   const toast = saved && (
     <Link
-      href={`/progress/session?cardio=${saved.id}`}
+      href={`/progress/session?cardio=${saved.id}&from=today`}
       role="status"
       className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-good/15 px-4 text-[15px] font-bold text-good"
     >
