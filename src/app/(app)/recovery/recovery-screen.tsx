@@ -48,7 +48,7 @@ export function RecoveryScreen() {
 
       <section className="flex flex-col gap-3 rounded-3xl border border-line bg-card p-4">
         <ReadinessTiles recovery={recovery.map} lit={lit?.name ?? null} onLight={setLit} />
-        <BodyMap recovery={recovery.map} selected={selected} highlight={lit?.muscles ?? null} onSelect={(m) => { setLit(null); setSelected(m); }} />
+        <BodyMap recovery={recovery.map} sex={profile?.sex ?? null} selected={selected} highlight={lit?.muscles ?? null} onSelect={(m) => { setLit(null); setSelected(m); }} />
         <div className="flex justify-center gap-4 text-xs font-bold tracking-[0.06em] text-muted">
           {(["fresh", "recovering", "fatigued"] as const).map((st) => (
             <span key={st} className="flex items-center gap-1.5">
