@@ -81,7 +81,7 @@ export function TargetsEditor({
     <div className="flex flex-col gap-3">
       {/* Rep range (design 2): dark card like Sets / Rest, blue selection bar, white numbers. */}
       <div className="relative rounded-[20px] bg-card-2 px-2 pt-2.5 pb-2">
-        <p className={`${label} text-center`}>REPS</p>
+        <p className={`${label} pl-2`}>REPS</p>
         <span className={`absolute top-2.5 right-3 text-xs font-bold tracking-[0.06em] text-good transition-opacity ${saved ? "opacity-100" : "opacity-0"}`} role="status">
           {saved ? "✓ SAVED" : ""}
         </span>
@@ -123,7 +123,7 @@ export function TargetsEditor({
 function Stepper({ title, value, onLess, onMore }: { title: string; value: string; onLess: () => void; onMore: () => void }) {
   return (
     <div className="flex flex-col items-center gap-1 rounded-2xl bg-card-2 px-2 py-2.5">
-      <span className={label}>{title}</span>
+      <span className={`${label} self-start pl-2`}>{title}</span>
       <div className="flex items-center">
         <button type="button" aria-label={`Less ${title.toLowerCase()}`} className="h-11 w-11 rounded-full border-2 border-line text-xl font-bold active:bg-line" onClick={onLess}>−</button>
         <span className="display num w-16 text-center text-2xl font-extrabold">{value}</span>
