@@ -3,95 +3,26 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useProfile, useSave } from "@/lib/db/provider";
-import { newId } from "@/lib/db/dexie";
 import { useCardioTimer } from "@/lib/cardio-timer";
-import { CARDIO_TYPES, cardioElapsedSec, cardioLabel } from "@/lib/cardio";
-import { useNow } from "@/lib/use-now";
-import { formatDuration } from "@/lib/units";
-import { CardioResultsForm } from "@/components/cardio-results";
+import { CARDIO_TYPES, cardioLabel } from "@/lib/cardio";
 import { PageHeader, btn } from "@/components/ui/kit";
 import type { CardioType } from "@/lib/db/types";
 
-/** Pick a cardio type → Start → Done → enter distance and the rest. The timer keeps going if you leave the screen. */
+/**
+ * Pick a cardio type → Start. The timer itself lives in a blue card: on Today for quick cardio, or in the workout
+ * when it belongs to one. There is no full-screen timer, so any running timer sends you to its card.
+ */
 export function CardioTimerFlow({ workoutId }: { workoutId: string | null }) {
   const router = useRouter();
-  const { profile } = useProfile();
-  const save = useSave();
-  const { timer, start, stop, clear } = useCardioTimer();
-  const now = useNow(1000);
+  const { timer, start } = useCardioTimer();
   const [type, setType] = useState<CardioType | null>(null);
-  const units = profile?.units ?? "lb";
 
-  // A timer started inside a workout runs in the workout's blue card.
-  const belongsToWorkoutItem = Boolean(timer?.workoutId);
+  const home = timer ? (timer.workoutId ? "/workout" : "/") : null;
   useEffect(() => {
-    if (belongsToWorkoutItem) router.replace("/workout");
-  }, [belongsToWorkoutItem, router]);
+    if (home) router.replace(home);
+  }, [home, router]);
 
-  if (timer === undefined || belongsToWorkoutItem) return null;
-
-  const discard = async () => {
-    if (!confirm("Throw this cardio session away?")) return;
-    await clear();
-    router.back();
-  };
-
-  // 3. Done was tapped: how did it go?
-  if (timer?.stoppedAt) {
-    const t = timer;
-    return (
-      <main className="safe-top safe-bottom flex flex-col gap-4 px-5 pb-8">
-        <PageHeader title={`${cardioLabel(t.type)} done`} />
-        <p className="-mt-2 text-base font-semibold text-muted">
-          {formatDuration(cardioElapsedSec(t, now))} on the clock. Add the rest, or leave it blank.
-        </p>
-        <CardioResultsForm
-          key="results"
-          type={t.type}
-          units={units}
-          initial={{ durationSec: cardioElapsedSec(t, now), startedAt: new Date(t.startedAt) }}
-          submitLabel="Save cardio"
-          onSubmit={async (r) => {
-            const id = newId();
-            await save("cardio_sessions", {
-              id,
-              workout_id: t.workoutId,
-              workout_exercise_id: null,
-              type: t.type,
-              started_at: r.startedAt,
-              duration_sec: r.durationSec,
-              distance: r.distance,
-              incline: r.incline,
-              avg_hr: r.avgHr,
-              rpe: r.rpe,
-              intervals: null,
-              notes: r.notes,
-            });
-            await clear();
-            router.replace(t.workoutId ? "/workout" : `/progress/session?cardio=${id}`);
-          }}
-        >
-          <button type="button" className={`${btn.ghost} text-danger`} onClick={discard}>Discard</button>
-        </CardioResultsForm>
-      </main>
-    );
-  }
-
-  // 2. Running.
-  if (timer) {
-    return (
-      <main className="safe-top safe-bottom flex min-h-dvh flex-col gap-4 px-5 pb-8">
-        <PageHeader title={cardioLabel(timer.type)} />
-        <div className="flex flex-1 flex-col items-center justify-center gap-2" role="timer" aria-label="Elapsed time">
-          <span className="text-xs font-bold tracking-[0.12em] text-muted">TIME</span>
-          <span className="display num text-[96px] leading-none font-extrabold">{formatDuration(cardioElapsedSec(timer, now))}</span>
-        </div>
-        <button type="button" className={btn.primary} onClick={() => stop()}>Done</button>
-        <button type="button" className={`${btn.ghost} text-danger`} onClick={discard}>Cancel session</button>
-      </main>
-    );
-  }
+  if (timer === undefined || timer) return null;
 
   // 1. Choose what you're doing.
   const manualHref = `/cardio?manual=1${workoutId ? `&workout=${workoutId}` : ""}`;
@@ -120,7 +51,9 @@ export function CardioTimerFlow({ workoutId }: { workoutId: string | null }) {
           disabled={!type}
           className={btn.primary}
           onClick={async () => {
-            if (type) await start(type, { workoutId, wexId: null });
+            if (!type) return;
+            await start(type, { workoutId, wexId: null });
+            if (!workoutId && "vibrate" in navigator) navigator.vibrate?.(30);
           }}
         >
           {type ? `Start ${cardioLabel(type).toLowerCase()}` : "Pick one to start"}
