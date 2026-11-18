@@ -1,6 +1,7 @@
 "use client";
 
 import type { MuscleRecovery, RecoveryState } from "@/lib/recovery";
+import type { Sex } from "@/lib/db/types";
 
 /*
   Front and back body drawn in SVG (left half drawn, right half mirrored), one or more shapes per tracked muscle:
@@ -74,9 +75,98 @@ const SILHOUETTE =
 
 const MIRROR = "translate(120 0) scale(-1 1)";
 
+/* ---- Female figure: the same muscles, reshaped ----
+   Rather than a second hand-drawn body, every point is moved sideways toward or away from the centre line (x = 60)
+   by a factor that depends on height: narrower shoulders and arms, a narrower waist, wider hips. Each muscle keeps its
+   shape, tap area and colour; only the proportions change. The chest gets its own rounder shape. */
+
+/** Width factor by height (y): [y, factor] stops, straight lines between. An hourglass: smaller head, slim neck,
+    narrow shoulders and waist, wide hips and upper thighs. */
+const FEMALE_WIDTH: [number, number][] = [
+  [0, 0.92], [26, 0.92], [31, 0.8], [37, 0.84], [44, 0.84], [60, 0.85], [74, 0.79], [88, 0.77], [98, 0.84], [106, 1.0],
+  [116, 1.15], [130, 1.16], [146, 1.09], [166, 1.0], [190, 0.95], [244, 0.93],
+];
+/** Arms follow the shoulders in and get slimmer around their own centre line. Measured from the body's centre because
+    the outline is drawn whole (both arms), unlike the mirrored muscles. Below the elbow the arm hangs further out, so
+    the hip outline (about 21 from the centre at y ≈ 120) isn't mistaken for it. */
+const ARM_Y: [number, number] = [44, 126];
+const ARM_SHIFT = 0.85;
+const ARM_SLIM = 0.82;
+/** Distance of the arm's centre line from the body's centre, by height (left arm). */
+const ARM_MID: [number, number][] = [[44, 27], [60, 27.5], [80, 27.5], [100, 30], [126, 33]];
+const isArm = (x: number, y: number) => y > ARM_Y[0] && y < ARM_Y[1] && Math.abs(60 - x) > (y > 100 ? 23 : 19.5);
+
+function lerp(stops: [number, number][], y: number) {
+  for (let i = 1; i < stops.length; i++) {
+    const [y1, k1] = stops[i];
+    const [y0, k0] = stops[i - 1];
+    if (y <= y1) return k0 + ((k1 - k0) * (y - y0)) / (y1 - y0);
+  }
+  return stops[stops.length - 1][1];
+}
+const widthAt = (y: number) => (y <= FEMALE_WIDTH[0][0] ? FEMALE_WIDTH[0][1] : lerp(FEMALE_WIDTH, y));
+function morphX(x: number, y: number) {
+  if (!isArm(x, y)) return 60 - (60 - x) * widthAt(y);
+  const side = x < 60 ? -1 : 1;
+  const mid = lerp(ARM_MID, y);
+  const off = Math.abs(60 - x) - mid; // + outside the arm's centre line, − inside
+  return 60 + side * (mid * ARM_SHIFT + off * ARM_SLIM);
+}
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Reshapes a path made of absolute M / L / C points (plus relative h for short lines). */
+function morphPath(d: string): string {
+  const out: string[] = [];
+  let cx = 0;
+  let cy = 0;
+  for (const [, cmd, args] of d.matchAll(/([MLCZhz])([^MLCZhz]*)/g)) {
+    const n = args.trim() ? args.trim().split(/[\s,]+/).map(Number) : [];
+    if (cmd === "Z" || cmd === "z") out.push("Z");
+    else if (cmd === "h") {
+      const x = cx + n[0];
+      out.push(`L${r1(morphX(x, cy))} ${cy}`);
+      cx = x;
+    } else {
+      const pts: string[] = [];
+      for (let i = 0; i < n.length; i += 2) {
+        pts.push(`${r1(morphX(n[i], n[i + 1]))} ${n[i + 1]}`);
+        cx = n[i];
+        cy = n[i + 1];
+      }
+      out.push(`${cmd}${pts.join(" ")}`);
+    }
+    if (cmd === "M") {
+      cx = n[0];
+      cy = n[1];
+    }
+  }
+  return out.join(" ");
+}
+function morphShape(sh: Shape): Shape {
+  if (!Array.isArray(sh.d)) return { ...sh, d: morphPath(sh.d) };
+  const [x, y, w, h] = sh.d;
+  const left = morphX(x, y + h / 2);
+  return { ...sh, d: [r1(left), y, r1(morphX(x + w, y + h / 2) - left), h] };
+}
+
+/** Female chest: one rounded shape per side with a gap at the centre line (drawn before reshaping, like the rest). */
+const FEMALE_CHEST = "M57.6 46.9 C54 44.9 47.5 45.2 44.2 48.9 C41.4 52.4 41.8 59.4 46 63.6 C50 67 55.8 66.4 57.6 62.4 C58.7 57.9 58.7 51.4 57.6 46.9 Z";
+const FEMALE_FRONT_LINES = FRONT_LINES.replace("M58.6 52 C53 51 48 52 44 55 ", "M57.2 63 C55 66 50 66.4 46.4 64 ");
+const FIGURES: Record<Sex, { front: Shape[]; back: Shape[]; frontLines: string; backLines: string; silhouette: string }> = {
+  male: { front: FRONT, back: BACK, frontLines: FRONT_LINES, backLines: BACK_LINES, silhouette: SILHOUETTE },
+  female: {
+    front: FRONT.map((sh) => (sh.muscle === "chest" ? { ...sh, d: FEMALE_CHEST } : sh)).map(morphShape),
+    back: BACK.map(morphShape),
+    frontLines: morphPath(FEMALE_FRONT_LINES),
+    backLines: morphPath(BACK_LINES),
+    silhouette: morphPath(SILHOUETTE),
+  },
+};
+
 function Figure({
   shapes,
   lines,
+  silhouette,
   label,
   recovery,
   selected,
@@ -85,6 +175,7 @@ function Figure({
 }: {
   shapes: Shape[];
   lines: string;
+  silhouette: string;
   label: string;
   recovery: Map<string, MuscleRecovery>;
   selected: string | null;
@@ -115,7 +206,7 @@ function Figure({
   return (
     <figure className="flex flex-1 flex-col items-center gap-1">
       <svg viewBox="16 0 88 244" className="h-auto w-full max-w-[170px]" role="group" aria-label={`${label} of body`}>
-        <path d={SILHOUETTE} fill="var(--card-2)" stroke="var(--border)" strokeWidth="0.8" />
+        <path d={silhouette} fill="var(--card-2)" stroke="var(--border)" strokeWidth="0.8" />
         <g strokeLinejoin="round">
           {half("l")}
           <g transform={MIRROR}>{half("r")}</g>
@@ -135,17 +226,21 @@ export function BodyMap({
   selected,
   highlight = null,
   onSelect,
+  sex = null,
 }: {
   recovery: Map<string, MuscleRecovery>;
   selected: string | null;
   highlight?: string[] | null;
   onSelect: (muscle: string) => void;
+  /** The account's sex (Profile). Female gets the female figure; male or not set keeps the original. */
+  sex?: Sex | null;
 }) {
   const hl = highlight ? new Set(highlight) : null;
+  const f = FIGURES[sex === "female" ? "female" : "male"];
   return (
     <div className="flex gap-2">
-      <Figure shapes={FRONT} lines={FRONT_LINES} label="Front" recovery={recovery} selected={selected} highlight={hl} onSelect={onSelect} />
-      <Figure shapes={BACK} lines={BACK_LINES} label="Back" recovery={recovery} selected={selected} highlight={hl} onSelect={onSelect} />
+      <Figure shapes={f.front} lines={f.frontLines} silhouette={f.silhouette} label="Front" recovery={recovery} selected={selected} highlight={hl} onSelect={onSelect} />
+      <Figure shapes={f.back} lines={f.backLines} silhouette={f.silhouette} label="Back" recovery={recovery} selected={selected} highlight={hl} onSelect={onSelect} />
     </div>
   );
 }
