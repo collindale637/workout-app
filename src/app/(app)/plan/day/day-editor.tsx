@@ -16,6 +16,8 @@ import { ExerciseInfo } from "@/components/exercise-info";
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { doseLabel, MusclePills, supersetLetter } from "@/components/planned";
 import { PageHeader, Sheet, btn, field, label } from "@/components/ui/kit";
+import { ReorderList, type ReorderItem } from "@/components/reorder-list";
+import { TargetsEditor } from "@/components/targets-editor";
 import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 import { targetsFor } from "@/lib/ai/apply";
 import type { PlanExercise } from "@/lib/db/types";
@@ -119,17 +121,21 @@ export function DayEditor() {
           No exercises yet. Add some, or tap Regenerate to fill the day.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {list.map((e, i) => {
+        // Hold a row and drag to reorder (like the live workout); swipe left for Swap / How-to / Remove; tap for targets.
+        <ReorderList
+          onReorder={(ids) => void actions.reorderExercises(day.id, ids)}
+          items={list.map((e, i): ReorderItem => {
             const ex = catalog.byId.get(e.exercise_id);
             const linked = e.superset_group !== null;
-            return (
-              <li key={e.id}>
-                <button
-                  type="button"
-                  onClick={() => setMenuFor(e)}
-                  className={`flex min-h-16 w-full items-center gap-3 rounded-3xl border bg-card px-4 py-3 text-left active:bg-card-2 ${linked ? "border-accent-strong/50" : "border-line"}`}
-                >
+            const linkedAbove = linked && i > 0 && list[i - 1].superset_group === e.superset_group;
+            return {
+              id: e.id,
+              ariaLabel: `${ex?.name ?? e.exercise_id}: edit targets`,
+              onTap: () => setMenuFor(e),
+              before: linkedAbove ? <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" /> : undefined,
+              faceClassName: `flex min-h-16 items-center rounded-3xl bg-card py-3 pr-3 pl-4 ring-inset ${linked ? "ring-2 ring-accent-strong/50" : "ring-1 ring-line"}`,
+              face: (
+                <>
                   <span className="display num w-6 shrink-0 text-lg font-extrabold text-muted">{i + 1}</span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-base font-bold">{ex?.name ?? e.exercise_id}</span>
@@ -139,12 +145,21 @@ export function DayEditor() {
                       {linked ? ` · Superset ${supersetLetter(e.superset_group!)}` : ""}
                     </span>
                   </span>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="shrink-0 text-muted" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" /></svg>
-                </button>
-              </li>
-            );
+                </>
+              ),
+              trailing: (
+                <svg className="shrink-0 text-[#454d6e]" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+                </svg>
+              ),
+              actions: [
+                { key: "swap", label: "Swap", icon: <span className="text-xl" aria-hidden="true">⇄</span>, className: "bg-primary text-white", onPress: () => setPicker(e) },
+                { key: "how", label: "How-to", icon: <span className="text-xl" aria-hidden="true">ⓘ</span>, className: "bg-[#2a3150] text-white", onPress: () => setInfoFor(e.exercise_id) },
+                { key: "remove", label: "Remove", icon: <span className="text-xl" aria-hidden="true">✕</span>, className: "bg-danger text-white", onPress: () => void actions.removeExercise(e.id) },
+              ],
+            };
           })}
-        </ul>
+        />
       )}
 
       <div className="grid grid-cols-2 gap-2">
@@ -210,10 +225,7 @@ export function DayEditor() {
           <ExerciseMenu
             row={menuFor}
             isCardio={isCardioExercise(catalog.byId.get(menuFor.exercise_id))}
-            isFirst={list[0]?.id === menuFor.id}
-            isLast={list[list.length - 1]?.id === menuFor.id}
-            onSave={async (c) => { await actions.updateExercise(menuFor.id, c); setMenuFor(null); }}
-            onMove={async (dir) => { await actions.moveExercise(day.id, menuFor.id, dir); setMenuFor(null); }}
+            onSave={(c) => actions.updateExercise(menuFor.id, c)}
             onSwap={() => { setPicker(menuFor); setMenuFor(null); }}
             onInfo={() => { setInfoFor(menuFor.exercise_id); setMenuFor(null); }}
             onSuperset={async () => {
@@ -297,61 +309,42 @@ export function DayEditor() {
 }
 
 function ExerciseMenu({
-  row, isCardio, isFirst, isLast, canSuperset, onSave, onMove, onSwap, onInfo, onSuperset, onRemove,
+  row, isCardio, canSuperset, onSave, onSwap, onInfo, onSuperset, onRemove,
 }: {
-  row: PlanExercise; isCardio: boolean; isFirst: boolean; isLast: boolean; canSuperset: boolean;
-  onSave: (c: Partial<PlanExercise>) => void; onMove: (dir: -1 | 1) => void; onSwap: () => void; onInfo: () => void; onSuperset: () => void; onRemove: () => void;
+  row: PlanExercise; isCardio: boolean; canSuperset: boolean;
+  onSave: (c: Partial<PlanExercise>) => void | Promise<void>; onSwap: () => void; onInfo: () => void; onSuperset: () => void; onRemove: () => void;
 }) {
-  const [sets, setSets] = useState(row.sets);
-  const [min, setMin] = useState(row.rep_min ?? 8);
-  const [max, setMax] = useState(row.rep_max ?? 12);
-  const [rest, setRest] = useState(row.rest_sec ?? 90);
   const [minutes, setMinutes] = useState(Number(/\d+/.exec(row.notes ?? "")?.[0] ?? 15));
-  const item = "flex min-h-13 w-full items-center gap-3 rounded-2xl bg-card-2 px-4 text-left text-base font-bold";
-  const small = (v: number, set: (n: number) => void, l: string, stepBy = 1, fmt?: (n: number) => string) => (
-    <div className="flex flex-col items-center gap-1">
-      <span className={label}>{l}</span>
-      <div className="flex items-center gap-2">
-        <button type="button" aria-label={`Less ${l.toLowerCase()}`} className="h-11 w-11 rounded-full border-2 border-line text-xl font-bold" onClick={() => set(Math.max(stepBy >= 5 ? stepBy : 1, v - stepBy))}>−</button>
-        <span className="display num w-14 text-center text-2xl font-extrabold">{fmt ? fmt(v) : v}</span>
-        <button type="button" aria-label={`More ${l.toLowerCase()}`} className="h-11 w-11 rounded-full border-2 border-line text-xl font-bold" onClick={() => set(v + stepBy)}>+</button>
-      </div>
-    </div>
-  );
+  if (!isCardio) {
+    return (
+      <TargetsEditor
+        initial={{ sets: row.sets, repMin: row.rep_min ?? 8, repMax: row.rep_max ?? 12, rest: row.rest_sec ?? 90 }}
+        onSave={(t) => onSave({ sets: t.sets, rep_min: t.repMin, rep_max: t.repMax, rest_sec: t.rest })}
+        onSwap={onSwap}
+        onInfo={onInfo}
+        superset={canSuperset ? { linked: row.superset_group !== null, onToggle: onSuperset } : undefined}
+        onRemove={onRemove}
+        removeLabel="Remove from this day"
+      />
+    );
+  }
+  const chip = "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full bg-card-2 px-2 text-sm font-bold active:bg-line";
   return (
-    <div className="flex flex-col gap-2">
-      {isCardio ? (
-        <div className="flex flex-col gap-3 rounded-2xl bg-card-2 p-3">
-          {small(minutes, setMinutes, "MINUTES", 5)}
-          <button type="button" className={btn.secondary} onClick={() => onSave({ notes: `${minutes} min` })}>Save</button>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col items-center gap-1 rounded-2xl bg-card-2 p-3">
+        <span className={label}>MINUTES</span>
+        <div className="flex items-center gap-2">
+          <button type="button" aria-label="Fewer minutes" className="h-11 w-11 rounded-full border-2 border-line text-xl font-bold" onClick={() => setMinutes(Math.max(5, minutes - 5))}>−</button>
+          <span className="display num w-14 text-center text-2xl font-extrabold">{minutes}</span>
+          <button type="button" aria-label="More minutes" className="h-11 w-11 rounded-full border-2 border-line text-xl font-bold" onClick={() => setMinutes(minutes + 5)}>+</button>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 rounded-2xl bg-card-2 p-3">
-          {small(sets, setSets, "SETS")}
-          {small(rest, setRest, "REST", 15, formatDuration)}
-          {small(min, setMin, "REPS FROM")}
-          {small(max, setMax, "REPS TO")}
-          <button
-            type="button"
-            className={`${btn.secondary} col-span-2`}
-            onClick={() => onSave({ sets: Math.min(20, sets), rep_min: Math.min(min, max), rep_max: Math.max(min, max), rest_sec: rest })}
-          >
-            Save targets
-          </button>
-        </div>
-      )}
-      <button type="button" className={item} onClick={onSwap}>⇄ Swap exercise</button>
-      <button type="button" className={item} onClick={onInfo}>ⓘ How to do it</button>
-      {!isCardio && canSuperset && (
-        <button type="button" className={item} onClick={onSuperset}>
-          🔗 {row.superset_group !== null ? "Remove from superset" : "Superset with the next exercise"}
-        </button>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled={isFirst} className={`${item} justify-center disabled:opacity-40`} onClick={() => onMove(-1)}>↑ Move up</button>
-        <button type="button" disabled={isLast} className={`${item} justify-center disabled:opacity-40`} onClick={() => onMove(1)}>↓ Move down</button>
+        <button type="button" className={`${btn.secondary} mt-1 w-full`} onClick={() => void onSave({ notes: `${minutes} min` })}>Save</button>
       </div>
-      <button type="button" className={`${item} text-danger`} onClick={onRemove}>✕ Remove from this day</button>
+      <div className="flex gap-2">
+        <button type="button" className={chip} onClick={onSwap}>⇄ Swap</button>
+        <button type="button" className={chip} onClick={onInfo}>ⓘ How-to</button>
+      </div>
+      <button type="button" className="min-h-12 text-base font-bold text-danger" onClick={onRemove}>Remove from this day</button>
     </div>
   );
 }

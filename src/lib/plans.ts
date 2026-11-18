@@ -5,6 +5,7 @@ import { useData } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
 import { newId, nowIso } from "@/lib/db/dexie";
 import type { GenItem } from "@/lib/generator";
+import { repairSupersets } from "@/lib/workout";
 import type { Goal, Plan, PlanDay, PlanExercise, PlanSource } from "@/lib/db/types";
 
 export const todayIso = () => {
@@ -164,6 +165,25 @@ export function usePlanActions() {
     [db, requestSync],
   );
 
+  /** Puts a day's exercises in this order (hold-and-drag); supersets split apart by the move are unlinked. */
+  const reorderExercises = useCallback(
+    async (dayId: string, ids: string[]) => {
+      const list = await db.plan_exercises.where("plan_day_id").equals(dayId).toArray();
+      const byId = new Map(list.map((e) => [e.id, e]));
+      const ordered = [...ids.map((id) => byId.get(id)).filter((e): e is PlanExercise => Boolean(e)), ...list.filter((e) => !ids.includes(e.id))];
+      const groups = repairSupersets(ordered.map((e) => e.superset_group));
+      for (let k = 0; k < ordered.length; k++) {
+        const e = ordered[k];
+        if (e.sort_order !== k || e.superset_group !== groups[k]) {
+          await db.plan_exercises.update(e.id, { sort_order: k, superset_group: groups[k] });
+          await markDirty(db, "plan_exercises", e.id);
+        }
+      }
+      requestSync(4000);
+    },
+    [db, requestSync],
+  );
+
   const moveExercise = useCallback(
     async (dayId: string, id: string, dir: -1 | 1) => {
       const list = (await db.plan_exercises.where("plan_day_id").equals(dayId).toArray()).sort((a, b) => a.sort_order - b.sort_order);
@@ -222,5 +242,5 @@ export function usePlanActions() {
     [db, requestSync],
   );
 
-  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, applyEdit };
+  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit };
 }
