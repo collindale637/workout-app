@@ -9,7 +9,7 @@ import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
 import { aiProfile, allowedAtGym, gymContext, historyLines, recoveryRecord, startAiJob, useAiJob, useAiUsage } from "@/lib/ai/client";
 import { draftSnapshot, draftWeekDays, planNotes, targetsFor } from "@/lib/ai/apply";
-import { draftDaysForWeek, lastScheduledWeek } from "@/lib/ai/weeks";
+import { draftDaysForWeek, lastScheduledWeek, varyDefault } from "@/lib/ai/weeks";
 import { WeekStepper, type WeekTone } from "@/components/week-stepper";
 import { AiItems, AiProblem, AiThinking, AiUsageNote, Sparkle } from "@/components/ai";
 import { MusclePills } from "@/components/planned";
@@ -40,8 +40,10 @@ export function AiPlanScreen() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [weeks, setWeeks] = useState(8);
-  // "Change it up": the workouts change over the weeks (Batch 20d). The preview then shows each week.
-  const [vary, setVary] = useState(true);
+  // "Change it up": the workouts change over the weeks (Batch 20d). The preview then shows each week. Until you pick,
+  // it follows the length: 4-week plans default to the same workouts each week (changing weeks cost more and matter
+  // little that short), longer plans to Change it up.
+  const [varyPick, setVary] = useState<boolean | null>(null);
   const [viewWeek, setViewWeek] = useState(1);
   const [slow, setSlow] = useState(false);
   const [minutes, setMinutes] = useState<number | null>(null);
@@ -70,6 +72,7 @@ export function AiPlanScreen() {
   }
 
   const chosen = { goal: goal ?? profile.goal, days: days ?? profile.days_per_week, minutes: minutes ?? profile.session_minutes };
+  const vary = varyDefault(weeks, varyPick);
   const original: PlanSnapshot | null = existing
     ? {
         name: existing.plan.name,

@@ -1,5 +1,8 @@
 import "server-only";
 import type { CallFn } from "./run";
+import { answerLine, withAnswerLine } from "./claude-pricing";
+
+export { costUsd, type Usage } from "./claude-pricing";
 
 /*
   Calls the Claude API (Messages API) from the server. The API key lives only in Vercel's environment
@@ -13,21 +16,6 @@ export const AI_FAST_MODEL = process.env.AI_FAST_MODEL || "claude-haiku-5-5";
 export const AI_MONTHLY_CAP_USD = Number(process.env.AI_MONTHLY_CAP_USD || 10);
 export const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
-/** USD per million tokens [input, output]. Unknown models are priced like Opus to stay on the safe side. */
-const PRICES: Record<string, [number, number]> = {
-  "claude-sonnet-5-5": [2, 10],
-  "claude-sonnet-5": [2, 10],
-  "claude-haiku-5-5": [1, 5],
-  "claude-opus-5-5": [4, 20],
-};
-
-export type Usage = { input_tokens: number; output_tokens: number };
-
-export function costUsd(model: string, u: Usage) {
-  const [i, o] = PRICES[model] ?? [4, 20];
-  return (u.input_tokens * i + u.output_tokens * o) / 1_000_000;
-}
-
 type Block = Record<string, unknown>;
 
 export class AiError extends Error {
@@ -40,6 +28,8 @@ export class AiError extends Error {
 export const callTool: CallFn = async (opts) => {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new AiError("AI isn't set up yet: add ANTHROPIC_API_KEY in Vercel.", 503);
+  const tools = opts.tools?.length ? opts.tools : [opts.tool];
+  const shared = tools.length > 1;
   let res: Response;
   try {
     res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -50,9 +40,11 @@ export const callTool: CallFn = async (opts) => {
         max_tokens: opts.maxTokens,
         // This model doesn't accept a forced tool_choice, so ask for the tool in the prompt instead. If it
         // ever answers in plain text, the result has no tool call and run.ts sends it back once to fix.
-        system: `${opts.system}\n\nAnswer ONLY by calling the ${opts.tool.name} tool, with no other text.`,
-        messages: opts.messages,
-        tools: [opts.tool],
+        // A build that shares one tool list (for the prompt cache) keeps the system prompt identical across its calls
+        // and says which tool to use at the end of the first message instead.
+        system: shared ? opts.system : `${opts.system}\n\n${answerLine(opts.tool.name)}`,
+        messages: shared ? withAnswerLine(opts.messages, opts.tool.name) : opts.messages,
+        tools,
         tool_choice: { type: "auto" },
       }),
       signal: AbortSignal.timeout(opts.maxTokens <= 1000 ? 30_000 : 130_000),
@@ -77,7 +69,8 @@ export const callTool: CallFn = async (opts) => {
     throw new AiError(`Claude returned an error (${res.status}${detail ? `: ${detail}` : ""}). Try again.`);
   }
   const content = data.content ?? [];
-  const use = content.find((b) => b.type === "tool_use");
+  // The answer is the call to the tool asked for; a call to another tool in the list counts as no answer (sent back to fix).
+  const use = content.find((b) => b.type === "tool_use" && b.name === opts.tool.name);
   const u = data.usage ?? {};
   return {
     input: use?.input ?? null,
@@ -86,6 +79,8 @@ export const callTool: CallFn = async (opts) => {
     usage: {
       input_tokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0),
       output_tokens: u.output_tokens ?? 0,
+      cache_write: u.cache_creation_input_tokens ?? 0,
+      cache_read: u.cache_read_input_tokens ?? 0,
     },
     truncated: data.stop_reason === "max_tokens",
   };

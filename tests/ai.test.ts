@@ -201,7 +201,7 @@ describe("the AI request pipeline", () => {
     expect(r.calls).toBe(2);
     expect(r.errors).toEqual([]);
     expect(r.kind === "workout" && r.value.items.map((i) => i.exercise_id)).toEqual(["Barbell_Bench_Press_-_Medium_Grip", "Triceps_Pushdown"]);
-    expect(r.tokens).toEqual({ input_tokens: 2000, output_tokens: 400 });
+    expect(r.tokens).toMatchObject({ input_tokens: 2000, output_tokens: 400 });
     const fix = seen[1].at(-1)!.content as Record<string, unknown>[];
     expect(fix[0]).toMatchObject({ type: "tool_result", tool_use_id: "tu_1", is_error: true });
     expect(String(fix[0].content)).toContain("Invented_Press");

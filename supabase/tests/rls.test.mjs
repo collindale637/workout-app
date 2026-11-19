@@ -45,6 +45,8 @@ await db.exec(readFileSync(root + "20261128000100_catalog_ez_preacher_and_more.s
 await db.exec(readFileSync(root + "20261128000200_overhead_cable_extension_names.sql", "utf8"));
 await db.exec(readFileSync(root + "20261129000100_plan_weeks.sql", "utf8"));
 await db.exec(readFileSync(root + "20261129000100_plan_weeks.sql", "utf8")); // re-runnable
+await db.exec(readFileSync(root + "20261130000100_ai_request_calls.sql", "utf8"));
+await db.exec(readFileSync(root + "20261130000100_ai_request_calls.sql", "utf8")); // re-runnable
 if ((await db.query(`select is_active from public.exercises where id = 'Crucifix'`)).rows[0]?.is_active !== false) throw new Error("Crucifix should be inactive");
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
@@ -112,6 +114,8 @@ r.push(["new splits present", await as(A, `select s.id, count(d.*)::int days fro
 r.push(["A logs an AI request", await as(A, `select public.ai_log_request('plan', 'claude-sonnet-5-5', 9000, 1500, 0.033, true)`)]);
 r.push(["A logs an AI swap", await as(A, `select public.ai_log_request('swap', 'claude-haiku-5-5', 1500, 200, 0.0025, true)`)]);
 r.push(["B logs an AI request", await as(B, `select public.ai_log_request('import', 'claude-sonnet-5-5', 4000, 800, 0.016)`)]);
+r.push(["A logs a build's call count", await as(A, `select public.ai_log_request('plan', 'claude-sonnet-5-5', 30000, 9000, 0.12, true, 4)`)]);
+r.push(["calls saved (null when not given)", await as(A, `select calls from ai_requests where cost_usd in (0.12, 0.033) order by cost_usd`)]);
 r.push(["A sees own log only", await as(A, `select count(*)::int n, sum(cost_usd)::text cost from ai_requests`)]);
 r.push(["A can't write the log directly", await as(A, `insert into ai_requests (type, cost_usd) values ('plan', 0)`)]);
 r.push(["A can't erase usage", await as(A, `delete from ai_requests returning id`)]);
