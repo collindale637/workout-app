@@ -16,7 +16,8 @@ import { Sheet, btn } from "@/components/ui/kit";
 import { ExerciseInfo } from "@/components/exercise-info";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { NotesForm, RowIcon, SmartExercisePicker } from "@/components/exercise-actions";
-import type { GenItem } from "@/lib/generator";
+import { dayStyle, dose, type GenItem } from "@/lib/generator";
+import { isCardioExercise } from "@/lib/cardio";
 import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 import { TODAY_TOP_EVENT } from "./today-cardio";
 
@@ -58,6 +59,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   // Today-list edits: which row's notes or swap picker is open (by row key).
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const { recovery } = useGeneratorInputs();
   const { mode, cardRef, sheetRef, headerRef, bodyRef, restRef, headerH, dragProps, cycle, openCardio } = useExerciseSheet();
   // Minimized, the card lists readiness per muscle with bars. On a short phone that would run under the sheet, so it
@@ -185,6 +187,14 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
       seed: up.seed,
       edits: { base: up.baseSig, items: items.map((i, n) => ({ ...i, superset_group: groups[n] })) },
     });
+  };
+  /** Sets, reps and rest for an exercise added by hand, the way the generator would dose it for today's goal. */
+  const doseFor = (exerciseId: string): GenItem => {
+    const ex = catalog.byId.get(exerciseId);
+    const base = { exercise_id: exerciseId, superset_group: null };
+    if (isCardioExercise(ex)) return { ...base, sets: 1, rep_min: null, rep_max: null, rest_sec: null, notes: "15 min" };
+    const role = ex?.movement_pattern === "core" ? "core" : ex?.mechanic === "compound" ? "compound" : "isolation";
+    return { ...base, ...dose(profile.goal, role, profile.experience, dayStyle(up.title).focus), notes: null };
   };
   const updateItem = (key: string, patch: Partial<GenItem>) => saveItems(keyed.map((k) => (k.key === key ? { ...k.it, ...patch } : k.it)));
   const undoEdits = () => setChoice({ ...choice, mode: up.mode, seed: up.seed, edits: undefined });
@@ -474,6 +484,13 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         ) : (
           <ReorderList items={listItems} onReorder={(ids) => void saveItems(ids.map((id) => byKey.get(id)!).filter(Boolean))} />
         )}
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="display mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-[14px] border-2 border-dashed border-line text-base font-extrabold tracking-[0.08em] text-accent-soft"
+        >
+          <span aria-hidden="true" className="text-xl leading-none">+</span> Add exercise
+        </button>
         {showSwaps && dropped.length > 0 && (
           <p className="pt-2 text-sm font-medium text-muted">Not available at {gym?.name ?? "this gym"}: {dropped.map((s) => name(s.from)).join(", ")}</p>
         )}
@@ -502,6 +519,24 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
             onPick={async (ids) => {
               if (ids[0]) await updateItem(swapFor, { exercise_id: ids[0] });
               setSwapFor(null);
+            }}
+          />
+        )}
+      </Sheet>
+
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Add exercises">
+        {adding && (
+          <SmartExercisePicker
+            mode="add"
+            fromIsCardio={false}
+            gymEquipment={gym ? equipment : null}
+            gymName={gym?.name}
+            excludeIds={up.items.map((i) => i.exercise_id)}
+            today={{ name: up.title, items: up.items.map((i) => ({ exercise_id: i.exercise_id, sets_done: 0, sets_planned: i.sets })) }}
+            initialMuscles={up.targets}
+            onPick={async (ids) => {
+              if (ids.length) await saveItems([...keyed.map((k) => k.it), ...ids.map(doseFor)]);
+              setAdding(false);
             }}
           />
         )}
