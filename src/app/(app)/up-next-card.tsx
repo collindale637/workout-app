@@ -374,11 +374,11 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
               onClick={() => setAiOpen(true)}
               aria-label="Customize with AI"
               title="Customize with AI"
-              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-ai-bright"
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/70"
             >
-              <Sparkle size={22} onCobalt />
+              <Sparkle size={22} white />
             </button>
-            <span className="text-[11px] leading-none font-bold text-ai-bright">Customize</span>
+            <span className="text-[11px] leading-none font-bold text-white/80">Customize</span>
           </div>
         </div>
         {seed > 0 && up.mode !== "ai" && (

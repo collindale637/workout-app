@@ -10,10 +10,10 @@ import { Sheet, btn, field } from "@/components/ui/kit";
 import type { Catalog } from "@/lib/hooks";
 import type { AiItem, AiUsage, AiWorkout } from "@/lib/ai/types";
 
-/** The little four-point sparkle used on every AI button. Always violet; `onCobalt` is for cobalt fills (primary buttons, the Up next card), where the page-colored violet would vanish in light mode. */
-export function Sparkle({ size = 18, className = "", onCobalt = false }: { size?: number; className?: string; onCobalt?: boolean }) {
+/** The little four-point sparkle used on every AI button. Always violet; `onCobalt` is for cobalt fills (primary buttons), where the page-colored violet would vanish in light mode. `white` is for the Up next card, where violet did not read (Collin, Nov 19). */
+export function Sparkle({ size = 18, className = "", onCobalt = false, white = false }: { size?: number; className?: string; onCobalt?: boolean; white?: boolean }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className} style={{ color: onCobalt ? "var(--ai-bright)" : "var(--ai)" }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className} style={{ color: white ? "#fff" : onCobalt ? "var(--ai-bright)" : "var(--ai)" }}>
       <path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9z" />
       <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" opacity=".7" />
     </svg>
