@@ -98,7 +98,16 @@ export function TodayCardio() {
 }
 
 /** Scroll Today back to the top (where the cardio card sits) with a short buzz, so starting feels like something happened. */
+/** Today's exercise sheet listens for this and shrinks if it's covering the page, so the top of Today shows. */
+export const TODAY_TOP_EVENT = "reps:today-top";
+
+/** Scroll Today back to the top, where the cardio card is. */
+export function showTodayTop() {
+  window.dispatchEvent(new Event(TODAY_TOP_EVENT));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 export function cardioStartedFeedback() {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(30);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  showTodayTop();
 }

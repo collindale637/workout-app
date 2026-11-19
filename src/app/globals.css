@@ -30,6 +30,7 @@
   --done: var(--good); /* the finished check: same green as weight increases */
   --done-ink: #062414; /* the check mark drawn on --done */
   --band-sky: #5aa9ff; /* quick-cardio band 1 */
+  --cardio-soft: #7fe8d8; /* the Cardio pill on Today's exercise sheet: teal text on a teal tint */
   /* Gold, the logo's slash, means "earned": PR badges, trophies, records. Nothing else is gold, so it stays a reward.
      Not for buttons, links, tabs or warnings (orange). */
   --gold: #ffc533;
@@ -50,6 +51,7 @@
   --accent-soft: #1f4bff;
   --accent-strong: #1f4bff;
   --gold: #a86f00; /* darker so gold text reads on white */
+  --cardio-soft: #0e7c8c;
   --gold-soft: rgb(255 197 51 / 0.22);
 }
 

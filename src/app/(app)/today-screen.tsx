@@ -57,6 +57,20 @@ export function TodayScreen() {
   const trainAgain = useTrainAgain();
   const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
 
+  // Below the workout card: quick cardio, last time, and the gym nudge.
+  const rest = (
+    <>
+      <QuickCardio />
+      {/* The done card already shows today's workout. */}
+      {lastWorkout?.kind === "workout" && !open && !doneToday && <LastWorkout item={lastWorkout} />}
+      {gyms.length === 0 && (
+        <Link href="/more/gyms/edit?new=1" className="rounded-3xl border-2 border-dashed border-accent-strong/60 p-4 text-base font-bold text-accent">
+          + Set up your gym so exercise lists match your equipment
+        </Link>
+      )}
+    </>
+  );
+
   return (
     <main className="mt-4 flex flex-col gap-4">
       <header className="flex h-11 items-center justify-between gap-3">
@@ -103,25 +117,23 @@ export function TodayScreen() {
       <CardioTimerBanner />
 
       {open ? (
-        <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} />
-      ) : doneToday === undefined ? null : doneToday ? (
+        <>
+          <InProgressCard workoutId={open.id} name={open.name} startedAt={open.started_at} />
+          {rest}
+        </>
+      ) : doneToday === undefined ? (
+        rest
+      ) : doneToday && !trainAgain.on ? (
         <>
           <DoneTodayCard workoutId={doneToday.id} trainAgain={trainAgain.on} onTrainAgain={() => void trainAgain.set()} />
-          {trainAgain.on && <UpNextCard hasGym={gyms.length > 0} />}
+          {rest}
         </>
       ) : (
-        <UpNextCard hasGym={gyms.length > 0} />
-      )}
-
-      <QuickCardio />
-
-      {/* The done card already shows today's workout. */}
-      {lastWorkout?.kind === "workout" && !open && !doneToday && <LastWorkout item={lastWorkout} />}
-
-      {gyms.length === 0 && (
-        <Link href="/more/gyms/edit?new=1" className="rounded-3xl border-2 border-dashed border-accent-strong/60 p-4 text-base font-bold text-accent">
-          + Set up your gym so exercise lists match your equipment
-        </Link>
+        <>
+          {doneToday && <DoneTodayCard workoutId={doneToday.id} trainAgain={trainAgain.on} onTrainAgain={() => void trainAgain.set()} />}
+          {/* The exercise list and everything below it live in the card's sheet. */}
+          <UpNextCard hasGym={gyms.length > 0}>{rest}</UpNextCard>
+        </>
       )}
     </main>
   );
