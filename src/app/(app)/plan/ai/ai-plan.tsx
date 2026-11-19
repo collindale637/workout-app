@@ -235,7 +235,7 @@ export function AiPlanScreen() {
                 {added && added.size > 0 && !editing && <span className="display ml-auto text-xs font-extrabold tracking-[0.1em] text-accent-soft">{added.size} NEW</span>}
               </div>
               <MusclePills catalog={catalog} ids={targetsFor(catalog, d.items)} max={8} />
-              <AiItems catalog={catalog} items={d.items} highlight={added} />
+              <AiItems catalog={catalog} items={d.items} highlight={added} hideRest />
             </section>
           );
         })}
