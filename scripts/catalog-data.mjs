@@ -534,6 +534,14 @@ export const ALIASES = {
   Standing_Military_Press: ["Military Press", "Barbell Overhead Press"],
   Barbell_Squat: ["Barbell Back Squat"],
   Side_Lateral_Raise: ["Dumbbell Lateral Raise", "Dumbbell Side Lateral Raise"],
+  // Written without gear, a preacher curl means the dumbbell version.
+  One_Arm_Dumbbell_Preacher_Curl: ["Preacher Curl"],
+  Preacher_Curl: ["EZ-Bar Preacher Curl", "EZ Bar Preacher Curl"],
+};
+
+// Dataset names that should NOT stay as an alias, because they now belong to a different version of the lift.
+export const DROP_ALIASES = {
+  Preacher_Curl: ["Preacher Curl"],
 };
 
 // Exercises the generator should never pick (odd equipment, neck work, sport drills).

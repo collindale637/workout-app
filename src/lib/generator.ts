@@ -74,7 +74,7 @@ export const STAPLES: Record<string, 1 | 2> = {
   "Stiff-Legged_Dumbbell_Deadlift": 1, Machine_Bench_Press: 1, Machine_Shoulder_Military_Press: 1, Smith_Machine_Squat: 1, "T-Bar_Row_with_Handle": 1,
   Dumbbell_Squat: 1, Dumbbell_Incline_Row: 1, "Lying_T-Bar_Row": 1, Machine_Seated_Row: 1, Pushups: 1, Bulgarian_Split_Squat: 1,
   Side_Lateral_Raise: 2, Cable_Lateral_Raise: 2, Machine_Lateral_Raise: 2, Seated_Side_Lateral_Raise: 2, Dumbbell_Bicep_Curl: 2, Hammer_Curls: 2,
-  Barbell_Curl: 2, "EZ-Bar_Curl": 2, Incline_Dumbbell_Curl: 2, Standing_Biceps_Cable_Curl: 2, Preacher_Curl: 2, Triceps_Pushdown: 2,
+  Barbell_Curl: 2, "EZ-Bar_Curl": 2, Incline_Dumbbell_Curl: 2, Standing_Biceps_Cable_Curl: 2, Preacher_Curl: 2, One_Arm_Dumbbell_Preacher_Curl: 2, Triceps_Pushdown: 2,
   "Triceps_Pushdown_-_Rope_Attachment": 2, "EZ-Bar_Skullcrusher": 2, Triceps_Overhead_Extension_with_Rope: 2, Standing_Dumbbell_Triceps_Extension: 2,
   Seated_Triceps_Press: 2, Lying_Leg_Curls: 2, Seated_Leg_Curl: 2, Leg_Extensions: 2, Standing_Calf_Raises: 2, Seated_Calf_Raise: 2,
   Standing_Dumbbell_Calf_Raise: 2, Calf_Press_On_The_Leg_Press_Machine: 2, Face_Pull: 2, Cable_Crossover: 2, Dumbbell_Flyes: 2, Butterfly: 2,
