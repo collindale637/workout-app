@@ -123,3 +123,30 @@ export function draftDaysForWeek(p: Pick<AiPlan, "days" | "later_weeks">, week: 
   for (const w of p.later_weeks ?? []) if (w.week <= week && (!entry || w.week > entry.week)) entry = w;
   return entry ? { days: entry.days, from: entry.week, entry } : { days: p.days, from: 1, entry: null };
 }
+
+/** Imports: every later week in the source that differs can be read (up to week 12), not just a few. */
+export const MAX_IMPORT_WEEKS = MAX_PLAN_WEEKS;
+
+/** Checks an import's schedule: weeks 2–12 whose workouts differ from the week before, in order, each listed once. */
+export function checkImportSchedule(raw: unknown): { schedule: { week: number; focus: string }[]; errors: string[] } {
+  if (raw === undefined || raw === null) return { schedule: [], errors: [] };
+  if (!Array.isArray(raw)) return { schedule: [], errors: [`"schedule" must be a list.`] };
+  const errors: string[] = [];
+  const seen = new Set<number>();
+  const out: { week: number; focus: string }[] = [];
+  for (const e of raw) {
+    const o = isObj(e) ? e : {};
+    const week = int(o.week);
+    if (week === null || week < 2 || week > MAX_IMPORT_WEEKS) {
+      errors.push(`schedule: week must be 2–${MAX_IMPORT_WEEKS} (put later weeks in "problems").`);
+      continue;
+    }
+    if (seen.has(week)) {
+      errors.push(`schedule: week ${week} is listed twice.`);
+      continue;
+    }
+    seen.add(week);
+    out.push({ week, focus: text(o.focus, 200) });
+  }
+  return { schedule: out.sort((a, b) => a.week - b.week), errors };
+}

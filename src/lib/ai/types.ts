@@ -113,7 +113,14 @@ export type AiImport = {
   days: { name: string; lines: ImportLine[] }[];
   /** Set when parts of the source couldn't be read. */
   problems: string | null;
+  /**
+   * Later weeks in the source whose workouts differ from the week before, in order (Batch 20e). Weeks not listed
+   * repeat the week before. Missing or empty: the source is one week that repeats.
+   */
+  later_weeks?: ImportWeek[];
 };
+
+export type ImportWeek = { week: number; focus: string; days: { name: string; lines: ImportLine[] }[] };
 
 /** The current plan, sent when asking for plain-English edits. */
 export type PlanSnapshot = {

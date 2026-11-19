@@ -180,8 +180,27 @@ export function checkImport(raw: unknown, allow: Map<string, AllowedExercise>): 
   const errors: string[] = [];
   const r = isObj(raw) ? raw : {};
   if (!isObj(raw) || !Array.isArray(r.days)) errors.push(`The answer must be an object with a "days" list (empty if nothing could be read).`);
+  const days = checkImportDays(r.days, allow);
+  const goal = GOALS.includes(r.goal as Goal) ? (r.goal as Goal) : null;
+  const weeks = int(r.weeks);
+  return {
+    result: {
+      name: str(r.name, 60) || "Imported plan",
+      goal,
+      weeks: weeks !== null && weeks >= 1 && weeks <= 52 ? weeks : null,
+      summary: prose(r.summary, 900),
+      progression: prose(r.progression, 1200),
+      days,
+      problems: textOrNull(r.problems, 400),
+    },
+    errors,
+  };
+}
+
+/** The days of an import (week 1, or a later week read on its own). Every readable line is kept. */
+export function checkImportDays(raw: unknown, allow: Map<string, AllowedExercise>): AiImport["days"] {
   const days: AiImport["days"] = [];
-  (Array.isArray(r.days) ? r.days : []).slice(0, 10).forEach((d, i) => {
+  (Array.isArray(raw) ? raw : []).slice(0, 10).forEach((d, i) => {
     const o = isObj(d) ? d : {};
     const lines: ImportLine[] = [];
     (Array.isArray(o.exercises) ? o.exercises : []).slice(0, 20).forEach((x) => {
@@ -221,20 +240,7 @@ export function checkImport(raw: unknown, allow: Map<string, AllowedExercise>): 
     });
     if (lines.length) days.push({ name: str(o.name, 40) || `Day ${i + 1}`, lines: normalizeSupersets(lines) });
   });
-  const goal = GOALS.includes(r.goal as Goal) ? (r.goal as Goal) : null;
-  const weeks = int(r.weeks);
-  return {
-    result: {
-      name: str(r.name, 60) || "Imported plan",
-      goal,
-      weeks: weeks !== null && weeks >= 1 && weeks <= 52 ? weeks : null,
-      summary: prose(r.summary, 900),
-      progression: prose(r.progression, 1200),
-      days,
-      problems: textOrNull(r.problems, 400),
-    },
-    errors,
-  };
+  return days;
 }
 
 /** Swap / suggest picks: ids from the candidate list only, no repeats, nothing already in the workout. */

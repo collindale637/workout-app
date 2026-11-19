@@ -15,6 +15,8 @@ import { buildMatchIndex, matchLine, type MatchStatus } from "@/lib/ai/match";
 import { planNotes, targetsFor } from "@/lib/ai/apply";
 import { normalizeSupersets } from "@/lib/ai/validate";
 import { MAX_IMAGES, type AiImage, type AiImport, type AiPdf, type ImportLine } from "@/lib/ai/types";
+import { MAX_PLAN_WEEKS } from "@/lib/plan-weeks";
+import { WeekStepper, type WeekTone } from "@/components/week-stepper";
 import { AiProblem, AiThinking, AiUsageNote, Sparkle } from "@/components/ai";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { repsLabel } from "@/components/planned";
@@ -25,9 +27,20 @@ import type { Goal } from "@/lib/db/types";
 type Photo = { id: string; url: string; image: AiImage };
 /** Where each imported line stands on the review screen. */
 type Resolution = { status: MatchStatus; exerciseId: string | null; candidates: string[]; confirmed: boolean; skipped: boolean };
-type LineRef = { day: number; line: number };
+type ImportDay = AiImport["days"][number];
 
-const key = (r: LineRef) => `${r.day}:${r.line}`;
+/** Lines are matched by what's written, so an exercise that shows up in every week is checked once. */
+const key = (l: Pick<ImportLine, "written">) => l.written.toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Week 1 plus the source's later weeks that differ; weeks not listed repeat the week before. */
+const sourceWeeks = (d: AiImport): { week: number; focus: string; days: ImportDay[] }[] => [{ week: 1, focus: "", days: d.days }, ...(d.later_weeks ?? [])];
+
+/** The days week `week` trains: its own, else the latest earlier week's. */
+function importDaysForWeek(d: AiImport, week: number) {
+  let best = sourceWeeks(d)[0];
+  for (const w of sourceWeeks(d)) if (w.week <= week && w.week > best.week) best = w;
+  return best;
+}
 
 /** Import a plan from pasted text or screenshots, then match every exercise before saving. */
 export function ImportScreen() {
@@ -49,8 +62,9 @@ export function ImportScreen() {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState<Goal | null>(null);
   const [weeks, setWeeks] = useState(8);
-  const [pickFor, setPickFor] = useState<LineRef | null>(null);
-  const [createFor, setCreateFor] = useState<LineRef | null>(null);
+  const [pickFor, setPickFor] = useState<ImportLine | null>(null);
+  const [createFor, setCreateFor] = useState<ImportLine | null>(null);
+  const [viewWeek, setViewWeek] = useState(1);
   const [saving, setSaving] = useState(false);
 
   const { catalog, profile, prefs, gym, gymEquipment } = inputs;
@@ -105,39 +119,47 @@ export function ImportScreen() {
     if (r.kind !== "import") return;
     if (!r.result.days.length) return setError(r.result.problems ?? "Couldn't find a workout plan in that. Try a clearer photo or PDF, or paste the text.");
     const next = new Map<string, Resolution>();
-    r.result.days.forEach((d, di) =>
-      d.lines.forEach((l, li) => {
-        const m = matchLine(index, l);
-        next.set(key({ day: di, line: li }), { ...m, confirmed: m.status === "matched", skipped: false });
-      }),
-    );
+    for (const w of sourceWeeks(r.result))
+      for (const d of w.days)
+        for (const l of d.lines) {
+          if (next.has(key(l))) continue;
+          const m = matchLine(index, l);
+          next.set(key(l), { ...m, confirmed: m.status === "matched", skipped: false });
+        }
     setRes(next);
     setResult({ data: r.result, warnings: r.warnings });
     setName(r.result.name);
     setGoal(r.result.goal);
-    setWeeks(r.result.weeks ?? 8);
+    const lastSourceWeek = Math.max(1, ...(r.result.later_weeks ?? []).map((w) => w.week));
+    setWeeks(Math.max(r.result.weeks ?? 8, lastSourceWeek));
+    setViewWeek(1);
     window.scrollTo({ top: 0 });
   }
 
-  const update = (ref: LineRef, change: (r: Resolution) => Resolution) =>
-    setRes((m) => new Map(m).set(key(ref), change(m.get(key(ref))!)));
-  const resolve = (ref: LineRef, exerciseId: string) => update(ref, (r) => ({ ...r, exerciseId, confirmed: true, skipped: false }));
-  const toggleSkip = (ref: LineRef) => update(ref, (r) => ({ ...r, skipped: !r.skipped }));
+  const update = (l: ImportLine, change: (r: Resolution) => Resolution) =>
+    setRes((m) => new Map(m).set(key(l), change(m.get(key(l))!)));
+  const resolve = (l: ImportLine, exerciseId: string) => update(l, (r) => ({ ...r, exerciseId, confirmed: true, skipped: false }));
+  const toggleSkip = (l: ImportLine) => update(l, (r) => ({ ...r, skipped: !r.skipped }));
 
   async function save() {
     if (!result || !catalog) return;
     setSaving(true);
-    const days = result.data.days
-      .map((d, di) => {
-        const items: GenItem[] = [];
-        d.lines.forEach((l, li) => {
-          const r = res.get(key({ day: di, line: li }));
-          if (!r || r.skipped || !r.exerciseId) return;
-          items.push(toItem(l, r.exerciseId));
-        });
-        return { ref_day_id: null, name: d.name, items: normalizeSupersets(items) };
-      })
-      .filter((d) => d.items.length);
+    const toDays = (list: ImportDay[], week: number) =>
+      list
+        .map((d) => {
+          const items: GenItem[] = [];
+          for (const l of d.lines) {
+            const r = res.get(key(l));
+            if (!r || r.skipped || !r.exerciseId) continue;
+            items.push(toItem(l, r.exerciseId));
+          }
+          return { week, name: d.name, items: normalizeSupersets(items) };
+        })
+        .filter((d) => d.items.length);
+    // Every week the source has, up to the plan's length (12 at most); weeks it doesn't list repeat the week before.
+    const days = sourceWeeks(result.data)
+      .filter((w) => w.week <= Math.min(weeks, MAX_PLAN_WEEKS))
+      .flatMap((w) => toDays(w.days, w.week));
     await actions.create({
       name: name.trim() || result.data.name,
       goal: goal ?? profile!.goal,
@@ -145,7 +167,7 @@ export function ImportScreen() {
       weeks,
       source: "imported",
       notes: planNotes({ summary: result.data.summary, progression: result.data.progression }),
-      days: days.map((d) => ({ name: d.name, target_muscle_ids: targetsFor(catalog, d.items), items: d.items })),
+      days: days.map((d) => ({ week: d.week, name: d.name, target_muscle_ids: targetsFor(catalog, d.items), items: d.items })),
     });
     await setChoice({ mode: "plan", seed: 0 });
     router.replace("/plan");
@@ -173,13 +195,14 @@ export function ImportScreen() {
       <main className="flex flex-col gap-4">
         <PageHeader title="Import a plan" />
         <AiThinking what="Reading your plan" />
-        <p className="text-center text-sm font-medium text-muted">Photos and PDFs take a little longer. Keep this screen open.</p>
+        <p className="text-center text-sm font-medium text-muted">Photos and PDFs take a little longer, and plans with several weeks up to 2–3 minutes. Keep this screen open.</p>
       </main>
     );
   }
 
   if (result) {
-    const all = [...res.values()];
+    const inPlan = new Set(sourceWeeks(result.data).filter((w) => w.week <= Math.min(weeks, MAX_PLAN_WEEKS)).flatMap((w) => w.days.flatMap((d) => d.lines.map(key))));
+    const all = [...res].filter(([k]) => inPlan.has(k)).map(([, r]) => r);
     const counts = {
       matched: all.filter((r) => r.status === "matched" && !r.skipped).length,
       check: all.filter((r) => !r.confirmed && !r.skipped).length,
@@ -187,7 +210,15 @@ export function ImportScreen() {
     };
     const unsureLeft = all.filter((r) => r.status === "unsure" && !r.confirmed && !r.skipped && r.exerciseId).length;
     const ready = counts.check === 0 && all.some((r) => !r.skipped && r.exerciseId);
-    const lineAt = (ref: LineRef) => result.data.days[ref.day].lines[ref.line];
+    // Week by week, when the source has more than one week of workouts.
+    const length = Math.min(weeks, MAX_PLAN_WEEKS);
+    const later = (result.data.later_weeks ?? []).filter((w) => w.week <= length);
+    const varied = later.length > 0 && length > 1;
+    const shownWeek = varied ? Math.min(viewWeek, length) : 1;
+    const view = importDaysForWeek({ ...result.data, later_weeks: later }, shownWeek);
+    const own = view.week === shownWeek;
+    const starts = new Set([1, ...later.map((w) => w.week)]);
+    const tones: WeekTone[] = Array.from({ length }, (_, i) => (starts.has(i + 1) ? "strong" : "plain"));
 
     return (
       <main className="flex flex-col gap-4 pb-6">
@@ -235,16 +266,33 @@ export function ImportScreen() {
           </button>
         )}
 
-        {result.data.days.map((d, di) => (
-          <section key={di} className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4">
+        {varied && (
+          <>
+            <WeekStepper
+              week={shownWeek}
+              length={length}
+              onPick={setViewWeek}
+              tones={tones}
+              labels={tones.map((t, i) => `Week ${i + 1}, ${t === "strong" ? "its own workouts" : "same as the week before"}`)}
+              status={own ? (shownWeek === 1 ? "Week 1" : "Different workouts") : `Same as week ${view.week}`}
+              statusClass={own ? "text-accent" : "text-muted"}
+            />
+            <p className={`rounded-2xl px-3 py-2.5 text-sm font-semibold ${own ? "border border-line bg-card text-ink" : "border border-dashed border-line text-muted"}`}>
+              {!own ? `Same workouts as week ${view.week}.` : shownWeek === 1 ? "Matching an exercise matches it in every week." : view.focus || `Week ${shownWeek} as the source has it.`}
+            </p>
+          </>
+        )}
+
+        {view.days.map((d, di) => (
+          <section key={`${shownWeek}-${di}`} className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4">
             <div className="flex items-baseline gap-2">
               <span className="display num text-lg font-extrabold text-muted">{di + 1}</span>
               <h2 className="display text-xl font-extrabold">{d.name}</h2>
             </div>
             <ul className="flex flex-col gap-2">
               {d.lines.map((l, li) => {
-                const ref = { day: di, line: li };
-                const r = res.get(key(ref))!;
+                const ref = l;
+                const r = res.get(key(l))!;
                 const ex = r.exerciseId ? catalog.byId.get(r.exerciseId) : undefined;
                 const notHere = ex && gymEquipment && !isAvailable(catalog.needs.get(ex.id) ?? [], gymEquipment);
                 const dose = l.is_cardio ? (l.notes?.split(" · ")[0] ?? "") : `${l.sets} × ${repsLabel(l.rep_min, l.rep_max)}`;
@@ -307,7 +355,7 @@ export function ImportScreen() {
         <button type="button" className={btn.ghost} onClick={() => setResult(null)}>← Back to the source</button>
         <AiUsageNote usage={usage} />
 
-        <Sheet open={pickFor !== null} onClose={() => setPickFor(null)} title={pickFor ? `"${lineAt(pickFor).written}" is…` : undefined}>
+        <Sheet open={pickFor !== null} onClose={() => setPickFor(null)} title={pickFor ? `"${pickFor.written}" is…` : undefined}>
           {pickFor && (
             <ExercisePicker
               mode="single"
@@ -323,8 +371,8 @@ export function ImportScreen() {
         <Sheet open={createFor !== null} onClose={() => setCreateFor(null)} title="New custom exercise">
           {createFor && (
             <QuickCustom
-              initialName={lineAt(createFor).standard_name}
-              cardio={lineAt(createFor).is_cardio}
+              initialName={createFor.standard_name}
+              cardio={createFor.is_cardio}
               onSave={async (x) => {
                 const id = await createCustomExercise(db, userId, x);
                 resolve(createFor, id);

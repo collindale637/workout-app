@@ -1,7 +1,7 @@
-import { IMPORT_TOOL, PICK_SYSTEM, PICK_TOOL, PLAN_TOOL, SYSTEM, WEEK_TOOL, WORKOUT_TOOL, contextBlock, pickBlock, taskBlock, weekTaskBlock } from "./prompts";
-import { checkImport, checkPicks, checkPlan, checkWorkout } from "./validate";
-import { assembleWeeks, checkSchedule, checkWeek } from "./weeks";
-import type { AiDay, AiImport, AiKind, AiPick, AiPlan, AiRequest, AiWorkout, AllowedExercise, WeekChange } from "./types";
+import { IMPORT_TOOL, IMPORT_WEEK_TOOL, PICK_SYSTEM, PICK_TOOL, PLAN_TOOL, SYSTEM, WEEK_TOOL, WORKOUT_TOOL, contextBlock, importWeekTaskBlock, pickBlock, taskBlock, weekTaskBlock } from "./prompts";
+import { checkImport, checkImportDays, checkPicks, checkPlan, checkWorkout } from "./validate";
+import { assembleWeeks, checkImportSchedule, checkSchedule, checkWeek } from "./weeks";
+import type { AiDay, AiImport, ImportWeek, AiKind, AiPick, AiPlan, AiRequest, AiWorkout, AllowedExercise, WeekChange } from "./types";
 
 /*
   One AI request from start to finish: build the prompt, ask Claude, check the answer, send problems back
@@ -44,9 +44,11 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
   const isPick = req.kind === "swap" || req.kind === "suggest";
   const tool = isPick ? PICK_TOOL : req.kind === "import" ? IMPORT_TOOL : isPlan ? PLAN_TOOL : WORKOUT_TOOL;
   const system = isPick ? PICK_SYSTEM : SYSTEM;
-  const content: Block[] = [];
-  if (req.pdf) content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: req.pdf.data } });
-  for (const img of req.images ?? []) content.push({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } });
+  // The PDF and photos go first; an import's later weeks are read from them again.
+  const source: Block[] = [];
+  if (req.pdf) source.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: req.pdf.data } });
+  for (const img of req.images ?? []) source.push({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } });
+  const content: Block[] = [...source];
   if (isPick) content.push({ type: "text", text: pickBlock(req) });
   else {
     content.push({ type: "text", text: contextBlock(req, { gymFiltered: req.kind !== "import" }) });
@@ -58,6 +60,7 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
   // A plan's schedule (the weeks whose workouts change) is read with the plan; saved-plan edits keep their weeks as they are.
   const scheduled = req.kind === "plan" || (req.kind === "edit" && req.draft === true);
   let schedule: WeekChange[] = [];
+  let importSchedule: { week: number; focus: string }[] = [];
 
   const check = (input: unknown): { value: AiPlan | AiWorkout | AiImport | AiPick[]; errors: string[] } => {
     if (isPick) {
@@ -66,7 +69,9 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
     }
     if (req.kind === "import") {
       const r = checkImport(input, allow);
-      return { value: r.result, errors: r.errors };
+      const s = checkImportSchedule(typeof input === "object" && input !== null ? (input as Record<string, unknown>).schedule : undefined);
+      importSchedule = s.schedule;
+      return { value: r.result, errors: [...r.errors, ...s.errors] };
     }
     if (isPlan) {
       const r = checkPlan(input, allow, {
@@ -140,6 +145,34 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
     const assembled = assembleWeeks(schedule, written, plan.days, plan.weeks);
     errors = [...errors, ...assembled.errors];
     value = { ...plan, later_weeks: assembled.weeks };
+  }
+
+  // Imports that run several weeks: read each later week that differs in its own call, all at once.
+  if (req.kind === "import" && importSchedule.length && (value as AiImport).days.length) {
+    const imp = value as AiImport;
+    const read = new Map<number, ImportWeek>();
+    await Promise.all(
+      importSchedule.map(async (e) => {
+        const msgs: Msg[] = [{ role: "user", content: [
+          ...source,
+          { type: "text", text: contextBlock(req, { gymFiltered: false }) },
+          { type: "text", text: importWeekTaskBlock(req, imp.days, importSchedule, e.week) },
+        ] }];
+        try {
+          const r = await askChecked(msgs, MAX_TOKENS.import, IMPORT_WEEK_TOOL, (input) => {
+            const o = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+            const days = checkImportDays(o.days, allow);
+            return { value: days, errors: days.length ? [] : [`Week ${e.week}: "days" must list that week's training days.`] };
+          }, Date.now() - started < WEEK_RETRY_CUTOFF_MS);
+          if (r.value.length) read.set(e.week, { week: e.week, focus: e.focus, days: r.value });
+        } catch (err) {
+          console.error(`AI import week ${e.week} failed`, err instanceof Error ? err.message : err);
+        }
+      }),
+    );
+    const missed = importSchedule.filter((e) => !read.has(e.week)).map((e) => e.week);
+    if (missed.length) errors.push(`Couldn't read week${missed.length === 1 ? "" : "s"} ${missed.join(", ")}, so ${missed.length === 1 ? "it repeats" : "they repeat"} the week before. Check them in the source.`);
+    value = { ...imp, later_weeks: importSchedule.flatMap((e) => (read.has(e.week) ? [read.get(e.week)!] : [])) };
   }
 
   const empty = isPick ? !(value as AiPick[]).length : req.kind === "import" ? false : isPlan ? !(value as AiPlan).days.length : !(value as AiWorkout).items.length;
