@@ -91,7 +91,8 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Alternating Dumbbell Curl | isolation | biceps | forearms | dumbbells |
 | Hammer Curl | isolation | biceps | forearms | dumbbells |
 | Incline Dumbbell Curl | isolation | biceps |  | dumbbells + adjustable_bench |
-| Preacher Curl | isolation | biceps |  | barbell + preacher_bench or adjustable_bench |
+| Barbell Preacher Curl | isolation | biceps |  | barbell + preacher_bench or adjustable_bench |
+| Dumbbell Preacher Curl | isolation | biceps |  | dumbbells + preacher_bench or adjustable_bench |
 | Machine Preacher Curl | isolation | biceps |  | bicep_curl_machine |
 | Concentration Curl | isolation | biceps | forearms | dumbbells |
 | Cable Curl | isolation | biceps |  | cable_crossover or cable_pulley |
@@ -108,6 +109,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Skull Crusher | isolation | triceps | forearms | ez_bar or barbell + flat_bench or adjustable_bench |
 | Dumbbell Skull Crusher | isolation | triceps |  | dumbbells + flat_bench or adjustable_bench |
 | Overhead Dumbbell Extension | isolation | triceps |  | dumbbells |
+| Barbell Overhead Triceps Extension | isolation | triceps | front_delts | barbell |
 | Seated Overhead Dumbbell Extension | isolation | triceps |  | dumbbells + flat_bench or adjustable_bench |
 | Tricep Kickback | isolation | triceps |  | dumbbells |
 | Close-Grip Bench Press | horizontal_push | triceps | chest, front_delts | barbell + flat_bench or adjustable_bench + power_rack or squat_stand |
@@ -219,6 +221,10 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Barbell Split Squat | lunge | quads, glutes | hamstrings, adductors | barbell + power_rack or squat_stand |
 | Barbell Bulgarian Split Squat | lunge | quads, glutes | hamstrings, adductors | barbell + power_rack or squat_stand + flat_bench or adjustable_bench or plyo_box |
 | Single-Leg Dumbbell RDL | hinge | hamstrings, glutes | lower_back, abs | dumbbells |
+| Dumbbell Front Squat | squat | quads | glutes, adductors, abs | dumbbells |
+| Dumbbell Push Press | vertical_push | front_delts | side_delts, triceps, quads | dumbbells |
+| Dumbbell Sumo Deadlift | hinge | glutes, hamstrings, adductors | quads, lower_back, traps, forearms | dumbbells or kettlebells |
+| Dumbbell Glute Bridge | hinge | glutes | hamstrings | dumbbells or kettlebells or weight_plates |
 | Barbell Front Raise | isolation | front_delts | side_delts | barbell or ez_bar |
 | Assisted Dip | horizontal_push | triceps, chest | front_delts | assisted_pullup_machine |
 | Single-Leg Lying Leg Curl | isolation | hamstrings | calves | lying_leg_curl |
