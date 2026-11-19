@@ -23,13 +23,9 @@ import { TODAY_TOP_EVENT } from "./today-cardio";
 /** Where the exercise sheet sits: a bar above the tabs, under the card (follows it as the page scrolls), or full height. */
 type SheetMode = "min" | "default" | "max";
 const SHEET_UP: Record<SheetMode, SheetMode> = { min: "default", default: "max", max: "max" };
-const SHEET_DOWN: Record<SheetMode, SheetMode> = { min: "min", default: "min", max: "default" };
 /** How far the sheet's rounded top tucks over the bottom of the blue card. */
 const TUCK = 16;
 const STICKY_TOP = "calc(env(safe-area-inset-top) + 8px)";
-/** Height of the slim PULL + Start bar (below the safe area): the sheet's header pins just under it. */
-const BAR_H = 64 + 12;
-const SHEET_TOP = `calc(env(safe-area-inset-top) + ${BAR_H}px)`;
 
 /**
  * Today's suggested workout: the next plan day, your freshest muscles, or muscles you picked.
@@ -61,7 +57,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<string | null>(null);
   const { recovery } = useGeneratorInputs();
-  const { mode, covered, sheetRef, headerRef, restRef, headerH, handleProps, openCardio } = useExerciseSheet();
+  const { mode, cardRef, sheetRef, headerRef, bodyRef, restRef, headerH, dragProps, cycle, openCardio } = useExerciseSheet();
 
   if (up === undefined || !catalog || !profile) {
     return (
@@ -220,10 +216,11 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
 
   return (
     <>
-      {/* Keeps the greeting from showing behind the status bar while the card is pinned. */}
-      {mode === "default" && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[5] mx-auto w-full max-w-md bg-bg" style={{ height: STICKY_TOP }} />}
+      {/* Keeps the page from showing behind the status bar while the card and the sheet's header are pinned. */}
+      {mode === "default" && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[12] mx-auto w-full max-w-md bg-bg" style={{ height: STICKY_TOP }} />}
       {/* The card pins at the top; scrolling on, the sheet slides up over it. */}
       <section
+        ref={cardRef}
         className={`flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white ${mode === "default" ? "sticky" : ""}`}
         style={mode === "default" ? { top: STICKY_TOP } : undefined}
       >
@@ -342,64 +339,39 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         )}
       </section>
 
-      {(mode === "max" || mode === "default") && (
-        // Once the sheet covers the card (scrolled up, or expanded) the card shows as a slim bar, so Start stays in reach.
-        <div
-          aria-hidden={mode === "default" && !covered}
-          className={`fixed inset-x-0 top-0 z-[25] mx-auto w-full max-w-md bg-primary px-5 text-white transition-[opacity,transform] duration-200 ${
-            mode === "max" || covered ? "opacity-100" : "pointer-events-none -translate-y-2 opacity-0"
-          }`}
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
-        >
-          <div className="flex h-16 items-center gap-3 pb-1" style={{ marginBottom: TUCK + 12 }}>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="display truncate text-[28px] leading-none font-extrabold">{up.title}</span>
-              <span className="truncate text-xs font-semibold text-[#DCE4FF]">{up.subtitle}</span>
-            </span>
-            <button
-              type="button"
-              onClick={go}
-              disabled={starting || !up.items.length}
-              tabIndex={mode === "default" && !covered ? -1 : undefined}
-              className="display flex h-11 shrink-0 items-center gap-2 rounded-full bg-white px-5 text-lg font-extrabold tracking-[0.08em] text-primary disabled:opacity-60"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
-              {starting ? "Starting…" : "Start"}
-            </button>
-          </div>
-        </div>
-      )}
       {/* Minimized: keep the page scrollable past the bar that now sits above the tabs. */}
       {mode === "min" && <div aria-hidden="true" style={{ height: headerH }} />}
 
+      {/*
+        Default: in the page under the card. Minimized and expanded: one full-height panel fixed between the top and the
+        tabs; minimized just slides it down so only the header shows. Either way it moves as one piece when dragged.
+      */}
       <section
         ref={sheetRef}
         aria-label="Today's exercises"
         className={
           mode === "default"
             ? "relative z-10 -mx-5 rounded-t-[28px] bg-card shadow-[0_-12px_30px_rgba(0,0,0,0.35)]"
-            : mode === "min"
-              ? "fixed inset-x-0 z-30 mx-auto w-full max-w-md rounded-t-[28px] bg-card shadow-[0_-12px_30px_rgba(0,0,0,0.4)]"
-              : "fixed inset-x-0 z-30 mx-auto w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] bg-card"
+            : "fixed inset-x-0 z-[15] mx-auto flex w-full max-w-md flex-col rounded-t-[28px] bg-card shadow-[0_-12px_30px_rgba(0,0,0,0.4)]"
         }
         style={
           mode === "default"
             ? { marginTop: -(16 + TUCK), marginBottom: "-7rem", paddingBottom: "7rem" }
-            : mode === "min"
-              ? { bottom: "var(--nav-h)" }
-              : { top: SHEET_TOP, bottom: "var(--nav-h)" }
+            : { top: STICKY_TOP, bottom: "var(--nav-h)", transform: mode === "min" ? restingTransform("min", headerH) : undefined }
         }
       >
+        {/* The whole header is the grab area: drag it to move the sheet without scrolling the page. */}
         <div
           ref={headerRef}
-          className={`rounded-t-[28px] bg-card px-5 pb-2 ${mode === "default" ? "sticky z-20" : mode === "max" ? "sticky top-0 z-10" : ""}`}
-          style={mode === "default" ? { top: SHEET_TOP } : undefined}
+          {...dragProps}
+          className={`shrink-0 touch-none rounded-t-[28px] bg-card px-5 pb-2 select-none ${mode === "default" ? "sticky z-20" : ""}`}
+          style={mode === "default" ? { top: STICKY_TOP } : undefined}
         >
           <button
             type="button"
-            {...handleProps}
+            onClick={cycle}
             aria-label={mode === "max" ? "Shrink the exercise list" : "Show more of the exercise list"}
-            className="-mx-5 flex h-8 w-[calc(100%+2.5rem)] touch-none items-center justify-center"
+            className="-mx-5 flex h-8 w-[calc(100%+2.5rem)] items-center justify-center"
           >
             <span className="h-[5px] w-10 rounded-full bg-muted/40" />
           </button>
@@ -417,7 +389,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
           <h2 className="display text-2xl leading-tight font-extrabold">
             {up.items.length} exercise{up.items.length === 1 ? "" : "s"} · ~{minutes} min
           </h2>
-          <div className="-mx-5 flex items-center gap-1.5 overflow-x-auto px-5 [scrollbar-width:none]">
+          <div className="-mx-5 flex touch-pan-x items-center gap-1.5 overflow-x-auto px-5 [scrollbar-width:none]">
             {up.swaps.length > 0 ? (
               <ChipButton active={showSwaps} onClick={() => setShowSwaps(!showSwaps)}>
                 {showSwaps ? "⇄ Hide swaps" : `⇄ ${up.swaps.length} swapped`}
@@ -440,7 +412,10 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
           </div>
         </div>
 
-        <div className={`flex flex-col gap-6 px-5 ${mode === "max" ? "pb-8" : "pb-2"}`} hidden={mode === "min"}>
+        <div
+          ref={bodyRef}
+          className={`flex flex-col gap-6 px-5 ${mode === "default" ? "pb-2" : `min-h-0 flex-1 overscroll-contain pb-8 ${mode === "max" ? "overflow-y-auto" : "overflow-hidden"}`}`}
+        >
         <div className="flex flex-col">
         {up.items.length === 0 ? (
           <p className="rounded-3xl border border-dashed border-line px-5 py-6 text-center text-base font-medium text-muted">
@@ -613,29 +588,48 @@ function ChipButton({ active, onClick, children }: { active?: boolean; onClick: 
   );
 }
 
+/** The minimized panel rests slid down so only its header (height h) shows above the tabs. */
+function restingTransform(mode: SheetMode, h: number, dy = 0) {
+  if (mode === "min") return `translateY(calc(100% - ${h}px + ${dy}px))`;
+  return `translateY(${dy}px)`;
+}
+
+/** A CSS length (e.g. with env()) in pixels. */
+function cssPx(length: string) {
+  const el = document.createElement("div");
+  el.style.cssText = `position:fixed;top:0;left:0;visibility:hidden;height:${length}`;
+  document.body.appendChild(el);
+  const h = el.offsetHeight;
+  el.remove();
+  return h;
+}
+
+const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+type Drag = { id: number; x: number; y: number; dy: number; active: boolean; lastY: number; lastT: number; v: number; top0: number };
+
 /**
  * The exercise sheet under the Up next card. Three positions:
  * - default: in the page right under the card. Scrolling moves the greeting, week strip and weigh-in away, the card
- *   pins at the top, and the sheet slides up over it until its header pins under the slim PULL + Start bar (all native
- *   scrolling; `covered` turns the slim bar on).
- * - min: only the header, as a bar above the tabs; the card shows readiness by muscle in the room it frees.
- * - max: full height with its own scrolling; the card becomes a slim bar with Start.
- * Drag or tap the handle to move between them. Changes slide from where the sheet was (a small FLIP animation).
+ *   pins at the top, and the sheet slides up over it until its header pins at the top (all native scrolling).
+ * - min: only the header shows, above the tabs; the card shows readiness by muscle in the room it frees.
+ * - max: the sheet covers the page from the top, with its own scrolling.
+ * Drag anywhere on the header: the sheet follows your finger and settles at the nearest position (a flick carries
+ * it further). Tap the handle to step min → default → max → default. Changes slide from where the sheet was (FLIP).
  */
-const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
 function useExerciseSheet() {
   const [mode, setModeState] = useState<SheetMode>("default");
   const modeRef = useRef<SheetMode>("default");
   const sheetRef = useRef<HTMLElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
   const headerEl = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const restRef = useRef<HTMLDivElement>(null);
-  // Default position: true once the sheet has slid up over the card and its header is pinned under the slim bar.
-  const [covered, setCovered] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const flipFrom = useRef<number | null>(null);
   const toCardio = useRef(false);
-  const drag = useRef<{ y: number; t: number; dy: number } | null>(null);
+  const drag = useRef<Drag | null>(null);
+  const swallowClick = useRef(false);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -661,34 +655,12 @@ function useExerciseSheet() {
     return () => ro.disconnect();
   };
 
-  // While the header is pinned the sheet's own top has scrolled above it: that's when the slim bar shows.
-  useEffect(() => {
-    if (mode !== "default") return;
-    let raf = 0;
-    const check = () => {
-      raf = 0;
-      const s = sheetRef.current?.getBoundingClientRect().top;
-      const h = headerEl.current?.getBoundingClientRect().top;
-      if (s !== undefined && h !== undefined) setCovered(s < h - 0.5);
-    };
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(check);
-    };
-    check();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, [mode]);
-
   const scrollToCardio = useCallback(() => {
-    const s = sheetRef.current;
+    const b = bodyRef.current;
     const r = restRef.current;
-    if (!s || !r) return;
-    s.scrollTo({ top: Math.max(0, r.offsetTop - (headerEl.current?.offsetHeight ?? 0) - 12), behavior: reduced() ? "auto" : "smooth" });
+    if (!b || !r) return;
+    const top = b.scrollTop + r.getBoundingClientRect().top - b.getBoundingClientRect().top - 12;
+    b.scrollTo({ top: Math.max(0, top), behavior: reduced() ? "auto" : "smooth" });
   }, []);
 
   // Slide from the old spot to the new one.
@@ -700,7 +672,11 @@ function useExerciseSheet() {
     if (from === null || !el || !h || reduced()) return;
     const d = from - h.getBoundingClientRect().top;
     if (Math.abs(d) < 1) return;
-    el.animate([{ transform: `translateY(${d}px)` }, { transform: "none" }], { duration: 320, easing: "cubic-bezier(0.2, 0.85, 0.25, 1)" });
+    const hh = h.offsetHeight;
+    el.animate([{ transform: restingTransform(mode, hh, d) }, { transform: restingTransform(mode, hh) }], {
+      duration: 320,
+      easing: "cubic-bezier(0.2, 0.85, 0.25, 1)",
+    });
   }, [mode]);
 
   // Expanded: freeze the page behind, Escape shrinks it, and the Cardio button lands on the quick cardio tiles.
@@ -741,42 +717,91 @@ function useExerciseSheet() {
     setMode("max");
   };
 
-  const handleProps = {
-    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
-      drag.current = { y: e.clientY, t: performance.now(), dy: 0 };
-      e.currentTarget.setPointerCapture(e.pointerId);
+  /** Handle tap (and keyboard): min → default → max → default. */
+  const cycle = () => {
+    if (swallowClick.current) return;
+    setMode(modeRef.current === "max" ? "default" : SHEET_UP[modeRef.current]);
+  };
+
+  /** Where the header's top would sit in each position, in viewport pixels. */
+  const targets = (d: Drag) => {
+    const max = cssPx("calc(env(safe-area-inset-top) + 8px)");
+    const h = headerEl.current?.offsetHeight ?? 0;
+    const min = window.innerHeight - cssPx("var(--nav-h)") - h;
+    const card = cardRef.current?.getBoundingClientRect();
+    const def = modeRef.current === "default" ? d.top0 : card ? card.bottom - TUCK : (max + min) / 2;
+    return { max, default: Math.min(min, Math.max(max, def)), min };
+  };
+
+  const dragProps = {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      const top0 = headerEl.current?.getBoundingClientRect().top ?? 0;
+      drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, dy: 0, active: false, lastY: e.clientY, lastT: performance.now(), v: 0, top0 };
     },
-    onPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => {
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       const d = drag.current;
       const el = sheetRef.current;
-      if (!d || !el) return;
-      d.dy = Math.max(-640, Math.min(320, e.clientY - d.y));
-      if (Math.abs(d.dy) > 4) el.style.transform = `translateY(${d.dy}px)`;
+      if (!d || !el || e.pointerId !== d.id) return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      if (!d.active) {
+        // Sideways first (the chip row scrolls): not a sheet drag.
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+          drag.current = null;
+          return;
+        }
+        if (Math.abs(dy) < 6) return;
+        d.active = true;
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+      const t = performance.now();
+      d.v = (e.clientY - d.lastY) / Math.max(1, t - d.lastT);
+      d.lastY = e.clientY;
+      d.lastT = t;
+      // Past the top it resists, so it can't be pulled off the screen.
+      const lim = targets(d).max - d.top0;
+      d.dy = dy < lim ? lim + (dy - lim) / 4 : dy;
+      el.style.transform = restingTransform(modeRef.current, headerEl.current?.offsetHeight ?? 0, d.dy);
     },
-    onPointerUp: () => {
+    onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const d = drag.current;
       drag.current = null;
       const el = sheetRef.current;
-      if (!d || !el) return;
+      if (!d || !el || !d.active || e.pointerId !== d.id) return;
+      // The click that follows a drag shouldn't press a button under the finger.
+      swallowClick.current = true;
+      setTimeout(() => (swallowClick.current = false), 0);
       const cur = modeRef.current;
-      const v = d.dy / Math.max(1, performance.now() - d.t);
-      let next = cur;
-      if (Math.abs(d.dy) < 6) next = cur === "max" ? "default" : SHEET_UP[cur];
-      else if (d.dy < -40 || v < -0.5) next = SHEET_UP[cur];
-      else if (d.dy > 40 || v > 0.5) next = SHEET_DOWN[cur];
-      if (next !== cur) setMode(next);
-      else if (d.dy && !reduced()) el.animate([{ transform: `translateY(${d.dy}px)` }, { transform: "none" }], { duration: 220, easing: "ease-out" });
-      el.style.transform = "";
+      const hh = headerEl.current?.offsetHeight ?? 0;
+      const top = d.top0 + d.dy;
+      const at = targets(d);
+      // Nearest position to where a flick would carry it.
+      const aim = top + Math.max(-600, Math.min(600, d.v * 220));
+      const next = (Object.keys(at) as SheetMode[]).reduce((a, b) => (Math.abs(at[b] - aim) < Math.abs(at[a] - aim) ? b : a), cur);
+      if (next !== cur) {
+        setMode(next); // measures the header where it was let go, then slides on from there
+        el.style.transform = next === "min" ? restingTransform("min", hh) : "";
+        return;
+      }
+      // Same position: settle back where it was.
+      el.style.transform = cur === "min" ? restingTransform("min", hh) : "";
+      if (!reduced()) el.animate([{ transform: restingTransform(cur, hh, d.dy) }, { transform: restingTransform(cur, hh) }], { duration: 240, easing: "ease-out" });
     },
     onPointerCancel: () => {
+      const d = drag.current;
       drag.current = null;
-      if (sheetRef.current) sheetRef.current.style.transform = "";
+      const el = sheetRef.current;
+      if (!d?.active || !el) return;
+      const cur = modeRef.current;
+      el.style.transform = cur === "min" ? restingTransform("min", headerEl.current?.offsetHeight ?? 0) : "";
     },
-    // Keyboard (Enter/Space) arrives as a click with no pointer: step through the positions.
-    onClick: (e: React.MouseEvent) => {
-      if (e.detail === 0) setMode(modeRef.current === "max" ? "default" : SHEET_UP[modeRef.current]);
+    onClickCapture: (e: React.MouseEvent) => {
+      if (!swallowClick.current) return;
+      e.stopPropagation();
+      e.preventDefault();
     },
   };
 
-  return { mode, covered: mode === "default" && covered, sheetRef, headerRef, restRef, headerH, handleProps, openCardio };
+  return { mode, cardRef, sheetRef, headerRef, bodyRef, restRef, headerH, dragProps, cycle, openCardio };
 }

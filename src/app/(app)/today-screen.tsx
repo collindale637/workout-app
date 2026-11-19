@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useMemo, useSyncExternalStore } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
-import { useActiveGym, useCatalog, useOpenWorkout } from "@/lib/hooks";
+import { useActiveGym, useOpenWorkout } from "@/lib/hooks";
 import { useHistory } from "@/lib/history";
 import { useWeeklyTarget } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { useCardioTimer } from "@/lib/cardio-timer";
-import { cardioElapsedSec, cardioLabel, cardioSummary } from "@/lib/cardio";
-import { formatDuration, formatWeight } from "@/lib/units";
+import { cardioElapsedSec, cardioLabel } from "@/lib/cardio";
+import { formatDuration } from "@/lib/units";
 import { dateKey } from "@/lib/progress";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { WeighInCard } from "@/components/weigh-in-card";
@@ -52,17 +52,14 @@ export function TodayScreen() {
     return { days, label, doneCount: days.filter((d) => d.done).length };
   }, [todayKey, history]);
 
-  const lastWorkout = history?.find((h) => h.kind === "workout");
   const doneToday = useDoneToday();
   const trainAgain = useTrainAgain();
   const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
 
-  // Below the workout card: quick cardio, last time, and the gym nudge.
+  // Below the workout card: quick cardio and the gym nudge.
   const rest = (
     <>
       <QuickCardio />
-      {/* The done card already shows today's workout. */}
-      {lastWorkout?.kind === "workout" && !open && !doneToday && <LastWorkout item={lastWorkout} />}
       {gyms.length === 0 && (
         <Link href="/more/gyms/edit?new=1" className="rounded-3xl border-2 border-dashed border-accent-strong/60 p-4 text-base font-bold text-accent">
           + Set up your gym so exercise lists match your equipment
@@ -176,51 +173,6 @@ function InProgressCard({ workoutId, name, startedAt }: { workoutId: string; nam
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
         Resume
       </Link>
-    </section>
-  );
-}
-
-function LastWorkout({ item }: { item: Extract<NonNullable<ReturnType<typeof useHistory>>[number], { kind: "workout" }> }) {
-  const { db } = useData();
-  const { profile } = useProfile();
-  const catalog = useCatalog();
-  const units = profile?.units ?? "lb";
-  const rows = useLiveQuery(async () => {
-    const wexs = await db.workout_exercises.where("workout_id").equals(item.workout.id).sortBy("sort_order");
-    const sets = await db.sets.where("workout_exercise_id").anyOf(wexs.map((w) => w.id)).toArray();
-    const cardio = await db.cardio_sessions.where("workout_id").equals(item.workout.id).toArray();
-    return wexs.map((w) => {
-      const session = cardio.find((c) => c.workout_exercise_id === w.id);
-      if (session) return { id: w.id, exerciseId: w.exercise_id, cardio: cardioSummary(session, units), sets: 0, reps: "", top: null as number | null };
-      const ws = sets.filter((s) => s.workout_exercise_id === w.id && s.type !== "warmup");
-      const top = ws.reduce<number | null>((m, s) => (s.weight !== null && (m === null || s.weight > m) ? s.weight : m), null);
-      const reps = ws.map((s) => s.reps ?? 0);
-      return { id: w.id, exerciseId: w.exercise_id, cardio: null as string | null, sets: ws.length, reps: reps.length ? `${Math.min(...reps)}${Math.min(...reps) !== Math.max(...reps) ? `–${Math.max(...reps)}` : ""}` : "—", top };
-    });
-  }, [db, item.workout.id, units]);
-  if (!rows || !catalog) return null;
-  return (
-    <section className="flex flex-col">
-      <div className="flex items-baseline justify-between pb-2">
-        <h2 className="display text-xl font-extrabold">Last time · {item.workout.name ?? new Date(item.at).toLocaleDateString([], { weekday: "short" })}</h2>
-        <Link href={`/workout?repeat=${item.workout.id}`} className="display text-sm font-extrabold tracking-[0.06em] text-accent">Repeat →</Link>
-      </div>
-      <ul className="divide-y divide-line">
-        {rows.map((r) => (
-          <li key={r.id} className="flex min-h-13 items-center justify-between gap-3">
-            <span className="truncate text-base font-bold">{catalog.byId.get(r.exerciseId)?.name ?? r.exerciseId}</span>
-            <span className="display num shrink-0 text-base font-bold text-muted">
-              {r.cardio ? (
-                <span className="text-ink">{r.cardio}</span>
-              ) : (
-                <>
-                  {r.sets}×{r.reps} · <span className="text-ink">{formatWeight(r.top, units)}</span>
-                </>
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }
