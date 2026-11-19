@@ -42,6 +42,7 @@ await db.exec(readFileSync(root + "20261127000100_exercise_twins.sql", "utf8"));
 await db.exec(readFileSync(root + "20261127000200_exercise_twins_2.sql", "utf8"));
 await db.exec(readFileSync(root + "20261127000300_preacher_curl_default.sql", "utf8"));
 await db.exec(readFileSync(root + "20261128000100_catalog_ez_preacher_and_more.sql", "utf8"));
+await db.exec(readFileSync(root + "20261128000200_overhead_cable_extension_names.sql", "utf8"));
 if ((await db.query(`select is_active from public.exercises where id = 'Crucifix'`)).rows[0]?.is_active !== false) throw new Error("Crucifix should be inactive");
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
