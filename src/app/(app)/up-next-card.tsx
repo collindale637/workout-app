@@ -663,6 +663,9 @@ function cssPx(length: string) {
 
 const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** drag.id for a pull that started on the list (touch events, not a pointer id). */
+const LIST_PULL = -1;
+
 type Drag = { id: number; x: number; y: number; dy: number; active: boolean; lastY: number; lastT: number; v: number; top0: number };
 
 /**
@@ -833,6 +836,124 @@ function useExerciseSheet() {
     return { max, default: Math.min(min, Math.max(max, def)), min };
   };
 
+  /** The sheet follows the finger (header drag or a pull on the list). */
+  const follow = (d: Drag, clientY: number) => {
+    const el = sheetRef.current;
+    if (!el) return;
+    const t = performance.now();
+    d.v = (clientY - d.lastY) / Math.max(1, t - d.lastT);
+    d.lastY = clientY;
+    d.lastT = t;
+    const dy = clientY - d.y;
+    // Past the top it resists, so it can't be pulled off the screen.
+    const lim = targets(d).max - d.top0;
+    d.dy = dy < lim ? lim + (dy - lim) / 4 : dy;
+    el.style.transform = restingTransform(modeRef.current, headerEl.current?.offsetHeight ?? 0, d.dy, el.offsetHeight);
+  };
+
+  /** Let go: settle at the nearest position, at least one step the way it was swiped. */
+  const release = (d: Drag) => {
+    const el = sheetRef.current;
+    if (!el) return;
+    // The click that follows a drag shouldn't press a button (or open a row) under the finger.
+    swallowClick.current = true;
+    setTimeout(() => (swallowClick.current = false), 0);
+    const cur = modeRef.current;
+    const hh = headerEl.current?.offsetHeight ?? 0;
+    const top = d.top0 + d.dy;
+    const at = targets(d);
+    // Nearest position to where a flick would carry it…
+    const aim = top + Math.max(-600, Math.min(600, d.v * 220));
+    let next = (Object.keys(at) as SheetMode[]).reduce((a, b) => (Math.abs(at[b] - aim) < Math.abs(at[a] - aim) ? b : a), cur);
+    // …but a real swipe always moves at least one step its way, so min → midway → top works both ways.
+    const ci = ORDER.indexOf(cur);
+    const ni = ORDER.indexOf(next);
+    if (d.dy < -24 && ni >= ci) next = ORDER[Math.max(0, ci - 1)];
+    if (d.dy > 24 && ni <= ci) next = ORDER[Math.min(ORDER.length - 1, ci + 1)];
+    if (next !== cur) {
+      setMode(next); // measures the header where it was let go, then slides on from there
+      // Clear the drag offset; the new position's resting spot is set when it renders (see the layout effect).
+      el.style.transform = "";
+      return;
+    }
+    // Same position: settle back where it was.
+    el.style.transform = cur === "min" ? restingTransform("min", hh) : "";
+    if (!reduced()) el.animate([{ translate: `0 ${d.dy}px` }, { translate: "0 0" }], { duration: 240, easing: "ease-out" });
+  };
+  const gesture = useRef({ follow, release });
+  useEffect(() => {
+    gesture.current = { follow, release };
+  });
+
+  // Pulling down on the list itself, once it's scrolled to its top, moves the sheet (top → midway → minimized), so you
+  // don't have to reach the header. Midway, "its top" is the top of the page. A row held still first is being picked up
+  // to reorder, and a sideways move is a row swipe: those stay with the list.
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body || mode === "min") return;
+    let g: { x: number; y: number; lastY: number; t0: number; decided: boolean; off: boolean } | null = null;
+    const atTop = () => (modeRef.current === "max" ? body.scrollTop <= 0 : window.scrollY <= 0);
+    const onStart = (e: TouchEvent) => {
+      const p = e.touches[0];
+      g = e.touches.length === 1 && !drag.current ? { x: p.clientX, y: p.clientY, lastY: p.clientY, t0: performance.now(), decided: false, off: false } : null;
+    };
+    const onMove = (e: TouchEvent) => {
+      const s = g;
+      if (!s) return;
+      const p = e.touches[0];
+      const d = drag.current;
+      if (d?.id === LIST_PULL) {
+        if (e.cancelable) e.preventDefault();
+        gesture.current.follow(d, p.clientY);
+        return;
+      }
+      if (s.off) return;
+      if (!s.decided) {
+        const dx = p.clientX - s.x;
+        const dy = p.clientY - s.y;
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        s.decided = true;
+        // Held first (reorder) or sideways (row swipe): not ours.
+        if (performance.now() - s.t0 > 300 || Math.abs(dx) > Math.abs(dy)) {
+          s.off = true;
+          return;
+        }
+      }
+      // Moving down with nothing left to scroll: the sheet takes over from here (also mid-gesture, after scrolling up).
+      const down = p.clientY > s.lastY;
+      s.lastY = p.clientY;
+      if (down && atTop() && e.cancelable) {
+        e.preventDefault();
+        const top0 = headerEl.current?.getBoundingClientRect().top ?? 0;
+        drag.current = { id: LIST_PULL, x: p.clientX, y: p.clientY, dy: 0, active: true, lastY: p.clientY, lastT: performance.now(), v: 0, top0 };
+      }
+    };
+    const onEnd = () => {
+      g = null;
+      const d = drag.current;
+      if (d?.id !== LIST_PULL) return;
+      drag.current = null;
+      gesture.current.release(d);
+    };
+    const swallow = (e: MouseEvent) => {
+      if (!swallowClick.current) return;
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    body.addEventListener("touchstart", onStart, { passive: true });
+    body.addEventListener("touchmove", onMove, { passive: false });
+    body.addEventListener("touchend", onEnd);
+    body.addEventListener("touchcancel", onEnd);
+    body.addEventListener("click", swallow, true);
+    return () => {
+      body.removeEventListener("touchstart", onStart);
+      body.removeEventListener("touchmove", onMove);
+      body.removeEventListener("touchend", onEnd);
+      body.removeEventListener("touchcancel", onEnd);
+      body.removeEventListener("click", swallow, true);
+    };
+  }, [mode]);
+
   const dragProps = {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -855,44 +976,13 @@ function useExerciseSheet() {
         d.active = true;
         e.currentTarget.setPointerCapture(e.pointerId);
       }
-      const t = performance.now();
-      d.v = (e.clientY - d.lastY) / Math.max(1, t - d.lastT);
-      d.lastY = e.clientY;
-      d.lastT = t;
-      // Past the top it resists, so it can't be pulled off the screen.
-      const lim = targets(d).max - d.top0;
-      d.dy = dy < lim ? lim + (dy - lim) / 4 : dy;
-      el.style.transform = restingTransform(modeRef.current, headerEl.current?.offsetHeight ?? 0, d.dy, el.offsetHeight);
+      follow(d, e.clientY);
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const d = drag.current;
       drag.current = null;
-      const el = sheetRef.current;
-      if (!d || !el || !d.active || e.pointerId !== d.id) return;
-      // The click that follows a drag shouldn't press a button under the finger.
-      swallowClick.current = true;
-      setTimeout(() => (swallowClick.current = false), 0);
-      const cur = modeRef.current;
-      const hh = headerEl.current?.offsetHeight ?? 0;
-      const top = d.top0 + d.dy;
-      const at = targets(d);
-      // Nearest position to where a flick would carry it…
-      const aim = top + Math.max(-600, Math.min(600, d.v * 220));
-      let next = (Object.keys(at) as SheetMode[]).reduce((a, b) => (Math.abs(at[b] - aim) < Math.abs(at[a] - aim) ? b : a), cur);
-      // …but a real swipe always moves at least one step its way, so min → midway → top works both ways.
-      const ci = ORDER.indexOf(cur);
-      const ni = ORDER.indexOf(next);
-      if (d.dy < -24 && ni >= ci) next = ORDER[Math.max(0, ci - 1)];
-      if (d.dy > 24 && ni <= ci) next = ORDER[Math.min(ORDER.length - 1, ci + 1)];
-      if (next !== cur) {
-        setMode(next); // measures the header where it was let go, then slides on from there
-        // Clear the drag offset; the new position's resting spot is set when it renders (see the layout effect).
-        el.style.transform = "";
-        return;
-      }
-      // Same position: settle back where it was.
-      el.style.transform = cur === "min" ? restingTransform("min", hh) : "";
-      if (!reduced()) el.animate([{ translate: `0 ${d.dy}px` }, { translate: "0 0" }], { duration: 240, easing: "ease-out" });
+      if (!d || !d.active || e.pointerId !== d.id) return;
+      release(d);
     },
     onPointerCancel: () => {
       const d = drag.current;
