@@ -10,7 +10,7 @@
 // exercise name, since the dataset only has one coarse equipment field.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { COMMON, EQUIPMENT, EXTRA_EXERCISES, INACTIVE, MUSCLE_OVERRIDES, MUSCLES, SOURCE_URL, SPLITS } from "./catalog-data.mjs";
+import { ALIASES, COMMON, EQUIPMENT, EXTRA_EXERCISES, INACTIVE, MUSCLE_OVERRIDES, MUSCLES, SOURCE_URL, SPLITS } from "./catalog-data.mjs";
 
 const OUT = new URL("../supabase/migrations/20261115000200_catalog_seed.sql", import.meta.url);
 const REPORT = new URL("../supabase/catalog-report.md", import.meta.url);
@@ -288,7 +288,7 @@ for (const ex of raw) {
   exercises.push({
     id: ex.id,
     name: display ?? ex.name,
-    aliases: display && display !== ex.name ? [ex.name] : [],
+    aliases: [...(display && display !== ex.name ? [ex.name] : []), ...(ALIASES[ex.id] ?? [])],
     category: CATEGORY[ex.category] ?? "strength",
     movement_pattern: patternFor(ex, name, roles),
     mechanic: ex.mechanic,
@@ -308,7 +308,7 @@ for (const ex of EXTRA_EXERCISES) {
   const name = ex.name.toLowerCase();
   const roles = new Map([...ex.primary.map((m) => [m, "primary"]), ...ex.secondary.map((m) => [m, "secondary"])]);
   exercises.push({
-    id: ex.id, name: ex.name, aliases: [], category: ex.category ?? "strength",
+    id: ex.id, name: ex.name, aliases: [...(ex.aliases ?? []), ...(ALIASES[ex.id] ?? [])], category: ex.category ?? "strength",
     movement_pattern: patternFor({ category: ex.category ?? "strength", mechanic: ex.mechanic }, name, roles),
     mechanic: ex.mechanic, force: ex.force, level: ex.level, instructions: ex.instructions, images: [],
     is_common: true, is_active: true, source: "catalog",
@@ -324,6 +324,7 @@ for (const e of exercises) {
   ids.add(e.id);
 }
 for (const id of Object.keys(COMMON)) if (!ids.has(id)) throw new Error(`COMMON id not in dataset: ${id}`);
+for (const id of Object.keys(ALIASES)) if (!ids.has(id)) throw new Error(`ALIASES id not in catalog: ${id}`);
 for (const [, , item] of exEquip) {
   if (item === "__unmapped_machine") continue;
   if (!equipmentIds.has(item)) throw new Error(`unknown equipment ${item}`);

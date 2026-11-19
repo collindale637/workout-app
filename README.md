@@ -127,6 +127,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261124000100_injuries.sql` | `profiles.avoid_areas` (knees, lower back…) and `profiles.injury_note`: "Anything to avoid?" steers plans, swaps and AI | ✓ |
 | `20261125000100_dev_notes.sql` | `dev_notes` table ("Note to developer", owner-only) + admin inbox: `app_admins` (rows added by hand), `is_app_admin()`, `dev_notes_inbox()`, `dev_note_set_done()` | ✓ |
 | `20261126000100_hide_crucifix.sql` | Crucifix hold hidden from the exercise list (inactive) | ✓ |
+| `20261127000100_exercise_twins.sql` | Barbell / dumbbell twins (Dumbbell Deadlift, Dumbbell Walking Lunge, Barbell Bulgarian Split Squat…), Assisted Dip, Single-Leg Lying Leg Curl, and more names imported plans use (Cable Fly, Seated Face Pull…) | ✓ |
 
 ## One-time setup
 
