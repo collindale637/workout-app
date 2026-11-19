@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCardioTimer } from "@/lib/cardio-timer";
 import { cardioLabel } from "@/lib/cardio";
-import { cardioStartedFeedback } from "./today-cardio";
+import { cardioStartedFeedback, showTodayTop } from "./today-cardio";
 import type { CardioType } from "@/lib/db/types";
 
 /** One tap starts a timer; the blue cardio card at the top of Today takes it from there. */
@@ -53,7 +53,7 @@ export function QuickCardio() {
       {busy ? (
         <button
           type="button"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          onClick={showTodayTop}
           className="display mt-2 flex min-h-12 items-center justify-center rounded-[20px] border-2 border-dashed border-line text-[15px] font-extrabold tracking-[0.04em] text-muted uppercase"
         >
           Cardio running · see top ↑
