@@ -231,3 +231,10 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Air Bike | cardio | quads | glutes, hamstrings, calves | air_bike |
 | Ski Erg | cardio | lats | triceps, abs | ski_erg |
 | Spin Bike | cardio | quads | hamstrings, glutes, calves | stationary_bike |
+| EZ-Bar Preacher Curl | isolation | biceps | forearms | ez_bar + preacher_bench or adjustable_bench |
+| Close-Grip EZ-Bar Preacher Curl | isolation | biceps | forearms | ez_bar + preacher_bench or adjustable_bench |
+| Twisting Hanging Knee Raise | core | abs, obliques | forearms | pull_up_bar |
+| Prisoner Squat | squat | quads, glutes | hamstrings, adductors, lower_back | none |
+| Bodyweight Reverse Lunge | lunge | quads, glutes | hamstrings, adductors | none |
+| Single-Leg Calf Raise | isolation | calves |  | none |
+| Lying Leg Raise | core | abs |  | none |

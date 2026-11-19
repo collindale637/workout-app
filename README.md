@@ -130,6 +130,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261127000100_exercise_twins.sql` | Barbell / dumbbell twins (Dumbbell Deadlift, Dumbbell Walking Lunge, Barbell Bulgarian Split Squat…), Assisted Dip, Single-Leg Lying Leg Curl, and more names imported plans use (Cable Fly, Seated Face Pull…) | ✓ |
 | `20261127000200_exercise_twins_2.sql` | More barbell / dumbbell twins: Dumbbell Front Squat, Push Press, Sumo Deadlift, Glute Bridge, Preacher Curl; Barbell Overhead Triceps Extension | ✓ |
 | `20261127000300_preacher_curl_default.sql` | "Preacher Curl" with no gear named now means the dumbbell version (alternate name moved off the barbell one) | ✓ |
+| `20261128000100_catalog_ez_preacher_and_more.sql` | New exercises: EZ-Bar and Close-Grip EZ-Bar Preacher Curl, Twisting Hanging Knee Raise, Prisoner Squat, Bodyweight Reverse Lunge, Single-Leg Calf Raise, Lying Leg Raise; "Cable Tricep Extension(s)" is an alternate name for Tricep Pushdown | ✓ |
 
 ## One-time setup
 

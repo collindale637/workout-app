@@ -521,6 +521,57 @@ export const EXTRA_EXERCISES = [
     equipment: [["stationary_bike"]],
     instructions: ["Ride at a steady pace or in intervals."],
   },
+  // From Collin's Nov 19 imports: movements the library only matched loosely (UNSURE) before.
+  {
+    id: "EZ_Bar_Preacher_Curl", name: "EZ-Bar Preacher Curl", mechanic: "isolation", force: "pull", level: "beginner",
+    primary: ["biceps"], secondary: ["forearms"],
+    equipment: [["ez_bar"], ["preacher_bench", "adjustable_bench"]],
+    aliases: ["EZ Bar Preacher Curl", "EZ Curl Bar Preacher Curl"],
+    instructions: ["Sit at a preacher bench with your chest and the backs of your upper arms against the pad. Hold an EZ bar on the angled inner grips, palms up.", "Lower the bar slowly until your arms are almost straight and your biceps are stretched.", "Curl the bar up to shoulder height, squeeze the biceps, and repeat."],
+  },
+  {
+    id: "Close_Grip_EZ_Bar_Preacher_Curl", name: "Close-Grip EZ-Bar Preacher Curl", mechanic: "isolation", force: "pull", level: "beginner",
+    primary: ["biceps"], secondary: ["forearms"],
+    equipment: [["ez_bar"], ["preacher_bench", "adjustable_bench"]],
+    aliases: ["Close Grip Preacher Curl", "Close-Grip Preacher Curl", "Close Grip EZ Bar Preacher Curl"],
+    instructions: ["Sit at a preacher bench with your chest and the backs of your upper arms against the pad. Hold an EZ bar on the inner grips, hands close together, palms up.", "Lower the bar slowly until your arms are almost straight and your biceps are stretched.", "Curl the bar up to shoulder height without letting your elbows drift off the pad, then repeat."],
+  },
+  {
+    id: "Twisting_Hanging_Knee_Raise", name: "Twisting Hanging Knee Raise", mechanic: "isolation", force: "pull", level: "intermediate",
+    primary: ["abs", "obliques"], secondary: ["forearms"],
+    equipment: [["pull_up_bar"]],
+    aliases: ["Hanging Knee Raise Twist", "Hanging Oblique Knee Raise", "Hanging Knee Twist"],
+    instructions: ["Hang from a pull-up bar with your arms straight and your legs together.", "Bend your knees and bring them up toward your chest while twisting your hips so the knees point to one side.", "Lower slowly with control, then twist to the other side on the next rep. Avoid swinging."],
+  },
+  {
+    id: "Prisoner_Squat", name: "Prisoner Squat", mechanic: "compound", force: "push", level: "beginner",
+    primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors", "lower_back"],
+    equipment: [],
+    aliases: ["Prisoner Squats", "Hands Behind Head Squat"],
+    instructions: ["Stand with your feet about shoulder width apart and your hands behind your head, elbows wide.", "Squat down with your chest up until your thighs are about parallel to the floor.", "Drive through your whole foot to stand back up."],
+  },
+  {
+    id: "Bodyweight_Reverse_Lunge", name: "Bodyweight Reverse Lunge", mechanic: "compound", force: "push", level: "beginner",
+    primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],
+    equipment: [],
+    // Written without gear, a reverse lunge means the bodyweight version (same idea as Preacher Curl).
+    aliases: ["Reverse Lunge", "Reverse Lunges", "Reverse Lunge (per leg)"],
+    instructions: ["Stand tall with your hands on your hips or in front of your chest.", "Step one foot back and lower until your back knee nearly touches the floor.", "Drive through the front foot to stand back up. Alternate legs, or finish one side first."],
+  },
+  {
+    id: "Single_Leg_Calf_Raise", name: "Single-Leg Calf Raise", mechanic: "isolation", force: "push", level: "beginner",
+    primary: ["calves"], secondary: [],
+    equipment: [],
+    aliases: ["Single Leg Calf Raise", "One-Leg Calf Raise", "Single-Leg Calf Raise (per leg)"],
+    instructions: ["Stand on one foot, ideally with the ball of the foot on a step, and hold a wall or rail for balance.", "Rise as high as you can onto your toes, then lower slowly until your heel is below the step.", "Finish all reps, then switch legs."],
+  },
+  {
+    id: "Lying_Leg_Raise", name: "Lying Leg Raise", mechanic: "isolation", force: "pull", level: "beginner",
+    primary: ["abs"], secondary: [],
+    equipment: [],
+    aliases: ["Lying Leg Raises", "Floor Leg Raise"],
+    instructions: ["Lie on your back with your legs straight and your hands under your hips or at your sides.", "Keeping your legs straight, raise them until they point at the ceiling.", "Lower slowly without letting your lower back arch off the floor, and repeat."],
+  },
 ];
 
 // Other names people write for the same lift, so imported plans match on their own.
@@ -536,7 +587,8 @@ export const ALIASES = {
   Side_Lateral_Raise: ["Dumbbell Lateral Raise", "Dumbbell Side Lateral Raise"],
   // Written without gear, a preacher curl means the dumbbell version.
   One_Arm_Dumbbell_Preacher_Curl: ["Preacher Curl"],
-  Preacher_Curl: ["EZ-Bar Preacher Curl", "EZ Bar Preacher Curl"],
+  // "Cable Tricep Extension(s)" is how many plans write a rope or bar pushdown.
+  Triceps_Pushdown: ["Cable Tricep Extension", "Cable Tricep Extensions", "Cable Triceps Extension"],
 };
 
 // Dataset names that should NOT stay as an alias, because they now belong to a different version of the lift.
