@@ -21,7 +21,7 @@ export function Sparkle({ size = 18, className = "", onCobalt = false, white = f
 }
 
 /** Exercises with their dose, notes and superset letters. */
-export function AiItems({ catalog, items, highlight }: { catalog: Catalog; items: AiItem[]; highlight?: Set<string> }) {
+export function AiItems({ catalog, items, highlight, hideRest }: { catalog: Catalog; items: AiItem[]; highlight?: Set<string>; hideRest?: boolean }) {
   return (
     <ul className="flex flex-col divide-y divide-line">
       {items.map((it, i) => {
@@ -35,7 +35,7 @@ export function AiItems({ catalog, items, highlight }: { catalog: Catalog; items
               </span>
               <span className="display num shrink-0 text-base font-bold text-muted">
                 {cardio ? (it.notes?.split(" · ")[0] ?? "Cardio") : doseLabel(catalog, it)}
-                {!cardio && it.rest_sec ? <span className="text-sm font-semibold"> · {formatDuration(it.rest_sec)}</span> : null}
+                {!cardio && !hideRest && it.rest_sec ? <span className="text-sm font-semibold"> · {formatDuration(it.rest_sec)}</span> : null}
               </span>
             </div>
             {(cardio ? it.notes?.split(" · ").slice(1).join(" · ") : it.notes) && (
