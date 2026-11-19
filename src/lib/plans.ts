@@ -1,6 +1,6 @@
 "use client";
 
-import { advancePlan, dayWeek, weekProgress } from "@/lib/plan-weeks";
+import { advancePlan, dayWeek, planCopy, weekProgress } from "@/lib/plan-weeks";
 import { useCallback } from "react";
 import { useData } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
@@ -292,5 +292,55 @@ export function usePlanActions() {
     [db, requestSync, advanceWeek],
   );
 
-  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit, advanceWeek, skipDay };
+  /**
+   * Copies a week's workouts into another week (Make it different: copy the week it repeats; Copy forward: copy this
+   * week into the next). The target's own workouts are replaced. New ids, so only that week changes from here on.
+   */
+  const copyWeek = useCallback(
+    async (planId: string, from: number, to: number) => {
+      const days = await db.plan_days.where("plan_id").equals(planId).toArray();
+      const rows = await db.plan_exercises.where("plan_day_id").anyOf(days.map((d) => d.id)).toArray();
+      const plan = planCopy(days, rows, from, to, newId);
+      if (!plan || to > 12) return false;
+      await db.transaction("rw", [db.plan_days, db.plan_exercises, db.outbox, db.tombstones], async () => {
+        for (const r of plan.removeRows) {
+          await db.plan_exercises.delete(r.id);
+          await markDeleted(db, "plan_exercises", r.id);
+        }
+        for (const d of plan.removeDays) {
+          await db.plan_days.delete(d.id);
+          await markDeleted(db, "plan_days", d.id);
+        }
+        await db.plan_days.bulkPut(plan.addDays);
+        for (const d of plan.addDays) await markDirty(db, "plan_days", d.id);
+        await db.plan_exercises.bulkPut(plan.addRows);
+        for (const r of plan.addRows) await markDirty(db, "plan_exercises", r.id);
+      });
+      requestSync();
+      return true;
+    },
+    [db, requestSync],
+  );
+
+  /** Plan complete → Restart: back to week 1 as a new run. Workout history and PRs are untouched. */
+  const restart = useCallback(
+    async (planId: string) => {
+      await db.plans.update(planId, { current_week: 1, week_started_at: nowIso(), skipped_day_ids: [], completed_at: null, completion_dismissed_at: null, start_date: todayIso(), is_active: true });
+      await markDirty(db, "plans", planId);
+      requestSync();
+    },
+    [db, requestSync],
+  );
+
+  /** Plan complete → "Skip for now" (true) or bring the screen back from Today's "Plan finished" row (false). */
+  const dismissComplete = useCallback(
+    async (planId: string, dismissed: boolean) => {
+      await db.plans.update(planId, { completion_dismissed_at: dismissed ? nowIso() : null });
+      await markDirty(db, "plans", planId);
+      requestSync();
+    },
+    [db, requestSync],
+  );
+
+  return { copyWeek, restart, dismissComplete, create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit, advanceWeek, skipDay };
 }

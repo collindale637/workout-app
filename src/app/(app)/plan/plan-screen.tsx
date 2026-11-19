@@ -13,7 +13,8 @@ import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
 import { dayOptions, resolveFilter, splitRows, type SplitFilter } from "@/lib/split-filter";
-import { weekLabel } from "@/lib/plan-weeks";
+import { daysForWeek, sourceWeek, weekLabel } from "@/lib/plan-weeks";
+import { WeekStepper, type WeekTone } from "@/components/week-stepper";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { Card, Sheet, btn, field } from "@/components/ui/kit";
 import { Sparkle } from "@/components/ai";
@@ -96,9 +97,21 @@ function ActivePlanCard() {
   const actions = usePlanActions();
   const [menu, setMenu] = useState(false);
   const [rename, setRename] = useState<string | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
   const splitName = useLiveQuery(async () => (plan?.plan.split_id ? (await db.splits.get(plan.plan.split_id))?.name : null), [db, plan?.plan.split_id]);
   if (!plan || !catalog) return null;
-  const { plan: p, days, exercises, nextDay, week, length } = plan;
+  const { plan: p, days, allDays, exercises, nextDay, week, length, doneThisWeek, skippedThisWeek } = plan;
+  // Week by week: a stepper over the plan's weeks (up to 12). Weeks with no workouts of their own repeat the week before.
+  const stepped = length !== null && length > 1 && length <= 12;
+  const viewWeek = stepped ? Math.min(picked ?? week, length) : week;
+  const shown = stepped ? daysForWeek(allDays, viewWeek) : days;
+  const src = sourceWeek(allDays, viewWeek) ?? 1;
+  const inherited = stepped && src !== viewWeek;
+  const editable = viewWeek > week; // this week's days are tied to workouts already done, so only later weeks can be copied
+  const ownWeeks = new Set(allDays.map((d) => d.week ?? 1));
+  const tones: WeekTone[] = stepped ? Array.from({ length }, (_, i) => (i + 1 < week ? "done" : i + 1 === week ? "current" : ownWeeks.has(i + 1) ? "strong" : "plain")) : [];
+  const nextHasOwn = ownWeeks.has(viewWeek + 1);
+  const canCopyForward = stepped && !inherited && viewWeek < length && viewWeek + 1 > week;
 
   return (
     <section className="flex flex-col gap-3">
@@ -130,23 +143,52 @@ function ActivePlanCard() {
         </details>
       )}
 
+      {stepped && (
+        <>
+          <WeekStepper
+            week={viewWeek}
+            length={length}
+            onPick={setPicked}
+            tones={tones}
+            labels={tones.map((t, i) => `Week ${i + 1}${t === "done" ? ", finished" : t === "current" ? ", this week" : ""}`)}
+            status={viewWeek < week ? "Finished" : viewWeek === week ? `This week · ${doneThisWeek.size + skippedThisWeek.size} of ${shown.length} done` : inherited ? `Same as week ${src}` : "Coming up"}
+            statusClass={viewWeek < week ? "text-good" : viewWeek === week ? "text-accent" : "text-muted"}
+          />
+          {inherited && (
+            <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 rounded-2xl border border-dashed border-line px-3 py-1.5">
+              <span className="text-sm font-semibold text-muted">Same workouts as week {src}</span>
+              {editable && (
+                <button type="button" className="display min-h-11 text-[15px] font-extrabold tracking-[0.04em] text-accent uppercase" onClick={() => void actions.copyWeek(p.id, viewWeek, viewWeek)}>
+                  Make it different
+                </button>
+              )}
+              <span className="basis-full pb-1.5 text-xs font-medium text-muted">Editing a day here changes every week that repeats week {src}.{editable ? " Make it different to edit just this week." : ""}</span>
+            </div>
+          )}
+        </>
+      )}
+
       <ul className="flex flex-col gap-2">
-        {days.map((d) => {
+        {shown.map((d) => {
           const list = exercises.get(d.id) ?? [];
-          const isNext = nextDay?.id === d.id;
+          const isNext = viewWeek === week && nextDay?.id === d.id;
+          const done = viewWeek < week || (viewWeek === week && doneThisWeek.has(d.id));
+          const skipped = viewWeek === week && skippedThisWeek.has(d.id);
           return (
             <li key={d.id}>
               <Link
                 href={`/plan/day?id=${d.id}`}
                 className={`flex min-h-20 items-center gap-3 rounded-3xl border-2 px-4 py-3 ${isNext ? "border-accent-strong bg-primary/10" : "border-line bg-card"}`}
               >
-                <span className={`display num flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-extrabold ${isNext ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
-                  {d.day_order}
+                <span className={`display num flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-extrabold ${done ? "bg-good text-black" : isNext ? "bg-primary text-white" : "bg-card-2 text-muted"}`}>
+                  {done ? "✓" : d.day_order}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div className="flex items-baseline gap-2">
                     <span className="display truncate text-xl font-extrabold">{d.name}</span>
                     {isNext && <span className="display shrink-0 text-xs font-extrabold tracking-[0.1em] text-accent">UP NEXT</span>}
+                    {done && viewWeek === week && <span className="display shrink-0 text-xs font-extrabold tracking-[0.1em] text-good">DONE</span>}
+                    {skipped && <span className="display shrink-0 text-xs font-extrabold tracking-[0.1em] text-muted">SKIPPED</span>}
                   </div>
                   <span className="truncate text-sm font-medium text-muted">
                     {headlineText(headline(list, { isCardio: (id) => isCardioExercise(catalog.byId.get(id)), nameOf: (id) => catalog.byId.get(id)?.name ?? id })) || "No exercises yet"}
@@ -159,6 +201,20 @@ function ActivePlanCard() {
         })}
       </ul>
 
+      {canCopyForward && (
+        <button
+          type="button"
+          className={btn.secondary}
+          onClick={async () => {
+            if (nextHasOwn && !confirm(`Replace week ${viewWeek + 1}'s workouts with week ${viewWeek}'s?`)) return;
+            await actions.copyWeek(p.id, viewWeek, viewWeek + 1);
+            setPicked(viewWeek + 1);
+          }}
+        >
+          Copy week {viewWeek} to week {viewWeek + 1}
+        </button>
+      )}
+
       <Link href={`/plan/ai?edit=${p.id}`} className={btn.secondary}>
         <Sparkle /> Change this plan with AI
       </Link>
@@ -169,6 +225,20 @@ function ActivePlanCard() {
             <Sparkle /> Change with AI
           </Link>
           <button type="button" className={btn.secondary} onClick={() => { setRename(p.name); setMenu(false); }}>Rename</button>
+          {(p.completed_at || (p.current_week ?? 1) > 1) && (
+            <button
+              type="button"
+              className={btn.secondary}
+              onClick={async () => {
+                if (!confirm(`Restart "${p.name}" from week 1? Your workout history and PRs stay.`)) return;
+                await actions.restart(p.id);
+                setPicked(null);
+                setMenu(false);
+              }}
+            >
+              Restart from week 1
+            </button>
+          )}
           {days.length > 1 && (
             <div className="flex flex-col gap-2 rounded-2xl bg-card-2 p-3">
               <span className="text-sm font-bold text-muted">Train a different day next</span>
