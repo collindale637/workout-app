@@ -16,8 +16,8 @@ const COLUMNS: Record<Exclude<SyncTable, "exercise_tags" | "gym_equipment" | "ex
   profiles: ["id", "display_name", "units", "goal", "experience", "days_per_week", "session_minutes", "default_rpe", "active_gym_id", "onboarded_at", "cardio_pref", "height_in", "sex", "avoid_areas", "injury_note"],
   exercises: ["id", "name", "aliases", "category", "movement_pattern", "mechanic", "force", "level", "instructions", "images", "is_common", "is_active", "owner_id", "source"],
   gyms: ["id", "name", "template", "is_default"],
-  plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active", "notes"],
-  plan_days: ["id", "plan_id", "day_order", "name", "gym_id", "target_muscle_ids"],
+  plans: ["id", "name", "goal", "split_id", "start_date", "weeks", "source", "is_active", "notes", "current_week", "week_started_at", "skipped_day_ids", "completed_at", "completion_dismissed_at"],
+  plan_days: ["id", "plan_id", "day_order", "name", "gym_id", "target_muscle_ids", "week"],
   plan_exercises: ["id", "plan_day_id", "exercise_id", "sort_order", "sets", "rep_min", "rep_max", "rest_sec", "superset_group", "notes"],
   workouts: ["id", "name", "gym_id", "plan_day_id", "started_at", "ended_at", "notes", "source"],
   workout_exercises: ["id", "workout_id", "exercise_id", "sort_order", "superset_group", "notes", "target_sets", "rep_min", "rep_max", "rest_sec", "skipped_sets"],
@@ -47,6 +47,31 @@ const RECONCILE = ["sets", "cardio_sessions", "workout_exercises", "workouts", "
 
 const pick = (row: Record<string, unknown>, cols: string[]) =>
   Object.fromEntries(cols.filter((c) => c in row).map((c) => [c, row[c] ?? null]));
+
+/**
+ * Upserts rows in runs that carry the same fields, in order. One upsert sends the union of every row's fields and
+ * fills the gaps with null, so a row saved before a column existed (no `current_week` yet) would break a NOT NULL
+ * column or wipe a value another phone set.
+ */
+export function sameFieldRuns<T extends Record<string, unknown>>(rows: T[]): T[][] {
+  const runs: T[][] = [];
+  let sig = "";
+  for (const r of rows) {
+    const s = Object.keys(r).sort().join(",");
+    if (!runs.length || s !== sig) runs.push([]);
+    runs[runs.length - 1].push(r);
+    sig = s;
+  }
+  return runs;
+}
+
+async function upsertRuns(sb: { from: (t: string) => { upsert: (rows: Record<string, unknown>[]) => PromiseLike<{ error: { message: string } | null }> } }, table: string, rows: Record<string, unknown>[]) {
+  for (const run of sameFieldRuns(rows)) {
+    const res = await sb.from(table).upsert(run);
+    if (res.error) return res;
+  }
+  return { error: null };
+}
 
 /** Reads every row of a query, 1,000 at a time (Supabase's page limit). */
 export async function fetchAll<T>(
@@ -139,7 +164,7 @@ async function push(db: LocalDB, sb: SupabaseClient, userId: string) {
             : table === "body_metrics"
               ? // One entry per day: two phones logging the same day offline merge into one row.
                 await sb.from(table).upsert(rows, { onConflict: "owner_id,date" })
-              : await sb.from(table).upsert(rows);
+              : await upsertRuns(sb, table, rows);
         if (error) throw new Error(`${table}: ${error.message}`);
       }
     }

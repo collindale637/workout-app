@@ -1,5 +1,6 @@
 "use client";
 
+import { advancePlan, dayWeek, weekProgress } from "@/lib/plan-weeks";
 import { useCallback } from "react";
 import { useData } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
@@ -30,8 +31,9 @@ export function usePlanActions() {
       const plan: Plan = {
         id: newId(), name: opts.name, goal: opts.goal, split_id: opts.splitId, start_date: todayIso(), weeks: opts.weeks,
         source: opts.source ?? "generated", is_active: true, created_at: nowIso(), ...(opts.notes ? { notes: opts.notes } : {}),
+        current_week: 1, week_started_at: nowIso(), skipped_day_ids: [], completed_at: null, completion_dismissed_at: null,
       };
-      const days: PlanDay[] = opts.days.map((d, i) => ({ id: newId(), plan_id: plan.id, day_order: i + 1, name: d.name, gym_id: null, target_muscle_ids: d.target_muscle_ids }));
+      const days: PlanDay[] = opts.days.map((d, i) => ({ id: newId(), plan_id: plan.id, day_order: i + 1, name: d.name, gym_id: null, target_muscle_ids: d.target_muscle_ids, week: 1 }));
       const rows = opts.days.flatMap((d, i) => d.items.map((item, k) => toRow(days[i].id, item, k)));
       await db.transaction("rw", [db.plans, db.plan_days, db.plan_exercises, db.outbox], async () => {
         // Only one active plan.
@@ -210,8 +212,10 @@ export function usePlanActions() {
     async (
       planId: string,
       next: { name: string; goal: Goal; weeks: number; notes: string | null; days: { ref_day_id: string | null; name: string; target_muscle_ids: string[]; items: GenItem[] }[] },
+      /** The week whose days are being replaced; other weeks are left alone. */
+      week = 1,
     ) => {
-      const oldDays = await db.plan_days.where("plan_id").equals(planId).toArray();
+      const oldDays = (await db.plan_days.where("plan_id").equals(planId).toArray()).filter((d) => dayWeek(d) === week);
       const oldRows = await db.plan_exercises.where("plan_day_id").anyOf(oldDays.map((d) => d.id)).toArray();
       const kept = new Set(next.days.map((d) => d.ref_day_id).filter(Boolean));
       await db.transaction("rw", [db.plans, db.plan_days, db.plan_exercises, db.outbox, db.tombstones], async () => {
@@ -230,7 +234,7 @@ export function usePlanActions() {
         for (const [i, d] of next.days.entries()) {
           const id = d.ref_day_id && oldDays.some((o) => o.id === d.ref_day_id) ? d.ref_day_id : newId();
           const old = oldDays.find((o) => o.id === id);
-          await db.plan_days.put({ id, plan_id: planId, day_order: i + 1, name: d.name, gym_id: old?.gym_id ?? null, target_muscle_ids: d.target_muscle_ids });
+          await db.plan_days.put({ id, plan_id: planId, day_order: i + 1, name: d.name, gym_id: old?.gym_id ?? null, target_muscle_ids: d.target_muscle_ids, week });
           await markDirty(db, "plan_days", id);
           const rows = d.items.map((item, k) => toRow(id, item, k));
           await db.plan_exercises.bulkPut(rows);
@@ -242,5 +246,44 @@ export function usePlanActions() {
     [db, requestSync],
   );
 
-  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit };
+  /** Moves the plan to its next week (or marks it complete) once every day this week is done or skipped. Safe to call any time. */
+  const advanceWeek = useCallback(
+    async (planId: string) => {
+      let changed = false;
+      await db.transaction("rw", [db.plans, db.plan_days, db.workouts, db.outbox], async () => {
+        const plan = await db.plans.get(planId);
+        if (!plan) return;
+        const days = await db.plan_days.where("plan_id").equals(planId).toArray();
+        const ids = new Set(days.map((d) => d.id));
+        const done = await db.workouts.filter((w) => Boolean(w.ended_at && w.plan_day_id && ids.has(w.plan_day_id))).toArray();
+        const patch = advancePlan(plan, weekProgress(plan, days, done), nowIso());
+        if (!patch) return;
+        await db.plans.update(planId, patch);
+        await markDirty(db, "plans", planId);
+        changed = true;
+      });
+      if (changed) requestSync();
+      return changed;
+    },
+    [db, requestSync],
+  );
+
+  /** Skips a day for the current week; it counts toward finishing the week. */
+  const skipDay = useCallback(
+    async (planId: string, dayId: string) => {
+      await db.transaction("rw", [db.plans, db.outbox], async () => {
+        const plan = await db.plans.get(planId);
+        if (!plan) return;
+        const skipped = new Set(plan.skipped_day_ids ?? []);
+        skipped.add(dayId);
+        await db.plans.update(planId, { skipped_day_ids: [...skipped] });
+        await markDirty(db, "plans", planId);
+      });
+      await advanceWeek(planId);
+      requestSync();
+    },
+    [db, requestSync, advanceWeek],
+  );
+
+  return { create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit, advanceWeek, skipDay };
 }

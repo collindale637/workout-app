@@ -132,6 +132,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261127000300_preacher_curl_default.sql` | "Preacher Curl" with no gear named now means the dumbbell version (alternate name moved off the barbell one) | ✓ |
 | `20261128000100_catalog_ez_preacher_and_more.sql` | New exercises: EZ-Bar and Close-Grip EZ-Bar Preacher Curl, Twisting Hanging Knee Raise, Prisoner Squat, Bodyweight Reverse Lunge, Single-Leg Calf Raise, Lying Leg Raise; "Cable Tricep Extension(s)" is an alternate name for Tricep Pushdown | ✓ |
 | `20261128000200_overhead_cable_extension_names.sql` | "Overhead Cable Tricep Extension" and similar written names now match Overhead Cable Extension | ✓ |
+| `20261129000100_plan_weeks.sql` | Plans by week: `plan_days.week` (1–12), and on `plans` the progress fields `current_week`, `week_started_at`, `skipped_day_ids`, `completed_at`, `completion_dismissed_at` | ✓ |
 
 ## One-time setup
 

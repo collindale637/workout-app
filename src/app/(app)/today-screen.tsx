@@ -19,6 +19,7 @@ import { QuickCardio } from "./quick-cardio";
 import { TodayCardio } from "./today-cardio";
 import { SyncBadge } from "@/components/sync-badge";
 import { UpNextCard } from "./up-next-card";
+import { usePlanWeekRollover } from "@/lib/plan-rollover";
 import { DoneTodayCard, useDoneToday, useTrainAgain } from "./done-today-card";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -30,6 +31,7 @@ function useTodayKey() {
 }
 
 export function TodayScreen() {
+  usePlanWeekRollover();
   const { profile } = useProfile();
   const todayKey = useTodayKey();
   const open = useOpenWorkout();

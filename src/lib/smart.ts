@@ -1,5 +1,6 @@
 "use client";
 
+import { dayWeek, weekProgress } from "@/lib/plan-weeks";
 import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
@@ -107,12 +108,22 @@ export function useLastDone() {
 
 export type ActivePlan = {
   plan: Plan;
+  /** This week's days, in order (a week with no days of its own reuses the latest earlier week's). */
   days: PlanDay[];
+  /** Every day of every week. */
+  allDays: PlanDay[];
   exercises: Map<string, PlanExercise[]>;
-  /** The day to train next: the one after the last plan day you finished. */
+  /** The day to train next: the first one this week not done or skipped. */
   nextDay: PlanDay | null;
-  /** 1-based week number since the plan started. */
+  /** The week the plan is on (1-based); moves on as weeks are finished. */
   week: number;
+  /** The plan's length in weeks, or null when it keeps going. */
+  length: number | null;
+  /** This week's days that are done / skipped. */
+  doneThisWeek: Set<string>;
+  skippedThisWeek: Set<string>;
+  /** Every day this week is done or skipped (the week moves on next). */
+  weekComplete: boolean;
   /** Plan days finished today (local date), so a day picked for today stops pinning "Up next" once it's done. */
   doneToday: Set<string>;
 };
@@ -127,21 +138,19 @@ export function usePlan(planId: string | null | undefined) {
   return useLiveQuery(async (): Promise<ActivePlan | null> => {
     const plan = planId ? await db.plans.get(planId) : (await db.plans.toArray()).find((p) => p.is_active);
     if (!plan) return null;
-    const days = (await db.plan_days.where("plan_id").equals(plan.id).toArray()).sort((a, b) => a.day_order - b.day_order);
-    const exs = await db.plan_exercises.where("plan_day_id").anyOf(days.map((d) => d.id)).toArray();
+    const allDays = (await db.plan_days.where("plan_id").equals(plan.id).toArray()).sort((a, b) => dayWeek(a) - dayWeek(b) || a.day_order - b.day_order);
+    const exs = await db.plan_exercises.where("plan_day_id").anyOf(allDays.map((d) => d.id)).toArray();
     const exercises = new Map<string, PlanExercise[]>();
-    for (const d of days) exercises.set(d.id, exs.filter((e) => e.plan_day_id === d.id).sort((a, b) => a.sort_order - b.sort_order));
-    // Next day: after the most recent finished workout that came from this plan.
-    const dayIds = new Set(days.map((d) => d.id));
-    const done = (await db.workouts.filter((w) => Boolean(w.ended_at && w.plan_day_id && dayIds.has(w.plan_day_id))).toArray())
-      .sort((a, b) => b.started_at.localeCompare(a.started_at));
-    const lastDay = done[0] ? days.find((d) => d.id === done[0].plan_day_id) : null;
-    const nextDay = days.length ? (lastDay ? days[(days.indexOf(lastDay) + 1) % days.length] : days[0]) : null;
-    const start = plan.start_date ? new Date(`${plan.start_date}T00:00:00`).getTime() : new Date(plan.created_at).getTime();
-    const week = Math.max(1, Math.floor((Date.now() - start) / (7 * 86_400_000)) + 1);
+    for (const d of allDays) exercises.set(d.id, exs.filter((e) => e.plan_day_id === d.id).sort((a, b) => a.sort_order - b.sort_order));
+    const dayIds = new Set(allDays.map((d) => d.id));
+    const done = await db.workouts.filter((w) => Boolean(w.ended_at && w.plan_day_id && dayIds.has(w.plan_day_id))).toArray();
+    const progress = weekProgress(plan, allDays, done);
     const today = new Date().toDateString();
     const doneToday = new Set(done.filter((w) => new Date(w.ended_at!).toDateString() === today).map((w) => w.plan_day_id!));
-    return { plan, days, exercises, nextDay, week, doneToday };
+    return {
+      plan, days: progress.days, allDays, exercises, nextDay: progress.nextDay, week: progress.week, length: progress.length,
+      doneThisWeek: progress.done, skippedThisWeek: progress.skipped, weekComplete: progress.weekComplete, doneToday,
+    };
   }, [db, planId]);
 }
 
