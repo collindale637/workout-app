@@ -69,7 +69,8 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
     const card = cardRef.current;
     if (!card) return;
     const check = () => {
-      if (!card.querySelector("[data-muscles]")) return setCompactMuscles(false);
+      const wrap = card.querySelector<HTMLElement>("[data-muscles-wrap]");
+      if (!wrap || wrap.offsetHeight === 0) return;
       const header = sheetRef.current?.firstElementChild as HTMLElement | null;
       const sheetTop = window.innerHeight - cssPx("var(--nav-h)") - (header?.offsetHeight ?? 0);
       setCompactMuscles((was) => was || card.getBoundingClientRect().bottom + 6 > sheetTop);
@@ -162,9 +163,10 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const wasFrom = new Map(swapped.map((s) => [s.to!, s.from]));
   const name = (id: string) => catalog.byId.get(id)?.name ?? id;
   const minutes = up.light?.minutes ?? profile.session_minutes;
-  // Minimized sheet: the room it frees shows how recovered each of today's muscles is.
+  // Minimized sheet: the room it frees shows how recovered each of today's muscles is. Always rendered, and folded
+  // away in the other positions, so it can grow and shrink smoothly with the sheet (see useExerciseSheet).
   const muscleRows =
-    mode === "min" && recovery
+    recovery
       ? up.targets.map((m) => ({ id: m, name: catalog.muscleName.get(m) ?? m, score: Math.round(recovery.map.get(m)?.score ?? 100) }))
       : [];
   const muscleChips = up.targets.map((m) => catalog.muscleName.get(m) ?? m);
@@ -279,32 +281,39 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
               </p>
             )}
             {muscleRows.length > 0 && (
-              // Name, percent and a bar for each muscle (the earlier layout) in two columns. When that won't fit above the
-              // sheet (short phone, or more than six muscles) it drops to three compact columns without bars.
-              muscleRows.length > 6 || compactMuscles ? (
-                <ul data-muscles className="grid grid-cols-3 gap-x-3 gap-y-0.5 border-t border-white/15 pt-2" aria-label="Readiness by muscle">
-                  {muscleRows.map((r) => (
-                    <li key={r.id} className="flex min-w-0 items-baseline justify-between gap-1 text-[13px] font-semibold text-[#DCE4FF]">
-                      <span className="truncate">{r.name}</span>
-                      <span className={`num shrink-0 ${r.score >= READY_AVG ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <ul data-muscles className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-white/15 pt-2.5" aria-label="Readiness by muscle">
-                  {muscleRows.map((r) => (
-                    <li key={r.id} className="flex min-w-0 flex-col gap-1 text-[13px] leading-none font-semibold text-[#DCE4FF]">
-                      <span className="flex items-baseline justify-between gap-2">
+              <div
+                data-muscles-wrap
+                aria-hidden={mode !== "min"}
+                className="overflow-hidden"
+                style={mode === "min" ? undefined : { height: 0, marginTop: -8, opacity: 0, visibility: "hidden" }}
+              >
+                {/* Name, percent and a bar for each muscle in two columns. When that won't fit above the sheet (short
+                    phone, or more than six muscles) it drops to three compact columns without bars. */}
+                {muscleRows.length > 6 || compactMuscles ? (
+                  <ul data-muscles className="grid grid-cols-3 gap-x-3 gap-y-0.5 border-t border-white/15 pt-2" aria-label="Readiness by muscle">
+                    {muscleRows.map((r) => (
+                      <li key={r.id} className="flex min-w-0 items-baseline justify-between gap-1 text-[13px] font-semibold text-[#DCE4FF]">
                         <span className="truncate">{r.name}</span>
-                        <span className="num shrink-0 text-white">{r.score}%</span>
-                      </span>
-                      <span className="h-1.5 rounded-full bg-white/20">
-                        <span className={`block h-full rounded-full ${r.score >= READY_AVG ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, r.score)}%` }} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )
+                        <span className={`num shrink-0 ${r.score >= READY_AVG ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <ul data-muscles className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-white/15 pt-2.5" aria-label="Readiness by muscle">
+                    {muscleRows.map((r) => (
+                      <li key={r.id} className="flex min-w-0 flex-col gap-1 text-[13px] leading-none font-semibold text-[#DCE4FF]">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate">{r.name}</span>
+                          <span className="num shrink-0 text-white">{r.score}%</span>
+                        </span>
+                        <span className="h-1.5 rounded-full bg-white/20">
+                          <span className={`block h-full rounded-full ${r.score >= READY_AVG ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, r.score)}%` }} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -629,11 +638,18 @@ function ChipButton({ active, onClick, children }: { active?: boolean; onClick: 
   );
 }
 
-/** The minimized panel rests slid down so only its header (height h) shows above the tabs. */
-function restingTransform(mode: SheetMode, h: number, dy = 0) {
-  if (mode === "min") return `translateY(calc(100% - ${h}px + ${dy}px))`;
+/**
+ * The minimized panel rests slid down so only its header (height h) shows above the tabs. Pass the panel's height
+ * to get plain pixels: Safari won't animate translateY(calc(100% - …)) and holds the first frame instead, which
+ * showed as the sheet sitting too low, then jumping up.
+ */
+function restingTransform(mode: SheetMode, h: number, dy = 0, panelH?: number) {
+  if (mode === "min") return panelH === undefined ? `translateY(calc(100% - ${h}px + ${dy}px))` : `translateY(${panelH - h + dy}px)`;
   return `translateY(${dy}px)`;
 }
+
+/** Shared by the sheet's slide and the card's readiness block, so they move together. */
+const SLIDE: KeyframeAnimationOptions = { duration: 340, easing: "cubic-bezier(0.22, 0.8, 0.3, 1)" };
 
 /** A CSS length (e.g. with env()) in pixels. */
 function cssPx(length: string) {
@@ -669,6 +685,8 @@ function useExerciseSheet() {
   const restRef = useRef<HTMLDivElement>(null);
   const [headerH, setHeaderH] = useState(0);
   const flipFrom = useRef<number | null>(null);
+  // The card's readiness-by-muscle block height before a position change (it opens only when minimized).
+  const wrapFrom = useRef<{ h: number; open: boolean } | null>(null);
   const toCardio = useRef(false);
   const drag = useRef<Drag | null>(null);
   const swallowClick = useRef(false);
@@ -680,6 +698,8 @@ function useExerciseSheet() {
   const setMode = (next: SheetMode) => {
     if (next === modeRef.current) return;
     flipFrom.current = headerEl.current?.getBoundingClientRect().top ?? null;
+    const wrap = cardRef.current?.querySelector<HTMLElement>("[data-muscles-wrap]");
+    wrapFrom.current = wrap ? { h: wrap.getBoundingClientRect().height, open: modeRef.current === "min" } : null;
     modeRef.current = next;
     setModeState(next);
   };
@@ -705,20 +725,41 @@ function useExerciseSheet() {
     b.scrollTo({ top: Math.max(0, top), behavior: reduced() ? "auto" : "smooth" });
   }, []);
 
-  // Slide from the old spot to the new one.
+  // Slide from the old spot to the new one, while the card's readiness block grows or folds away alongside.
   useLayoutEffect(() => {
     const from = flipFrom.current;
+    const wf = wrapFrom.current;
     flipFrom.current = null;
+    wrapFrom.current = null;
     const el = sheetRef.current;
     const h = headerEl.current;
     if (from === null || !el || !h || reduced()) return;
-    const d = from - h.getBoundingClientRect().top;
+    // Where the sheet ends up: measured before any animation starts, since that changes the layout.
+    const top = h.getBoundingClientRect().top;
+    // The block: from its old height to its new one (pixels, measured before the animation starts).
+    let cardShrink = 0;
+    const wrap = cardRef.current?.querySelector<HTMLElement>("[data-muscles-wrap]");
+    if (wrap && wf) {
+      const open = mode === "min";
+      const to = wrap.offsetHeight;
+      const gap = (o: boolean) => (o ? 0 : -8);
+      if (wf.open !== open || Math.abs(wf.h - to) > 1) {
+        cardShrink = wf.h + gap(wf.open) - (to + gap(open));
+        wrap.animate(
+          [
+            { height: `${wf.h}px`, marginTop: `${gap(wf.open)}px`, opacity: wf.open ? 1 : 0, visibility: "visible" },
+            { height: `${to}px`, marginTop: `${gap(open)}px`, opacity: open ? 1 : 0, visibility: "visible" },
+          ],
+          SLIDE,
+        );
+      }
+    }
+    // Midway, the sheet sits in the page under the card, so the card's shrinking already carries it part of the way.
+    const d = from - top - (mode === "default" ? cardShrink : 0);
     if (Math.abs(d) < 1) return;
     const hh = h.offsetHeight;
-    el.animate([{ transform: restingTransform(mode, hh, d) }, { transform: restingTransform(mode, hh) }], {
-      duration: 320,
-      easing: "cubic-bezier(0.2, 0.85, 0.25, 1)",
-    });
+    const ph = el.offsetHeight;
+    el.animate([{ transform: restingTransform(mode, hh, d, ph) }, { transform: restingTransform(mode, hh, 0, ph) }], SLIDE);
   }, [mode]);
 
   // Expanded: freeze the page behind, Escape shrinks it, and the Cardio button lands on the quick cardio tiles.
@@ -773,8 +814,8 @@ function useExerciseSheet() {
     const card = cardRef.current?.getBoundingClientRect();
     // Where the sheet will sit under the card. Minimized, the card also lists readiness by muscle, which goes away in
     // the midway position, so leave that out (otherwise midway lands on top of minimized and can't be reached).
-    const muscles = cardRef.current?.querySelector<HTMLElement>("[data-muscles]");
-    const extra = muscles ? muscles.offsetHeight + 8 : 0;
+    const wrap = cardRef.current?.querySelector<HTMLElement>("[data-muscles-wrap]");
+    const extra = wrap && wrap.offsetHeight > 0 ? wrap.offsetHeight + 8 : 0;
     const def = modeRef.current === "default" ? d.top0 : card ? card.bottom - extra + SHEET_GAP : (max + min) / 2;
     return { max, default: Math.min(min, Math.max(max, def)), min };
   };
@@ -808,7 +849,7 @@ function useExerciseSheet() {
       // Past the top it resists, so it can't be pulled off the screen.
       const lim = targets(d).max - d.top0;
       d.dy = dy < lim ? lim + (dy - lim) / 4 : dy;
-      el.style.transform = restingTransform(modeRef.current, headerEl.current?.offsetHeight ?? 0, d.dy);
+      el.style.transform = restingTransform(modeRef.current, headerEl.current?.offsetHeight ?? 0, d.dy, el.offsetHeight);
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const d = drag.current;
@@ -837,7 +878,8 @@ function useExerciseSheet() {
       }
       // Same position: settle back where it was.
       el.style.transform = cur === "min" ? restingTransform("min", hh) : "";
-      if (!reduced()) el.animate([{ transform: restingTransform(cur, hh, d.dy) }, { transform: restingTransform(cur, hh) }], { duration: 240, easing: "ease-out" });
+      const ph = el.offsetHeight;
+      if (!reduced()) el.animate([{ transform: restingTransform(cur, hh, d.dy, ph) }, { transform: restingTransform(cur, hh, 0, ph) }], { duration: 240, easing: "ease-out" });
     },
     onPointerCancel: () => {
       const d = drag.current;
