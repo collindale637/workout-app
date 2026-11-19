@@ -8,7 +8,7 @@ import type { LocalDB } from "@/lib/db/dexie";
 import type { Catalog } from "@/lib/hooks";
 import type { MuscleRecovery } from "@/lib/recovery";
 import type { ExercisePref, Exercise, Profile } from "@/lib/db/types";
-import type { AiImage, AiJob, AiProfile, AiRequest, AiResponse, AiUsage, AllowedExercise } from "./types";
+import { MAX_PDF_BYTES, type AiImage, type AiJob, type AiPdf, type AiProfile, AiRequest, AiResponse, AiUsage, AllowedExercise } from "./types";
 
 /*
   The phone's side of AI: it gathers the context (what this gym can do, your profile, recovery and recent
@@ -116,7 +116,7 @@ export async function askAI(req: AiRequest): Promise<AiResponse> {
   try {
     const res = await fetch("/api/ai", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) });
     const data = (await res.json().catch(() => null)) as AiResponse | null;
-    if (!data) return { ok: false, error: res.status === 413 ? "The photos are too large. Try fewer." : `Something went wrong (${res.status}). Try again.` };
+    if (!data) return { ok: false, error: res.status === 413 ? "That upload is too large. Try fewer photos or a smaller PDF." : `Something went wrong (${res.status}). Try again.` };
     return data;
   } catch {
     return { ok: false, error: "Couldn't reach the server. Check your connection and try again." };
@@ -230,6 +230,17 @@ export async function prepareImage(file: File): Promise<AiImage> {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Reads a PDF file into the request shape. Rejects anything that isn't a PDF or is too big to send. */
+export async function preparePdf(file: File): Promise<AiPdf> {
+  if (file.size > MAX_PDF_BYTES) throw new Error(`That PDF is ${(file.size / 1e6).toFixed(1)} MB. The limit is ${MAX_PDF_BYTES / 1e6} MB: try exporting fewer pages or a smaller copy.`);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  // Every PDF starts with "%PDF-"; the phone's file type can be blank, so check the bytes.
+  if (bytes.length < 5 || String.fromCharCode(...bytes.slice(0, 5)) !== "%PDF-") throw new Error("That doesn't look like a PDF.");
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { media_type: "application/pdf", data: btoa(binary), name: file.name };
 }
 
 /** "$0.42 of $10 this month" */

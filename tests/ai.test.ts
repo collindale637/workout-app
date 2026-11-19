@@ -248,6 +248,17 @@ describe("the AI request pipeline", () => {
     expect(blocks[0]).toMatchObject({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: "abc" } });
     expect(String(blocks.at(-1)!.text)).toContain("No pasted text");
   });
+
+  it("sends an imported PDF to Claude as a document block, before the text", async () => {
+    let first: Msg | undefined;
+    await runAi({ ...base, kind: "import", prompt: "", pdf: { media_type: "application/pdf", data: "JVBERi0x" } }, async ({ messages }) => {
+      first = messages[0];
+      return reply({ name: "X", goal: null, weeks: null, summary: "", progression: "", problems: null, days: [] });
+    });
+    const blocks = first!.content as Record<string, unknown>[];
+    expect(blocks[0]).toMatchObject({ type: "document", source: { type: "base64", media_type: "application/pdf", data: "JVBERi0x" } });
+    expect(blocks.some((b) => b.type === "text")).toBe(true);
+  });
 });
 
 describe("AI swap and add suggestions", () => {
