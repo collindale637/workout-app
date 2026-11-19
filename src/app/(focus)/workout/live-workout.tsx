@@ -14,7 +14,7 @@ import { loadFor, suggestNext } from "@/lib/progression";
 import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
-import { formatDuration, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, repsWheel, toDisplayWeight, VOLUME_NOTE, volumeBy, weightUnit, weightWheel, wheelNumber } from "@/lib/units";
+import { formatDuration, formatMax, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, repsWheel, toDisplayWeight, VOLUME_NOTE, volumeBy, weightUnit, weightWheel, wheelNumber } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { useSmartPicks } from "@/lib/ai/picks";
 import type { SwapWhy } from "@/lib/generator";
@@ -23,7 +23,7 @@ import { ConfirmSheet, Sheet, btn, doneDisc, field } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
-import { setsLine, shortDate } from "@/lib/compare";
+import { setRecord, setsLine, shortDate } from "@/lib/compare";
 import { isDoubleTap } from "@/lib/double-tap";
 import { EditSetForm, TYPE_LABEL } from "@/components/edit-set-form";
 import { setProblem } from "@/lib/set-limits";
@@ -242,8 +242,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       return;
     }
     const before = { currentId, upNextFrom, rest, draft, wexId: current.id, count: (setsBy.get(current.id) ?? []).length };
+    // This exercise's sets so far today (it can appear twice), for the gold "New PR" toast.
+    const earlier = wexs!.filter((w) => w.exercise_id === current.exercise_id).flatMap((w) => setsBy.get(w.id) ?? []);
     const saved = await actions.logSet(current.id, draft);
-    showLogged(saved, before);
+    showLogged(saved, before, setRecord(history?.get(current.exercise_id), earlier, saved));
     const group = current.superset_group;
     const doneNow = filled(current) + (draft.type === "warmup" ? 0 : 1);
     // Already past the planned sets (an extra set): stay on this exercise instead of jumping ahead again.
@@ -294,12 +296,23 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   }
 
   /** "✓ Set 2 logged · 70 lb × 10 · Undo" for 5 s. Undo deletes the set and puts the screen back as it was. */
-  function showLogged(saved: WorkoutSet, before: { currentId: string | null; upNextFrom: string | null; rest: RestState | null; draft: Draft; wexId: string; count: number }) {
+  function showLogged(
+    saved: WorkoutSet,
+    before: { currentId: string | null; upNextFrom: string | null; rest: RestState | null; draft: Draft; wexId: string; count: number },
+    record: ReturnType<typeof setRecord> = null,
+  ) {
     const what = saved.type === "warmup" ? "Warm-up" : saved.type === "drop" ? "Drop set" : `Set ${setNumber}`;
     const load = `${saved.weight === null ? "BW" : `${formatWeight(saved.weight, units)} ${weightUnit(units)}`} × ${saved.reps ?? "—"}`;
+    // A record turns the toast gold: "PR Heaviest ever · 190 lb × 3" or "PR Best est. max · 233 lb".
+    const text = !record
+      ? `${what} logged · ${load}`
+      : record.kind === "weight"
+        ? `Heaviest ever · ${load}`
+        : `Best est. max · ${formatMax(record.value, units)} ${weightUnit(units)}`;
     setToast({
       id: saved.id,
-      text: `${what} logged · ${load}`,
+      text,
+      pr: !!record,
       onUndo: async () => {
         setToast(null);
         restoreDraft.current = { wexId: before.wexId, count: before.count, draft: before.draft };
@@ -1286,7 +1299,7 @@ function FinishSummary({
         <div className="flex items-center gap-2.5 rounded-2xl bg-primary/15 px-3 py-2.5 text-sm font-bold text-accent-soft">
           <PrBadge />
           <span>
-            {recordCount} {recordCount === 1 ? "record" : "records"}
+            <span className="text-gold">{recordCount} {recordCount === 1 ? "record" : "records"}</span>
             {upLine ? ` · ${upLine}` : ""}
           </span>
         </div>

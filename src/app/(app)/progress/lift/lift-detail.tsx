@@ -57,6 +57,8 @@ function LiftDetail({ id }: { id: string }) {
   const days = RANGES.find((r) => r.id === range)!.days;
   const shown = list.filter((s) => now - new Date(s.at).getTime() <= days * DAY);
   const value = (s: LiftSession) => (m === "e1rm" ? s.e1rm : m === "weight" ? s.topWeight : m === "volume" ? s.volume : s.bestReps);
+  // The session holding the all-time best for the metric on the chart: marked with a gold dot.
+  const recordAt = (m === "e1rm" ? rec.e1rm : m === "weight" ? rec.weight : m === "volume" ? rec.volume : rec.reps)?.at;
   const label = (s: LiftSession) =>
     m === "reps" ? `${s.bestReps} reps` : m === "volume" ? `${Math.round(toDisplayWeight(s.volume, units)).toLocaleString()} ${u}` : m === "weight" ? `${formatWeight(s.topWeight, units)} ${u} × ${s.topReps}` : `${formatMax(s.e1rm, units)} ${u}`;
   const metrics: { id: Metric; label: string }[] = bodyweight
@@ -70,12 +72,12 @@ function LiftDetail({ id }: { id: string }) {
       <div className="grid grid-cols-2 gap-2">
         {bodyweight ? (
           <>
-            <Record value={`${rec.reps?.value ?? 0}`} unit="reps" label="BEST SET" at={rec.reps?.at} />
+            <Record value={`${rec.reps?.value ?? 0}`} unit="reps" label="BEST SET" at={rec.reps?.at} gold />
             <Record value={String(list.length)} unit="" label="SESSIONS" at={list[list.length - 1].at} atLabel="last" />
           </>
         ) : (
           <>
-            <Record value={formatMax(rec.e1rm?.value ?? 0, units)} unit={u} label="BEST EST. MAX" at={rec.e1rm?.at} />
+            <Record value={formatMax(rec.e1rm?.value ?? 0, units)} unit={u} label="BEST EST. MAX" at={rec.e1rm?.at} gold />
             <Record value={formatWeight(rec.weight?.value ?? 0, units)} unit={u} label={`HEAVIEST × ${rec.weight?.reps ?? 0}`} at={rec.weight?.at} />
           </>
         )}
@@ -92,6 +94,7 @@ function LiftDetail({ id }: { id: string }) {
             ariaLabel={`${name}: ${metrics.find((x) => x.id === m)?.label} per session`}
             format={(v) => (m === "reps" ? String(Math.round(v)) : formatWeight(v, units).replace(/\.\d+$/, ""))}
             series={[{ name: metrics.find((x) => x.id === m)!.label, color: "var(--chart-1)", dots: shown.length <= 24 ? "all" : "end", points: shown.map((s) => ({ x: new Date(s.at).getTime(), y: value(s), label: label(s) })) }]}
+            record={recordAt ? new Date(recordAt).getTime() : undefined}
           />
         ) : (
           <p className="py-8 text-center text-sm font-medium text-muted">Nothing in this range.</p>
@@ -148,10 +151,11 @@ function setsText(s: LiftSession, units: Units) {
   return `${txt || "Drop sets only"}${drops ? ` · +${drops} drop` : ""}`;
 }
 
-function Record({ value, unit, label, at, atLabel }: { value: string; unit: string; label: string; at?: string; atLabel?: string }) {
+/** One all-time best. `gold`: the headline record, in the "earned" color. */
+function Record({ value, unit, label, at, atLabel, gold = false }: { value: string; unit: string; label: string; at?: string; atLabel?: string; gold?: boolean }) {
   return (
-    <div className="flex flex-col rounded-2xl bg-card p-3">
-      <span className="display text-4xl leading-none font-extrabold">
+    <div className={`flex flex-col rounded-2xl bg-card p-3 ${gold ? "ring-1 ring-gold/35 ring-inset" : ""}`}>
+      <span className={`display text-4xl leading-none font-extrabold ${gold ? "text-gold" : ""}`}>
         {value}{unit && <span className="ml-1 text-lg text-muted">{unit}</span>}
       </span>
       <span className="mt-1 text-xs font-bold tracking-[0.1em] text-muted">{label}</span>

@@ -53,9 +53,11 @@ export type LineSeries = { name: string; points: LinePoint[]; color: string; dot
  * series at the nearest date.
  */
 export function LineChart({
-  series, height = 200, format = (v) => fmtTick(v), xLabel = defaultXLabel, ariaLabel,
+  series, height = 200, format = (v) => fmtTick(v), xLabel = defaultXLabel, ariaLabel, record,
 }: {
   series: LineSeries[];
+  /** x of an all-time best on the first series: drawn as a gold dot with a soft halo, on top. */
+  record?: number;
   height?: number;
   format?: (v: number) => string;
   xLabel?: (t: number) => string;
@@ -136,6 +138,15 @@ export function LineChart({
               </g>
             );
           })}
+          {record !== undefined && (() => {
+            const p = series[0]?.points.find((q) => q.x === record);
+            return p ? (
+              <g pointerEvents="none">
+                <circle cx={sx(p.x)} cy={sy(p.y)} r={10} fill="var(--gold-soft)" />
+                <circle cx={sx(p.x)} cy={sy(p.y)} r={6} fill="var(--gold)" stroke="var(--card)" strokeWidth={2} />
+              </g>
+            ) : null;
+          })()}
         </svg>
       )}
       {ax !== null && rows.length > 0 && (

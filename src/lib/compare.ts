@@ -220,6 +220,27 @@ export function compareWorkout(args: {
 export const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 /** "+110 lb" / "−60 lb" in display units, or null at 0. */
+/**
+ * The live "New PR" toast: does the set just logged make a record, by the same rules as compareWorkout (heaviest
+ * ever, else a best estimated max 2.5% up), and beat every earlier set of this exercise today? The second check means
+ * the toast fires when a record is set or raised, not again for each set that ties it. None on a first session.
+ */
+export function setRecord(
+  history: Pick<LiftHistory, "bestWeight" | "best1RM"> | undefined,
+  earlierToday: Pick<CmpSet, "type" | "weight" | "reps">[],
+  set: Pick<CmpSet, "type" | "weight" | "reps">,
+): { kind: "weight" | "e1rm"; value: number } | null {
+  if (!history || (history.bestWeight <= 0 && history.best1RM <= 0)) return null;
+  if (set.type === "warmup" || !set.weight || !set.reps) return null;
+  const before = earlierToday.filter((s) => s.type !== "warmup" && s.weight && s.reps);
+  const topBefore = Math.max(0, ...before.map((s) => s.weight!));
+  if (set.weight > history.bestWeight && set.weight > topBefore) return { kind: "weight", value: set.weight };
+  if (set.weight > history.bestWeight) return null; // a heavier record is already set today; this set adds nothing
+  const e = bestE1rm([set]);
+  if (e >= history.best1RM * PR_MARGIN && e > bestE1rm(before)) return { kind: "e1rm", value: e };
+  return null;
+}
+
 export function volumeDeltaText(lb: number, units: Units) {
   const v = Math.round(toDisplayWeight(Math.abs(lb), units));
   if (v === 0) return null;

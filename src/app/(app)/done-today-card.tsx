@@ -102,7 +102,7 @@ export function DoneTodayCard({ workoutId, trainAgain, onTrainAgain }: { workout
         {hasBodyweightSets(sets) && <p className="-mt-1 text-xs font-semibold text-muted">{VOLUME_NOTE}</p>}
         {(records > 0 || notStarted > 0) && (
           <p className="text-sm font-semibold text-muted">
-            {records > 0 && <span className="text-accent-soft">{records} {records === 1 ? "record" : "records"}</span>}
+            {records > 0 && <span className="text-gold">{records} {records === 1 ? "record" : "records"}</span>}
             {records > 0 && notStarted > 0 && " · "}
             {notStarted > 0 && `${notStarted} ${notStarted === 1 ? "exercise" : "exercises"} not started`}
           </p>
