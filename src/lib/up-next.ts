@@ -1,6 +1,6 @@
 "use client";
 
-import { weekLabel } from "@/lib/plan-weeks";
+import { planFinishedAndDismissed, weekLabel } from "@/lib/plan-weeks";
 import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData } from "@/lib/db/provider";
@@ -83,10 +83,12 @@ export function useUpNext(): UpNext | null | undefined {
 
 function useGenerated(
   inputs: ReturnType<typeof useGeneratorInputs>,
-  plan: ReturnType<typeof useActivePlan>,
+  activePlan: ReturnType<typeof useActivePlan>,
   choice: UpNextChoice | null,
   loaded: boolean,
 ): Omit<UpNext, "baseSig" | "edited"> | null | undefined {
+  // A finished plan that was dismissed ("Skip for now") counts as no plan: Today builds from fresh muscles.
+  const plan = activePlan && planFinishedAndDismissed(activePlan.plan) ? null : activePlan;
   return useMemo((): Omit<UpNext, "baseSig" | "edited"> | null | undefined => {
     if (!inputs.ready || plan === undefined || !loaded) return undefined;
     const { catalog, profile, gymEquipment, prefs, recovery, lastDone } = inputs;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advancePlan, daysForWeek, sourceWeek, weekLabel, weekProgress } from "@/lib/plan-weeks";
+import { advancePlan, daysForWeek, planCopy, planFinishedAndDismissed, planRunStats, showPlanComplete, sourceWeek, weekLabel, weekProgress } from "@/lib/plan-weeks";
 import { sameFieldRuns } from "@/lib/db/sync";
 
 const day = (id: string, week: number | undefined, order: number) => ({ id, week, day_order: order });
@@ -77,5 +77,55 @@ describe("sync upserts rows in runs with the same fields", () => {
   it("splits where the fields change and keeps the order", () => {
     const runs = sameFieldRuns([{ id: 1, a: 1 }, { id: 2, a: 2 }, { id: 3, a: 3, b: 1 }, { id: 4, a: 4 }]);
     expect(runs.map((r) => r.map((x) => x.id))).toEqual([[1, 2], [3], [4]]);
+  });
+});
+
+describe("Plan complete (Batch 20c)", () => {
+  const rows = [
+    { id: "r1", plan_day_id: "a1", sort_order: 0 }, { id: "r2", plan_day_id: "a1", sort_order: 1 }, { id: "r3", plan_day_id: "a2", sort_order: 0 },
+    { id: "r4", plan_day_id: "b1", sort_order: 0 },
+  ];
+
+  it("shows once the plan is complete, until it's skipped, then Today goes back to fresh muscles", () => {
+    expect(showPlanComplete({ completed_at: null, completion_dismissed_at: null })).toBe(false);
+    expect(showPlanComplete({ completed_at: "x", completion_dismissed_at: null })).toBe(true);
+    expect(showPlanComplete({ completed_at: "x", completion_dismissed_at: "y" })).toBe(false);
+    expect(planFinishedAndDismissed({ completed_at: "x", completion_dismissed_at: "y" })).toBe(true);
+    expect(planFinishedAndDismissed({ completed_at: "x", completion_dismissed_at: null })).toBe(false);
+  });
+
+  it("counts workouts from this run and the planned days left undone; a restart's new start date drops the old run", () => {
+    const p = { weeks: 12, start_date: "2026-11-16", created_at: "2026-11-16T12:00:00Z" };
+    const done = [
+      { id: "w1", plan_day_id: "a1", ended_at: "2026-11-17T10:00:00Z" }, { id: "w2", plan_day_id: "b2", ended_at: "2026-11-25T10:00:00Z" },
+      { id: "w3", plan_day_id: "zzz", ended_at: "2026-11-25T10:00:00Z" }, { id: "w4", plan_day_id: "a2", ended_at: null },
+    ];
+    // 12 weeks × 2 days = 24 planned; 2 workouts belong to this plan.
+    expect(planRunStats(p, blocks, done)).toMatchObject({ workouts: 2, skipped: 22 });
+    expect(planRunStats(p, blocks, done).workoutIds).toEqual(new Set(["w1", "w2"]));
+    expect(planRunStats({ ...p, start_date: "2026-11-20" }, blocks, done).workouts).toBe(1);
+    expect(planRunStats({ ...p, weeks: 2 }, blocks, done).skipped).toBe(2);
+  });
+
+  it("copies a week's days and exercises with new ids, replacing the target's own", () => {
+    let n = 0;
+    const id = () => `n${++n}`;
+    // Week 3 repeats week 1; copying it into week 5 replaces week 5's own days (b1, b2).
+    const c = planCopy(blocks, rows, 3, 5, id)!;
+    expect(c.removeDays.map((d) => d.id)).toEqual(["b1", "b2"]);
+    expect(c.removeRows.map((r) => r.id)).toEqual(["r4"]);
+    expect(c.addDays.map((d) => [d.week, d.day_order])).toEqual([[5, 1], [5, 2]]);
+    expect(c.addRows).toHaveLength(3);
+    expect(c.addRows.map((r) => r.plan_day_id)).toEqual([c.addDays[0].id, c.addDays[0].id, c.addDays[1].id]);
+    expect(new Set([...c.addDays.map((d) => d.id), ...c.addRows.map((r) => r.id)]).size).toBe(5);
+  });
+
+  it("Make it different copies the week a week repeats; copying onto itself or from nothing does nothing", () => {
+    const c = planCopy(blocks, rows, 5, 5, () => "x");
+    expect(c).toBeNull();
+    const m = planCopy([day("a1", 1, 1)], rows, 4, 4, (() => { let i = 0; return () => `m${++i}`; })())!;
+    expect(m.removeDays).toEqual([]);
+    expect(m.addDays.map((d) => d.week)).toEqual([4]);
+    expect(planCopy([], rows, 2, 3, () => "x")).toBeNull();
   });
 });

@@ -94,3 +94,59 @@ export function advancePlan(
 
 /** "Week 3 of 8" or "Week 3". */
 export const weekLabel = (week: number, length: number | null) => (length ? `Week ${Math.min(week, length)} of ${length}` : `Week ${week}`);
+
+/** The plan finished its last week and the Plan complete screen hasn't been dismissed ("Skip for now"). */
+export const showPlanComplete = (p: Pick<Plan, "completed_at" | "completion_dismissed_at">) => Boolean(p.completed_at && !p.completion_dismissed_at);
+
+/** The plan finished and was dismissed: Today works as if no plan were active, with a "Plan finished" row. */
+export const planFinishedAndDismissed = (p: Pick<Plan, "completed_at" | "completion_dismissed_at">) => Boolean(p.completed_at && p.completion_dismissed_at);
+
+/** When this run of the plan began (Restart sets a new start date), so history from earlier runs isn't counted. */
+export function runStart(p: Pick<Plan, "start_date" | "created_at">): number {
+  return p.start_date ? new Date(`${p.start_date}T00:00:00`).getTime() : Date.parse(p.created_at);
+}
+
+/**
+ * Numbers for the Plan complete screen: workouts done from this plan since the run began, and planned days not done
+ * (skips aren't kept once a week moves on, so this is days planned minus workouts done, never below 0).
+ */
+export function planRunStats<T extends Pick<PlanDay, "id" | "week" | "day_order">>(
+  plan: Pick<Plan, "weeks" | "start_date" | "created_at">,
+  allDays: T[],
+  finished: (FinishedWorkout & { id?: string })[],
+): { workouts: number; skipped: number; workoutIds: Set<string> } {
+  const ids = new Set(allDays.map((d) => d.id));
+  const since = runStart(plan);
+  const mine = finished.filter((w) => w.plan_day_id && w.ended_at && ids.has(w.plan_day_id) && Date.parse(w.ended_at) >= since);
+  let planned = 0;
+  const length = Math.min(plan.weeks && plan.weeks > 1 ? plan.weeks : 1, 52);
+  for (let w = 1; w <= length; w++) planned += daysForWeek(allDays, w).length;
+  return { workouts: mine.length, skipped: Math.max(0, planned - mine.length), workoutIds: new Set(mine.map((w) => w.id).filter((x): x is string => Boolean(x))) };
+}
+
+
+/**
+ * What copying week `from`'s workouts into week `to` changes: the target's own days and exercises go, and copies of the
+ * source week's days (new ids) take their place. Null when there's nothing to copy or the week copies onto itself.
+ */
+export function planCopy<D extends Pick<PlanDay, "id" | "week" | "day_order">, R extends { id: string; plan_day_id: string; sort_order: number }>(
+  days: D[],
+  rows: R[],
+  from: number,
+  to: number,
+  newId: () => string,
+): { removeDays: D[]; removeRows: R[]; addDays: D[]; addRows: R[] } | null {
+  const src = sourceWeek(days, from);
+  if (src === null || src === to || to < 1) return null;
+  const fromDays = days.filter((d) => dayWeek(d) === src).sort((a, b) => a.day_order - b.day_order);
+  const removeDays = days.filter((d) => dayWeek(d) === to);
+  const gone = new Set(removeDays.map((d) => d.id));
+  const addDays: D[] = [];
+  const addRows: R[] = [];
+  for (const d of fromDays) {
+    const id = newId();
+    addDays.push({ ...d, id, week: to });
+    for (const r of rows.filter((x) => x.plan_day_id === d.id).sort((a, b) => a.sort_order - b.sort_order)) addRows.push({ ...r, id: newId(), plan_day_id: id });
+  }
+  return { removeDays, removeRows: rows.filter((r) => gone.has(r.plan_day_id)), addDays, addRows };
+}

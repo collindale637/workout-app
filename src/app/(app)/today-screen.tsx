@@ -6,7 +6,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useActiveGym, useOpenWorkout } from "@/lib/hooks";
 import { useHistory } from "@/lib/history";
-import { useWeeklyTarget } from "@/lib/smart";
+import { useActivePlan, useWeeklyTarget } from "@/lib/smart";
+import { planFinishedAndDismissed, showPlanComplete } from "@/lib/plan-weeks";
+import { PlanComplete, PlanFinishedRow } from "./plan-complete";
 import { useNow } from "@/lib/use-now";
 import { useCardioTimer } from "@/lib/cardio-timer";
 import { cardioElapsedSec, cardioLabel } from "@/lib/cardio";
@@ -57,6 +59,7 @@ export function TodayScreen() {
   const doneToday = useDoneToday();
   const trainAgain = useTrainAgain();
   const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
+  const activePlan = useActivePlan();
 
   // Below the workout card: quick cardio and the gym nudge.
   const rest = (
@@ -70,6 +73,9 @@ export function TodayScreen() {
     </>
   );
 
+  // The plan's last week is done: Plan complete takes over Today until you restart, pick a new plan or skip it.
+  if (activePlan && showPlanComplete(activePlan.plan) && !open) return <PlanComplete />;
+
   return (
     <main className="mt-4 flex flex-col gap-4">
       <header className="flex h-11 items-center justify-between gap-3">
@@ -81,6 +87,8 @@ export function TodayScreen() {
       </header>
 
       <SyncBadge />
+
+      {activePlan && planFinishedAndDismissed(activePlan.plan) && <PlanFinishedRow />}
 
       <section aria-label="This week" className="flex flex-col gap-2">
         <div className="flex justify-between text-xs font-bold tracking-[0.1em] text-muted">
