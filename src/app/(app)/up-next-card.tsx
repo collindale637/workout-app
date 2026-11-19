@@ -733,6 +733,9 @@ function useExerciseSheet() {
     wrapFrom.current = null;
     const el = sheetRef.current;
     const h = headerEl.current;
+    // Minimized rests with exactly its header showing. Use the header's height now (the chip row just hid), not the
+    // one measured before the change, or the sheet sits a row off and jumps when the stored height catches up.
+    if (el && h && mode === "min") el.style.transform = restingTransform("min", h.offsetHeight);
     if (from === null || !el || !h || reduced()) return;
     // Where the sheet ends up: measured before any animation starts, since that changes the layout.
     const top = h.getBoundingClientRect().top;
@@ -757,9 +760,10 @@ function useExerciseSheet() {
     // Midway, the sheet sits in the page under the card, so the card's shrinking already carries it part of the way.
     const d = from - top - (mode === "default" ? cardShrink : 0);
     if (Math.abs(d) < 1) return;
-    const hh = h.offsetHeight;
-    const ph = el.offsetHeight;
-    el.animate([{ transform: restingTransform(mode, hh, d, ph) }, { transform: restingTransform(mode, hh, 0, ph) }], SLIDE);
+    // Only the offset from the resting spot is animated, on the separate `translate` property, so the end point is
+    // always wherever the sheet really rests. (Animating the whole transform landed a header-height too low on iPhone,
+    // then jumped up when the animation ended.)
+    el.animate([{ translate: `0 ${d}px` }, { translate: "0 0" }], SLIDE);
   }, [mode]);
 
   // Expanded: freeze the page behind, Escape shrinks it, and the Cardio button lands on the quick cardio tiles.
@@ -873,13 +877,13 @@ function useExerciseSheet() {
       if (d.dy > 24 && ni <= ci) next = ORDER[Math.min(ORDER.length - 1, ci + 1)];
       if (next !== cur) {
         setMode(next); // measures the header where it was let go, then slides on from there
-        el.style.transform = next === "min" ? restingTransform("min", hh) : "";
+        // Clear the drag offset; the new position's resting spot is set when it renders (see the layout effect).
+        el.style.transform = "";
         return;
       }
       // Same position: settle back where it was.
       el.style.transform = cur === "min" ? restingTransform("min", hh) : "";
-      const ph = el.offsetHeight;
-      if (!reduced()) el.animate([{ transform: restingTransform(cur, hh, d.dy, ph) }, { transform: restingTransform(cur, hh, 0, ph) }], { duration: 240, easing: "ease-out" });
+      if (!reduced()) el.animate([{ translate: `0 ${d.dy}px` }, { translate: "0 0" }], { duration: 240, easing: "ease-out" });
     },
     onPointerCancel: () => {
       const d = drag.current;
