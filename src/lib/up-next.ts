@@ -9,6 +9,9 @@ import { recoveryScores, useActivePlan, useGeneratorInputs, type ActivePlan } fr
 import { todayIso } from "@/lib/plans";
 import { lighterItems, lighterMinutes } from "@/lib/today-alt";
 import type { PlanDay } from "@/lib/db/types";
+import { applyEdits, type UpNextEdits } from "@/lib/up-next-edits";
+
+export { applyEdits, itemsSignature, type UpNextEdits } from "@/lib/up-next-edits";
 
 /*
   What Today's "Up next" card shows. The choice lives on the phone (meta "upNext") and resets each day:
@@ -27,6 +30,7 @@ export type AiPick = { name: string; summary: string; items: GenItem[]; planDayI
  */
 export type UpNextChoice = {
   date: string; mode: UpNextMode; dayId?: string | null; muscles?: string[]; seed: number; ai?: AiPick; via?: "switch"; light?: boolean;
+  edits?: UpNextEdits;
 };
 
 export type UpNext = {
@@ -42,6 +46,10 @@ export type UpNext = {
   source: "plan" | "generated" | "ai";
   /** "Go lighter" (plan mode): lifts capped at 2 sets; minutes is the estimate for the shorter session. */
   light?: { minutes: number };
+  /** Signature of the list before your edits (what `edits.base` must match). */
+  baseSig: string;
+  /** True when the items include your changes from Today's list. */
+  edited: boolean;
 };
 
 export function useUpNextChoice() {
@@ -68,8 +76,17 @@ export function useUpNext(): UpNext | null | undefined {
   const inputs = useGeneratorInputs();
   const plan = useActivePlan();
   const { choice, loaded } = useUpNextChoice();
+  const generated = useGenerated(inputs, plan, choice, loaded);
+  return useMemo(() => (generated ? applyEdits(generated, choice?.edits) : generated), [generated, choice?.edits]);
+}
 
-  return useMemo(() => {
+function useGenerated(
+  inputs: ReturnType<typeof useGeneratorInputs>,
+  plan: ReturnType<typeof useActivePlan>,
+  choice: UpNextChoice | null,
+  loaded: boolean,
+): Omit<UpNext, "baseSig" | "edited"> | null | undefined {
+  return useMemo((): Omit<UpNext, "baseSig" | "edited"> | null | undefined => {
     if (!inputs.ready || plan === undefined || !loaded) return undefined;
     const { catalog, profile, gymEquipment, prefs, recovery, lastDone } = inputs;
     if (!catalog || !profile || !recovery) return undefined;
