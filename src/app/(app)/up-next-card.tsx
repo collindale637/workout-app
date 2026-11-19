@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
-import { useWorkoutActions } from "@/lib/workout";
+import { repairSupersets, useWorkoutActions } from "@/lib/workout";
 import { suggestionFor, useGeneratorInputs, useLastSets, useStartingProfile } from "@/lib/smart";
 import { formatWait, groupReadiness, READY_AVG } from "@/lib/readiness";
 import { pickAlternative } from "@/lib/today-alt";
@@ -14,6 +14,9 @@ import { doseLabel, suggestionLabel, supersetLetter } from "@/components/planned
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { Sheet, btn } from "@/components/ui/kit";
 import { ExerciseInfo } from "@/components/exercise-info";
+import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
+import { NotesForm, RowIcon, SmartExercisePicker } from "@/components/exercise-actions";
+import type { GenItem } from "@/lib/generator";
 import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 import { TODAY_TOP_EVENT } from "./today-cardio";
 
@@ -51,6 +54,9 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const [aiOpen, setAiOpen] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
   const [showSwaps, setShowSwaps] = useState(false);
+  // Today-list edits: which row's notes or swap picker is open (by row key).
+  const [notesFor, setNotesFor] = useState<string | null>(null);
+  const [swapFor, setSwapFor] = useState<string | null>(null);
   const { recovery } = useGeneratorInputs();
   const { mode, cardRef, sheetRef, headerRef, restRef, cardH, headerH, handleProps, openCardio } = useExerciseSheet();
 
@@ -138,6 +144,76 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
       ? up.targets.map((m) => ({ id: m, name: catalog.muscleName.get(m) ?? m, score: Math.round(recovery.map.get(m)?.score ?? 100) }))
       : [];
   const muscleChips = up.targets.map((m) => catalog.muscleName.get(m) ?? m);
+
+  // ---- Editing the list before you start: drag to reorder, swipe left for Swap / How-to / Notes / Remove. ----
+  // Each row gets a stable key (the exercise, plus a count if it appears twice).
+  const keyed = up.items.map((it, i) => ({ it, key: `${it.exercise_id}~${up.items.slice(0, i).filter((x) => x.exercise_id === it.exercise_id).length}` }));
+  const byKey = new Map(keyed.map((k) => [k.key, k.it]));
+  // Saved with today's choice; regenerating or changing the workout starts fresh (see UpNextEdits).
+  const saveItems = (items: GenItem[]) => {
+    const groups = repairSupersets(items.map((i) => i.superset_group));
+    return setChoice({
+      ...choice,
+      mode: up.mode,
+      dayId: up.mode === "plan" ? (up.day?.id ?? null) : (choice?.dayId ?? null),
+      seed: up.seed,
+      edits: { base: up.baseSig, items: items.map((i, n) => ({ ...i, superset_group: groups[n] })) },
+    });
+  };
+  const updateItem = (key: string, patch: Partial<GenItem>) => saveItems(keyed.map((k) => (k.key === key ? { ...k.it, ...patch } : k.it)));
+  const undoEdits = () => setChoice({ ...choice, mode: up.mode, seed: up.seed, edits: undefined });
+  const rowActions = (key: string, exerciseId: string): RowAction[] => [
+    { key: "swap", label: "Swap", icon: <RowIcon name="swap" />, className: "bg-primary text-white", onPress: () => setSwapFor(key) },
+    { key: "how", label: "How-to", icon: <RowIcon name="how" />, className: "bg-[#2a3150] text-white", onPress: () => setViewing(exerciseId) },
+    { key: "notes", label: "Notes", icon: <RowIcon name="notes" />, className: "bg-[#3b4a8c] text-white", onPress: () => setNotesFor(key) },
+    { key: "remove", label: "Remove", icon: <RowIcon name="remove" />, className: "bg-danger text-white", onPress: () => void saveItems(keyed.filter((k) => k.key !== key).map((k) => k.it)) },
+  ];
+  const listItems: ReorderItem[] = keyed.map(({ it, key }, i) => {
+    const s =
+      catalog.byId.get(it.exercise_id)?.category === "cardio"
+        ? undefined
+        : suggestionFor(catalog, it.exercise_id, lastSets?.get(it.exercise_id), it.rep_min, it.rep_max, gym ? equipmentRows : null, who);
+    const sLabel = suggestionLabel(s, units);
+    const linkedAbove = i > 0 && it.superset_group !== null && up.items[i - 1].superset_group === it.superset_group;
+    return {
+      id: key,
+      ariaLabel: `${name(it.exercise_id)}. Tap for how-to. Swipe left for options. Hold to drag.`,
+      liClassName: linkedAbove ? "-mt-2" : "",
+      before: linkedAbove ? <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" /> : undefined,
+      faceClassName: "flex min-h-16 items-center rounded-[14px] bg-card-2 py-2 pr-2 pl-4 ring-1 ring-[#262d49] ring-inset",
+      onTap: () => setViewing(it.exercise_id),
+      face: (
+        <>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-base font-bold">
+              {it.superset_group !== null && <span className="mr-1.5 text-accent">{supersetLetter(it.superset_group)}</span>}
+              {name(it.exercise_id)}
+            </span>
+            <span className="truncate text-sm font-medium text-muted">
+              {doseLabel(catalog, it)}
+              {showSwaps && wasFrom.has(it.exercise_id) && <span className="text-accent-soft"> · ⇄ was {name(wasFrom.get(it.exercise_id)!)}</span>}
+              {it.notes && <span className="text-accent-soft"> · {it.notes}</span>}
+            </span>
+          </span>
+          {sLabel &&
+            (s?.change === "new" ? (
+              <span className="shrink-0 text-sm font-semibold text-muted" title="First time: find a comfortable working weight">{sLabel}</span>
+            ) : (
+              <span className={`display num shrink-0 text-base font-extrabold ${s?.change === "up" ? "text-good" : "text-ink"}`}>{sLabel}</span>
+            ))}
+        </>
+      ),
+      // Hint that the row can be held and dragged (same grip as the workout list).
+      trailing: (
+        <svg className="ml-2 shrink-0 text-[#454d6e]" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+        </svg>
+      ),
+      actions: rowActions(key, it.exercise_id),
+    };
+  });
+  const swapItem = swapFor ? byKey.get(swapFor) : undefined;
+  const notesItem = notesFor ? byKey.get(notesFor) : undefined;
 
   return (
     <>
@@ -345,6 +421,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
                 <span className={chipOutline}>Set up a plan →</span>
               </Link>
             )}
+            {up.edited && <ChipButton onClick={() => void undoEdits()}>↺ Undo changes</ChipButton>}
             {muscleChips.map((m) => (
               <span key={m} className="flex h-8 shrink-0 items-center rounded-full bg-primary/15 px-3 text-sm font-semibold whitespace-nowrap text-accent-soft">
                 {m}
@@ -360,42 +437,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
             Nothing at {gym?.name ?? "this gym"} trains these muscles. Tap Change to pick others, or add equipment under More → Gyms.
           </p>
         ) : (
-          <ul className="divide-y divide-line">
-            {up.items.map((it, i) => {
-              const s =
-                catalog.byId.get(it.exercise_id)?.category === "cardio"
-                  ? undefined
-                  : suggestionFor(catalog, it.exercise_id, lastSets?.get(it.exercise_id), it.rep_min, it.rep_max, gym ? equipmentRows : null, who);
-              const sLabel = suggestionLabel(s, units);
-              return (
-                <li key={`${it.exercise_id}-${i}`}>
-                  <button
-                    type="button"
-                    onClick={() => setViewing(it.exercise_id)}
-                    aria-label={`View ${name(it.exercise_id)}`}
-                    className="flex min-h-14 w-full items-center justify-between gap-3 py-1.5 text-left active:opacity-70"
-                  >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-base font-bold">
-                      {it.superset_group !== null && <span className="mr-1.5 text-accent">{supersetLetter(it.superset_group)}</span>}
-                      {name(it.exercise_id)}
-                    </span>
-                    <span className="text-sm font-medium text-muted">
-                      {doseLabel(catalog, it)}
-                      {showSwaps && wasFrom.has(it.exercise_id) && <span className="text-accent-soft"> · ⇄ was {name(wasFrom.get(it.exercise_id)!)}</span>}
-                    </span>
-                  </span>
-                  {sLabel &&
-                    (s?.change === "new" ? (
-                      <span className="shrink-0 text-sm font-semibold text-muted" title="First time: find a comfortable working weight">{sLabel}</span>
-                    ) : (
-                      <span className={`display num shrink-0 text-base font-extrabold ${s?.change === "up" ? "text-good" : "text-ink"}`}>{sLabel}</span>
-                    ))}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <ReorderList items={listItems} onReorder={(ids) => void saveItems(ids.map((id) => byKey.get(id)!).filter(Boolean))} />
         )}
         {showSwaps && dropped.length > 0 && (
           <p className="pt-2 text-sm font-medium text-muted">Not available at {gym?.name ?? "this gym"}: {dropped.map((s) => name(s.from)).join(", ")}</p>
@@ -409,6 +451,37 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
 
       <Sheet open={viewing !== null} onClose={() => setViewing(null)} title={viewing ? name(viewing) : undefined}>
         {viewing && <ExerciseInfo catalog={catalog} id={viewing} gymEquipment={gym ? equipment : null} gymName={gym?.name} />}
+      </Sheet>
+
+      <Sheet open={swapItem !== undefined} onClose={() => setSwapFor(null)} title="Swap for…">
+        {swapItem && swapFor && (
+          <SmartExercisePicker
+            mode="swap"
+            swapFrom={swapItem.exercise_id}
+            fromIsCardio={catalog.byId.get(swapItem.exercise_id)?.category === "cardio"}
+            gymEquipment={gym ? equipment : null}
+            gymName={gym?.name}
+            excludeIds={up.items.map((i) => i.exercise_id)}
+            today={{ name: up.title, items: up.items.map((i) => ({ exercise_id: i.exercise_id, sets_done: 0, sets_planned: i.sets })) }}
+            initialMuscles={(catalog.musclesOf.get(swapItem.exercise_id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id)}
+            onPick={async (ids) => {
+              if (ids[0]) await updateItem(swapFor, { exercise_id: ids[0] });
+              setSwapFor(null);
+            }}
+          />
+        )}
+      </Sheet>
+
+      <Sheet open={notesItem !== undefined} onClose={() => setNotesFor(null)} title="Exercise notes">
+        {notesItem && notesFor && (
+          <NotesForm
+            initial={notesItem.notes}
+            onSave={async (text) => {
+              await updateItem(notesFor, { notes: text });
+              setNotesFor(null);
+            }}
+          />
+        )}
       </Sheet>
 
       <Sheet open={options} onClose={() => setOptions(false)} title="What to train today">
