@@ -27,6 +27,9 @@ const SHEET_DOWN: Record<SheetMode, SheetMode> = { min: "min", default: "min", m
 /** How far the sheet's rounded top tucks over the bottom of the blue card. */
 const TUCK = 16;
 const STICKY_TOP = "calc(env(safe-area-inset-top) + 8px)";
+/** Height of the slim PULL + Start bar (below the safe area): the sheet's header pins just under it. */
+const BAR_H = 64 + 12;
+const SHEET_TOP = `calc(env(safe-area-inset-top) + ${BAR_H}px)`;
 
 /**
  * Today's suggested workout: the next plan day, your freshest muscles, or muscles you picked.
@@ -58,7 +61,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<string | null>(null);
   const { recovery } = useGeneratorInputs();
-  const { mode, cardRef, sheetRef, headerRef, restRef, cardH, headerH, handleProps, openCardio } = useExerciseSheet();
+  const { mode, covered, sheetRef, headerRef, restRef, headerH, handleProps, openCardio } = useExerciseSheet();
 
   if (up === undefined || !catalog || !profile) {
     return (
@@ -217,11 +220,11 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
 
   return (
     <>
-      {/* Keeps the list from showing above the pinned card, under the status bar. */}
-      {mode === "default" && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-10 mx-auto w-full max-w-md bg-bg" style={{ height: STICKY_TOP }} />}
+      {/* Keeps the greeting from showing behind the status bar while the card is pinned. */}
+      {mode === "default" && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[5] mx-auto w-full max-w-md bg-bg" style={{ height: STICKY_TOP }} />}
+      {/* The card pins at the top; scrolling on, the sheet slides up over it. */}
       <section
-        ref={cardRef}
-        className={`flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white ${mode === "default" ? "sticky z-10" : ""}`}
+        className={`flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white ${mode === "default" ? "sticky" : ""}`}
         style={mode === "default" ? { top: STICKY_TOP } : undefined}
       >
         <div className="flex items-center justify-between gap-2">
@@ -339,9 +342,15 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         )}
       </section>
 
-      {mode === "max" && (
-        // Expanded: the card turns into a slim bar so Start is never out of reach.
-        <div className="fixed inset-x-0 top-0 z-[25] mx-auto w-full max-w-md bg-primary px-5 text-white" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      {(mode === "max" || mode === "default") && (
+        // Once the sheet covers the card (scrolled up, or expanded) the card shows as a slim bar, so Start stays in reach.
+        <div
+          aria-hidden={mode === "default" && !covered}
+          className={`fixed inset-x-0 top-0 z-[25] mx-auto w-full max-w-md bg-primary px-5 text-white transition-[opacity,transform] duration-200 ${
+            mode === "max" || covered ? "opacity-100" : "pointer-events-none -translate-y-2 opacity-0"
+          }`}
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
+        >
           <div className="flex h-16 items-center gap-3 pb-1" style={{ marginBottom: TUCK + 12 }}>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="display truncate text-[28px] leading-none font-extrabold">{up.title}</span>
@@ -351,6 +360,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
               type="button"
               onClick={go}
               disabled={starting || !up.items.length}
+              tabIndex={mode === "default" && !covered ? -1 : undefined}
               className="display flex h-11 shrink-0 items-center gap-2 rounded-full bg-white px-5 text-lg font-extrabold tracking-[0.08em] text-primary disabled:opacity-60"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z" /></svg>
@@ -367,7 +377,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         aria-label="Today's exercises"
         className={
           mode === "default"
-            ? "relative -mx-5 bg-card"
+            ? "relative z-10 -mx-5 rounded-t-[28px] bg-card shadow-[0_-12px_30px_rgba(0,0,0,0.35)]"
             : mode === "min"
               ? "fixed inset-x-0 z-30 mx-auto w-full max-w-md rounded-t-[28px] bg-card shadow-[0_-12px_30px_rgba(0,0,0,0.4)]"
               : "fixed inset-x-0 z-30 mx-auto w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] bg-card"
@@ -377,13 +387,13 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
             ? { marginTop: -(16 + TUCK), marginBottom: "-7rem", paddingBottom: "7rem" }
             : mode === "min"
               ? { bottom: "var(--nav-h)" }
-              : { top: `calc(env(safe-area-inset-top) + ${64 + 12}px)`, bottom: "var(--nav-h)" }
+              : { top: SHEET_TOP, bottom: "var(--nav-h)" }
         }
       >
         <div
           ref={headerRef}
-          className={`rounded-t-[28px] bg-card px-5 pb-2 ${mode === "default" ? "sticky z-30 shadow-[0_-12px_24px_rgba(0,0,0,0.3)]" : mode === "max" ? "sticky top-0 z-10" : ""}`}
-          style={mode === "default" ? { top: `calc(${STICKY_TOP} + ${cardH - TUCK}px)` } : undefined}
+          className={`rounded-t-[28px] bg-card px-5 pb-2 ${mode === "default" ? "sticky z-20" : mode === "max" ? "sticky top-0 z-10" : ""}`}
+          style={mode === "default" ? { top: SHEET_TOP } : undefined}
         >
           <button
             type="button"
@@ -605,8 +615,9 @@ function ChipButton({ active, onClick, children }: { active?: boolean; onClick: 
 
 /**
  * The exercise sheet under the Up next card. Three positions:
- * - default: in the page right under the card. The card pins to the top and the sheet's header pins under it, so one
- *   scroll moves the greeting, week strip and weigh-in away first and then the list (all native scrolling).
+ * - default: in the page right under the card. Scrolling moves the greeting, week strip and weigh-in away, the card
+ *   pins at the top, and the sheet slides up over it until its header pins under the slim PULL + Start bar (all native
+ *   scrolling; `covered` turns the slim bar on).
  * - min: only the header, as a bar above the tabs; the card shows readiness by muscle in the room it frees.
  * - max: full height with its own scrolling; the card becomes a slim bar with Start.
  * Drag or tap the handle to move between them. Changes slide from where the sheet was (a small FLIP animation).
@@ -619,7 +630,8 @@ function useExerciseSheet() {
   const sheetRef = useRef<HTMLElement>(null);
   const headerEl = useRef<HTMLDivElement | null>(null);
   const restRef = useRef<HTMLDivElement>(null);
-  const [cardH, setCardH] = useState(0);
+  // Default position: true once the sheet has slid up over the card and its header is pinned under the slim bar.
+  const [covered, setCovered] = useState(false);
   const [headerH, setHeaderH] = useState(0);
   const flipFrom = useRef<number | null>(null);
   const toCardio = useRef(false);
@@ -640,13 +652,7 @@ function useExerciseSheet() {
     setModeLatest.current = setMode;
   });
 
-  // The card's height decides where the sheet's header pins; the header's height is the minimized bar's footprint.
-  const cardRef = (el: HTMLElement | null) => {
-    if (!el) return;
-    const ro = new ResizeObserver(() => setCardH(el.offsetHeight));
-    ro.observe(el);
-    return () => ro.disconnect();
-  };
+  // The header's height is the minimized bar's footprint.
   const headerRef = (el: HTMLDivElement | null) => {
     headerEl.current = el;
     if (!el) return;
@@ -654,6 +660,29 @@ function useExerciseSheet() {
     ro.observe(el);
     return () => ro.disconnect();
   };
+
+  // While the header is pinned the sheet's own top has scrolled above it: that's when the slim bar shows.
+  useEffect(() => {
+    if (mode !== "default") return;
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const s = sheetRef.current?.getBoundingClientRect().top;
+      const h = headerEl.current?.getBoundingClientRect().top;
+      if (s !== undefined && h !== undefined) setCovered(s < h - 0.5);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [mode]);
 
   const scrollToCardio = useCallback(() => {
     const s = sheetRef.current;
@@ -749,5 +778,5 @@ function useExerciseSheet() {
     },
   };
 
-  return { mode, cardRef, sheetRef, headerRef, restRef, cardH, headerH, handleProps, openCardio };
+  return { mode, covered: mode === "default" && covered, sheetRef, headerRef, restRef, headerH, handleProps, openCardio };
 }
