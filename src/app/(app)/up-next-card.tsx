@@ -766,6 +766,15 @@ function useExerciseSheet() {
     el.animate([{ translate: `0 ${d}px` }, { translate: "0 0" }], SLIDE);
   }, [mode]);
 
+  // Minimized: keep the page taller than the screen (see .sheet-min in globals.css). Before paint, so the page never
+  // has a frame where it's shorter.
+  useLayoutEffect(() => {
+    if (mode !== "min") return;
+    const html = document.documentElement;
+    html.classList.add("sheet-min");
+    return () => html.classList.remove("sheet-min");
+  }, [mode]);
+
   // Expanded: freeze the page behind, Escape shrinks it, and the Cardio button lands on the quick cardio tiles.
   useEffect(() => {
     if (mode !== "max") return;
