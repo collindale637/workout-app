@@ -306,7 +306,7 @@ export function AiPlanScreen() {
 
       {shownError && <AiProblem>{shownError}</AiProblem>}
       <button type="button" className={btn.primary} disabled={editing && !text.trim()} onClick={() => ask(false)}>
-        <Sparkle /> {editing ? "Propose changes" : "Build my plan"}
+        <Sparkle onCobalt /> {editing ? "Propose changes" : "Build my plan"}
       </button>
       <AiUsageNote usage={(result && result.ok ? result.usage : null) ?? usage} />
     </main>

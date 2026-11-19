@@ -30,8 +30,9 @@
   --done: var(--good); /* the finished check: same green as weight increases */
   --done-ink: #062414; /* the check mark drawn on --done */
   --band-sky: #5aa9ff; /* quick-cardio band 1 */
-  --band-run: #ff7ac6; /* quick-cardio Run: pink, so it stands apart from the blue Walk, green Bike and teal Cardio pill */
-  --ai: #c4a1ff; /* the sparkle on "Build with AI": violet, since gold is for earned things and orange for warnings */
+  --band-run: #f4e04d; /* quick-cardio Run: lemon yellow. Deliberately paler than --gold (#ffc533), which is for "earned" things only */
+  --ai: #c4a1ff; /* every AI sparkle: violet, since gold is for earned things and orange for warnings */
+  --ai-bright: #c4a1ff; /* the same violet for sparkles on cobalt fills (primary buttons, the Up next card); does not darken in light mode */
   --cardio-soft: #7fe8d8; /* the Cardio pill on Today's exercise sheet: teal text on a teal tint */
   /* Gold, the logo's slash, means "earned": PR badges, trophies, records. Nothing else is gold, so it stays a reward.
      Not for buttons, links, tabs or warnings (orange). */
@@ -76,6 +77,7 @@
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-ai: var(--ai);
+  --color-ai-bright: var(--ai-bright);
   --color-teal: var(--cardio-soft);
   --color-gold: var(--gold);
   --color-gold-ink: var(--gold-ink);

@@ -392,7 +392,7 @@ export function ImportScreen() {
 
       {error && <AiProblem>{error}</AiProblem>}
       <button type="button" className={btn.primary} disabled={!text.trim() && !photos.length && !pdf} onClick={read}>
-        <Sparkle /> Read my plan
+        <Sparkle onCobalt /> Read my plan
       </button>
       <AiUsageNote usage={usage} />
     </main>

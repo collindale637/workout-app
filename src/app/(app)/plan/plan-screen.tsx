@@ -44,7 +44,7 @@ export function PlanScreen() {
         <h2 className="display text-xl font-extrabold">With AI</h2>
         <Card className="divide-y divide-line overflow-hidden">
           <Link href="/plan/ai" className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
-            <Sparkle size={22} className="shrink-0 text-ai" />
+            <Sparkle size={22} className="shrink-0" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-base font-bold">Build with AI</span>
               <span className={`text-sm font-medium ${aiLine ? "text-accent" : "text-muted"}`}>{aiLine ?? "Describe what you want, get a full plan for your gym"}</span>
