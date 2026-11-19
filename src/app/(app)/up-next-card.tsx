@@ -60,6 +60,29 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const [swapFor, setSwapFor] = useState<string | null>(null);
   const { recovery } = useGeneratorInputs();
   const { mode, cardRef, sheetRef, headerRef, bodyRef, restRef, headerH, dragProps, cycle, openCardio } = useExerciseSheet();
+  // Minimized, the card lists readiness per muscle with bars. On a short phone that would run under the sheet, so it
+  // falls back to the compact three-column list. Checked whenever the card's size changes (which also covers
+  // switching position or workout) and reset when the window changes size.
+  const [compactMuscles, setCompactMuscles] = useState(false);
+  const cardReady = up != null && !!catalog && !!profile;
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const check = () => {
+      if (!card.querySelector("[data-muscles]")) return setCompactMuscles(false);
+      const header = sheetRef.current?.firstElementChild as HTMLElement | null;
+      const sheetTop = window.innerHeight - cssPx("var(--nav-h)") - (header?.offsetHeight ?? 0);
+      setCompactMuscles((was) => was || card.getBoundingClientRect().bottom + 6 > sheetTop);
+    };
+    const reset = () => setCompactMuscles(false);
+    const ro = new ResizeObserver(check);
+    ro.observe(card);
+    window.addEventListener("resize", reset);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", reset);
+    };
+  }, [cardReady, cardRef, sheetRef]);
 
   if (up === undefined || !catalog || !profile) {
     return (
@@ -256,15 +279,32 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
               </p>
             )}
             {muscleRows.length > 0 && (
-              // Three compact columns so the card stays short enough to sit fully above the minimized sheet.
-              <ul data-muscles className="grid grid-cols-3 gap-x-3 gap-y-0.5 border-t border-white/15 pt-2" aria-label="Readiness by muscle">
-                {muscleRows.map((r) => (
-                  <li key={r.id} className="flex min-w-0 items-baseline justify-between gap-1 text-[13px] font-semibold text-[#DCE4FF]">
-                    <span className="truncate">{r.name}</span>
-                    <span className={`num shrink-0 ${r.score >= READY_AVG ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
-                  </li>
-                ))}
-              </ul>
+              // Name, percent and a bar for each muscle (the earlier layout) in two columns. When that won't fit above the
+              // sheet (short phone, or more than six muscles) it drops to three compact columns without bars.
+              muscleRows.length > 6 || compactMuscles ? (
+                <ul data-muscles className="grid grid-cols-3 gap-x-3 gap-y-0.5 border-t border-white/15 pt-2" aria-label="Readiness by muscle">
+                  {muscleRows.map((r) => (
+                    <li key={r.id} className="flex min-w-0 items-baseline justify-between gap-1 text-[13px] font-semibold text-[#DCE4FF]">
+                      <span className="truncate">{r.name}</span>
+                      <span className={`num shrink-0 ${r.score >= READY_AVG ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <ul data-muscles className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-white/15 pt-2.5" aria-label="Readiness by muscle">
+                  {muscleRows.map((r) => (
+                    <li key={r.id} className="flex min-w-0 flex-col gap-1 text-[13px] leading-none font-semibold text-[#DCE4FF]">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate">{r.name}</span>
+                        <span className="num shrink-0 text-white">{r.score}%</span>
+                      </span>
+                      <span className="h-1.5 rounded-full bg-white/20">
+                        <span className={`block h-full rounded-full ${r.score >= READY_AVG ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, r.score)}%` }} />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )
             )}
           </div>
         )}
@@ -619,8 +659,9 @@ type Drag = { id: number; x: number; y: number; dy: number; active: boolean; las
  * it further). Tap the handle to step min → default → max → default. Changes slide from where the sheet was (FLIP).
  */
 function useExerciseSheet() {
-  const [mode, setModeState] = useState<SheetMode>("default");
-  const modeRef = useRef<SheetMode>("default");
+  // Today opens minimized: the card and the top of the page get the room, the list is one swipe up.
+  const [mode, setModeState] = useState<SheetMode>("min");
+  const modeRef = useRef<SheetMode>("min");
   const sheetRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLElement>(null);
   const headerEl = useRef<HTMLDivElement | null>(null);
