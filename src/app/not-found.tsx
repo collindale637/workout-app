@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { APP_NAME } from "@/lib/app";
+import { RepsLogo } from "@/components/logo";
 
 export const metadata = { title: "Page not found" };
 
 export default function NotFound() {
   return (
     <main className="safe-top safe-bottom mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center gap-5 px-5 text-center">
-      <span className="display text-xs font-extrabold tracking-[0.14em] text-muted">{APP_NAME.toUpperCase()}</span>
+      <RepsLogo height={28} />
       <span className="display text-7xl leading-none font-extrabold text-accent">404</span>
       <h1 className="display text-3xl font-extrabold">That page isn&apos;t here.</h1>
       <p className="text-base font-medium text-muted">The link may be out of date, or the page has moved.</p>

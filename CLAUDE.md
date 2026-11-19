@@ -1,4 +1,4 @@
-# Workout app ("Rep", working name): notes for Claude
+# Reps (workout app): notes for Claude
 
 A family-only "personal trainer in your pocket" PWA for Collin and close family (under 5 people, non-commercial).
 Next.js 16 (App Router, Cache Components on, `src/proxy.ts` instead of middleware) + Tailwind 4 on Vercel; Supabase
@@ -26,4 +26,7 @@ Before pushing: `npm run lint`, `npm test`, `npm run test:db` and `npm run build
   `src/lib/db/catalog.ts` so phones re-download it.
 - Style: dark "4B Cobalt" tokens in `src/app/globals.css`; Barlow Condensed (caps) for headings/numbers/buttons, Barlow
   for body; 44px minimum touch targets.
+- Brand: the app is called **Reps**. Logo = the italic cobalt "gym tag" (four white tally notches, gold slash, white
+  REPS) in `src/components/logo.tsx` (`RepsLogo`, `RepsMark`); SVG copies and PNG icons are in `public/icons/`. Icons
+  are cache-first in the service worker, so bump `VERSION` in `public/sw.js` whenever they change.
 - Collin wants to learn the technical terms (PR, PWA, RLS…): use them, with a short plain explanation the first time.
