@@ -23,8 +23,10 @@ import { TODAY_TOP_EVENT } from "./today-cardio";
 /** Where the exercise sheet sits: a bar above the tabs, under the card (follows it as the page scrolls), or full height. */
 type SheetMode = "min" | "default" | "max";
 const SHEET_UP: Record<SheetMode, SheetMode> = { min: "default", default: "max", max: "max" };
-/** How far the sheet's rounded top tucks over the bottom of the blue card. */
-const TUCK = 16;
+/** Top to bottom. */
+const ORDER: SheetMode[] = ["max", "default", "min"];
+/** Space between the bottom of the blue card and the sheet, so the whole card stays in view. */
+const SHEET_GAP = 10;
 const STICKY_TOP = "calc(env(safe-area-inset-top) + 8px)";
 
 /**
@@ -221,21 +223,21 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
       {/* The card pins at the top; scrolling on, the sheet slides up over it. */}
       <section
         ref={cardRef}
-        className={`flex flex-col gap-3 rounded-[28px] bg-primary p-5 text-white ${mode === "default" ? "sticky" : ""}`}
+        className={`flex flex-col gap-2.5 rounded-[28px] bg-primary p-4 text-white ${mode === "default" ? "sticky" : ""}`}
         style={mode === "default" ? { top: STICKY_TOP } : undefined}
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">
             UP NEXT{up.light ? " · LIGHTER" : up.mode === "fresh" ? " · FRESH MUSCLES" : up.mode === "muscles" ? " · YOUR PICK" : up.mode === "ai" ? " · AI" : ""}
           </span>
-          <button type="button" onClick={() => setOptions(true)} className="display -mr-1 min-h-11 rounded-full px-3 text-sm font-extrabold tracking-[0.08em] text-[#DCE4FF]">
+          <button type="button" onClick={() => setOptions(true)} className="display -my-3 -mr-1 min-h-11 rounded-full px-3 text-sm font-extrabold tracking-[0.08em] text-[#DCE4FF]">
             Change
           </button>
         </div>
-        <h1 className="display text-[56px] leading-[0.85] font-extrabold tracking-[-0.02em] break-words">{up.title}</h1>
-        <p className="-mt-1 text-[15px] font-semibold text-[#DCE4FF]">{up.subtitle}</p>
+        <h1 className="display text-[44px] leading-[0.85] font-extrabold tracking-[-0.02em] break-words">{up.title}</h1>
+        <p className="-mt-1 text-sm font-semibold text-[#DCE4FF]">{up.subtitle}</p>
         {rd && (
-          <div className="flex flex-col gap-2 rounded-2xl bg-black/20 px-3 py-2.5">
+          <div className="flex flex-col gap-2 rounded-2xl bg-black/20 px-3 py-2">
             {/* One line so the card stays short and the list gets the room. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">READINESS</span>
@@ -254,14 +256,12 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
               </p>
             )}
             {muscleRows.length > 0 && (
-              <ul className="flex flex-col gap-1.5 border-t border-white/15 pt-2" aria-label="Readiness by muscle">
+              // Three compact columns so the card stays short enough to sit fully above the minimized sheet.
+              <ul data-muscles className="grid grid-cols-3 gap-x-3 gap-y-0.5 border-t border-white/15 pt-2" aria-label="Readiness by muscle">
                 {muscleRows.map((r) => (
-                  <li key={r.id} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_2.75rem] items-center gap-2 text-sm font-semibold text-[#DCE4FF]">
+                  <li key={r.id} className="flex min-w-0 items-baseline justify-between gap-1 text-[13px] font-semibold text-[#DCE4FF]">
                     <span className="truncate">{r.name}</span>
-                    <span className="h-1.5 rounded-full bg-white/20">
-                      <span className={`block h-full rounded-full ${r.score >= READY_AVG ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, r.score)}%` }} />
-                    </span>
-                    <span className="num text-right text-white">{r.score}%</span>
+                    <span className={`num shrink-0 ${r.score >= READY_AVG ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
                   </li>
                 ))}
               </ul>
@@ -280,12 +280,12 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
             </button>
           </div>
         )}
-        <div className="mt-1 flex items-start gap-2">
+        <div className="flex items-start gap-2">
           <button
             type="button"
             onClick={go}
             disabled={starting || !up.items.length}
-            className={`display flex h-[52px] flex-1 items-center justify-center gap-2.5 rounded-full text-xl font-extrabold tracking-[0.08em] disabled:opacity-60 ${
+            className={`display flex h-12 flex-1 items-center justify-center gap-2.5 rounded-full text-xl font-extrabold tracking-[0.08em] disabled:opacity-60 ${
               startAnyway ? "border-2 border-white/70 text-white" : "bg-white text-primary"
             }`}
           >
@@ -299,13 +299,13 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
                 onClick={regenerate}
                 aria-label="Regenerate"
                 title="Regenerate"
-                className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70"
+                className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/70"
               >
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" />
                 </svg>
               </button>
-              <span className="text-xs font-bold text-white/80">Regenerate</span>
+              <span className="text-[11px] leading-none font-bold text-white/80">Regenerate</span>
             </div>
           )}
           <div className="flex flex-col items-center gap-1">
@@ -314,11 +314,11 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
               onClick={() => setAiOpen(true)}
               aria-label="Customize with AI"
               title="Customize with AI"
-              className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 border-white/70 text-white"
+              className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/70 text-white"
             >
               <Sparkle size={22} />
             </button>
-            <span className="text-xs font-bold text-white/80">Customize</span>
+            <span className="text-[11px] leading-none font-bold text-white/80">Customize</span>
           </div>
         </div>
         {seed > 0 && up.mode !== "ai" && (
@@ -356,7 +356,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         }
         style={
           mode === "default"
-            ? { marginTop: -(16 + TUCK), marginBottom: "-7rem", paddingBottom: "7rem" }
+            ? { marginTop: SHEET_GAP - 16, marginBottom: "-7rem", paddingBottom: "7rem" }
             : { top: STICKY_TOP, bottom: "var(--nav-h)", transform: mode === "min" ? restingTransform("min", headerH) : undefined }
         }
       >
@@ -371,13 +371,13 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
             type="button"
             onClick={cycle}
             aria-label={mode === "max" ? "Shrink the exercise list" : "Show more of the exercise list"}
-            className="-mx-5 flex h-8 w-[calc(100%+2.5rem)] items-center justify-center"
+            className="-mx-5 flex h-7 w-[calc(100%+2.5rem)] items-center justify-center"
           >
             <span className="h-[5px] w-10 rounded-full bg-muted/40" />
           </button>
           <div className="flex items-center justify-between gap-3">
             <span className="min-w-0 truncate text-xs font-bold tracking-[0.12em] text-accent">IN TODAY&apos;S {up.title.toUpperCase()}</span>
-            <button type="button" onClick={openCardio} className="-my-2 flex min-h-11 shrink-0 items-center" aria-label="Cardio: jump to quick cardio">
+            <button type="button" onClick={openCardio} className="-my-2.5 flex min-h-11 shrink-0 items-center" aria-label="Cardio: jump to quick cardio">
               <span className="display flex h-8 items-center gap-1.5 rounded-full bg-chart-2/20 px-3 text-sm font-extrabold tracking-[0.06em] text-[var(--cardio-soft)]">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M3 12h4l3-7 4 14 3-7h4" />
@@ -389,7 +389,8 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
           <h2 className="display text-2xl leading-tight font-extrabold">
             {up.items.length} exercise{up.items.length === 1 ? "" : "s"} · ~{minutes} min
           </h2>
-          <div className="-mx-5 flex touch-pan-x items-center gap-1.5 overflow-x-auto px-5 [scrollbar-width:none]">
+          {/* Hidden while minimized: a shorter bar leaves the whole card in view. */}
+          <div className="-mx-5 flex touch-pan-x items-center gap-1.5 overflow-x-auto px-5 [scrollbar-width:none]" hidden={mode === "min"}>
             {up.swaps.length > 0 ? (
               <ChipButton active={showSwaps} onClick={() => setShowSwaps(!showSwaps)}>
                 {showSwaps ? "⇄ Hide swaps" : `⇄ ${up.swaps.length} swapped`}
@@ -729,7 +730,11 @@ function useExerciseSheet() {
     const h = headerEl.current?.offsetHeight ?? 0;
     const min = window.innerHeight - cssPx("var(--nav-h)") - h;
     const card = cardRef.current?.getBoundingClientRect();
-    const def = modeRef.current === "default" ? d.top0 : card ? card.bottom - TUCK : (max + min) / 2;
+    // Where the sheet will sit under the card. Minimized, the card also lists readiness by muscle, which goes away in
+    // the midway position, so leave that out (otherwise midway lands on top of minimized and can't be reached).
+    const muscles = cardRef.current?.querySelector<HTMLElement>("[data-muscles]");
+    const extra = muscles ? muscles.offsetHeight + 8 : 0;
+    const def = modeRef.current === "default" ? d.top0 : card ? card.bottom - extra + SHEET_GAP : (max + min) / 2;
     return { max, default: Math.min(min, Math.max(max, def)), min };
   };
 
@@ -776,9 +781,14 @@ function useExerciseSheet() {
       const hh = headerEl.current?.offsetHeight ?? 0;
       const top = d.top0 + d.dy;
       const at = targets(d);
-      // Nearest position to where a flick would carry it.
+      // Nearest position to where a flick would carry it…
       const aim = top + Math.max(-600, Math.min(600, d.v * 220));
-      const next = (Object.keys(at) as SheetMode[]).reduce((a, b) => (Math.abs(at[b] - aim) < Math.abs(at[a] - aim) ? b : a), cur);
+      let next = (Object.keys(at) as SheetMode[]).reduce((a, b) => (Math.abs(at[b] - aim) < Math.abs(at[a] - aim) ? b : a), cur);
+      // …but a real swipe always moves at least one step its way, so min → midway → top works both ways.
+      const ci = ORDER.indexOf(cur);
+      const ni = ORDER.indexOf(next);
+      if (d.dy < -24 && ni >= ci) next = ORDER[Math.max(0, ci - 1)];
+      if (d.dy > 24 && ni <= ci) next = ORDER[Math.min(ORDER.length - 1, ci + 1)];
       if (next !== cur) {
         setMode(next); // measures the header where it was let go, then slides on from there
         el.style.transform = next === "min" ? restingTransform("min", hh) : "";
