@@ -1,4 +1,6 @@
 import { AREA_LABELS, INJURY_NOTE_MAX, isAvoidArea } from "../injuries";
+import { MAX_PLAN_WEEKS } from "../plan-weeks";
+import { MAX_NEW_WEEKS } from "./weeks";
 import type { AiRequest } from "./types";
 
 /*
@@ -94,8 +96,53 @@ export function contextBlock(req: AiRequest, opts: { gymFiltered: boolean }) {
   return lines.join("\n");
 }
 
-const itemsText = (items: { exercise_id: string; sets: number; rep_min: number | null; rep_max: number | null; rest_sec: number | null; superset_group: number | null; notes: string | null }[]) =>
+type AiItemLike = { exercise_id: string; sets: number; rep_min: number | null; rep_max: number | null; rest_sec: number | null; superset_group: number | null; notes: string | null };
+
+const itemsText = (items: AiItemLike[]) =>
   items.map((i) => ({ exercise_id: i.exercise_id, sets: i.sets, rep_min: i.rep_min, rep_max: i.rep_max, rest_sec: i.rest_sec, superset_group: i.superset_group, notes: i.notes }));
+
+/**
+ * How Claude fills "schedule": the weeks where the workouts change. "vary": they asked for changing weeks; "same":
+ * only if the request asks for it; "keep": a follow-up on a draft, so keep the schedule unless the change is about it.
+ */
+export function scheduleRules(weeks: number, mode: "vary" | "same" | "keep") {
+  const last = Math.min(weeks, MAX_PLAN_WEEKS);
+  if (last < 2) return `Leave "schedule" empty.`;
+  const how = `"schedule" lists the weeks (2–${last}) where the workouts change; weeks not listed repeat the week before. Each entry: "week"; "kind" = "new" (new exercise choices or rep schemes, at most ${MAX_NEW_WEEKS} of these) or "deload" (an easier week: the app halves the sets of the week before and goes back to full sets the week after, so just mark it); "focus" = one sentence on what changes that week (which lifts swap for which variations, new rep ranges, what stays). Don't write the later weeks' exercises here: each "new" week is written separately from its focus, starting from week 1. Mention the changing weeks in "progression".`;
+  if (mode === "vary") return `${how}\nThey want the workouts to change over the ${weeks} weeks: new workouts every 2–4 weeks keep it fresh, with the main lifts trained throughout, and a deload every 4–6 weeks on plans of 6 weeks or more.`;
+  if (mode === "same") return `The same days repeat every week, so leave "schedule" empty, UNLESS what they asked for explicitly wants different exercises or workouts in different weeks. Then: ${how}`;
+  return `Return "schedule" too, unchanged unless the change they asked for is about which weeks change (or the plan's length). ${how}`;
+}
+
+/** Writing one later week of a plan whose workouts change (Batch 20d). `before` is the draft's earlier version of this week, if any. */
+export function weekTaskBlock(
+  req: AiRequest,
+  plan: { name: string; goal: string; weeks: number; summary: string; progression: string; days: { name: string; items: AiItemLike[] }[]; changes: string[] },
+  schedule: { week: number; kind: string; focus: string }[],
+  week: number,
+  before: { name: string; items: AiItemLike[] }[] | null,
+) {
+  const entry = schedule.find((e) => e.week === week);
+  const days = plan.days.map((d) => ({ name: d.name, exercises: itemsText(d.items) }));
+  const head = `TASK: write week ${week} of this ${plan.weeks}-week plan. Week 1 is below; the weeks where the workouts change are in the schedule.
+PLAN: ${JSON.stringify({ name: plan.name, goal: plan.goal, summary: plan.summary, progression: plan.progression })}
+SCHEDULE: ${JSON.stringify(schedule)}
+WEEK 1: ${JSON.stringify(days)}
+WEEK ${week} FOCUS: ${entry?.focus || "fresh variations of week 1"}`;
+  const rules = `Return exactly ${plan.days.length} days, in the same order and with the same names as week 1, each with its full list of exercises. Follow the focus; keep each day training the same muscles, the same session length, and the dosing and exercise rules above. Use only ids from the EXERCISES list.`;
+  if (before) {
+    return `${head}
+This week was already written (below). The person then asked for a change, which was applied to week 1 like this: ${JSON.stringify(plan.changes)}.
+Apply the same change to this week where it fits, and keep everything else in it exactly as it is.
+WEEK ${week} NOW: ${JSON.stringify(before.map((d) => ({ name: d.name, exercises: itemsText(d.items) })))}
+${rules}
+
+The change they asked for: """${req.prompt.trim() || "(none)"}"""`;
+  }
+  return `${head}
+${rules}
+${req.prompt.trim() ? `\nWhat they asked for originally: """${req.prompt.trim()}"""` : ""}`;
+}
 
 /** The ask itself, by kind. */
 export function taskBlock(req: AiRequest) {
@@ -105,21 +152,31 @@ export function taskBlock(req: AiRequest) {
       const o = req.options!;
       return `TASK: build a training plan.
 Settings: goal ${GOAL_WORDS[o.goal] ?? o.goal}; ${o.days_per_week} training days a week; ${o.weeks} weeks; ${o.session_minutes}-minute sessions.
-Return exactly ${o.days_per_week} distinct training days, in the order they should be done. The week repeats for ${o.weeks} weeks, so "progression" should explain how to progress week to week (and when to deload, if the plan is longer than 5 weeks), in at most 120 words of complete sentences.
+Return exactly ${o.days_per_week} distinct training days, in the order they should be done. These are week 1. "progression" should explain how to progress week to week (and when to deload, if the plan is longer than 5 weeks), in at most 120 words of complete sentences.
+${scheduleRules(o.weeks, o.vary ? "vary" : "same")}
 "summary": two or three sentences on what the plan is and why it fits this person. Leave "changes" empty.
 
 What they asked for: """${ask}"""`;
     }
-    case "edit":
+    case "edit": {
+      const pl = req.plan!;
+      const schedule = (pl.later ?? []).filter((w) => w.kind !== "back").map((w) => ({ week: w.week, kind: w.kind, focus: w.focus }));
       return `TASK: change this plan as asked and return the whole revised plan.
 Keep everything that the request doesn't touch exactly as it is (same exercises, order and numbers).
 For every day you keep or modify, set ref_day_id to that day's "id"; for new days use null; leave out days that are removed.
-List what you changed in "changes" (one short line each). Update "summary" and "progression" only if the change affects them.
+List what you changed in "changes" (one short line each). Update "summary" and "progression" only if the change affects them.${
+        req.draft
+          ? `
+"days" are week 1. ${scheduleRules(pl.weeks, "keep")}
+Its current schedule: ${JSON.stringify(schedule)}`
+          : ""
+      }
 
 CURRENT PLAN:
-${JSON.stringify({ name: req.plan!.name, goal: req.plan!.goal, weeks: req.plan!.weeks, notes: req.plan!.notes, days: req.plan!.days.map((d) => ({ id: d.id, name: d.name, exercises: itemsText(d.items) })) })}
+${JSON.stringify({ name: pl.name, goal: pl.goal, weeks: pl.weeks, notes: pl.notes, days: pl.days.map((d) => ({ id: d.id, name: d.name, exercises: itemsText(d.items) })) })}
 
 The change they asked for: """${ask}"""`;
+    }
     case "workout":
       return `TASK: build one workout for today. It must fit ${req.profile.session_minutes} minutes unless the request says otherwise.
 Use the recovery scores: favor fresh muscles and go easy on ones below 60, unless the request says otherwise.
@@ -188,8 +245,37 @@ export const PLAN_TOOL = {
           required: ["name", "ref_day_id", "exercises"],
         },
       },
+      schedule: {
+        type: "array",
+        description: "The weeks where the workouts change (see the task). Empty when every week is the same.",
+        items: {
+          type: "object",
+          properties: { week: { type: "integer" }, kind: { type: "string", enum: ["new", "deload"] }, focus: { type: "string" } },
+          required: ["week", "kind", "focus"],
+        },
+      },
     },
     required: ["name", "goal", "weeks", "summary", "progression", "changes", "days"],
+  },
+};
+
+/** One later week of a plan whose workouts change. */
+export const WEEK_TOOL = {
+  name: "save_week",
+  description: "Return one week of the plan.",
+  input_schema: {
+    type: "object",
+    properties: {
+      days: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { name: { type: "string" }, exercises: { type: "array", items: ITEM } },
+          required: ["name", "exercises"],
+        },
+      },
+    },
+    required: ["days"],
   },
 };
 

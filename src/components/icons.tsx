@@ -43,3 +43,9 @@ export const InfoIcon = ({ size = 22 }: { size?: number }) => (
 export const UndoIcon = ({ size = 18, strokeWidth = 2.5 }: { size?: number; strokeWidth?: number }) => (
   <svg {...base} width={size} height={size} strokeWidth={strokeWidth}><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
 );
+export const ChevronLeftIcon = () => (
+  <svg {...base} width={22} height={22}><path d="M15 5l-7 7 7 7" /></svg>
+);
+export const ChevronRightIcon = () => (
+  <svg {...base} width={22} height={22}><path d="M9 5l7 7-7 7" /></svg>
+);

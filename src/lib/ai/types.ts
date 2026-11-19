@@ -64,7 +64,23 @@ export type AiPlan = {
   days: AiDay[];
   /** Edits only: what changed, one short line each. */
   changes: string[];
+  /**
+   * Later weeks whose workouts differ from the week before, in order (Batch 20d). Weeks not listed repeat the week
+   * before them. Missing or empty: every week is `days`.
+   */
+  later_weeks?: AiWeek[];
 };
+
+/**
+ * One planned change of workouts. "new": Claude writes new workouts for it. "deload": the week before with about half
+ * the sets (worked out by the app). "back": full sets again after a deload (added by the app).
+ */
+export type WeekKind = "new" | "deload" | "back";
+
+/** Where the plan's workouts change, as Claude schedules it in the first answer (the days come later). */
+export type WeekChange = { week: number; kind: "new" | "deload"; focus: string };
+
+export type AiWeek = { week: number; kind: WeekKind; focus: string; days: AiDay[] };
 
 export type AiWorkout = { name: string; summary: string; items: AiItem[] };
 
@@ -106,6 +122,8 @@ export type PlanSnapshot = {
   weeks: number;
   notes: string | null;
   days: { id: string; name: string; items: AiItem[] }[];
+  /** A draft's later weeks, sent back with a follow-up so unchanged weeks can stay as they are. */
+  later?: { week: number; kind: WeekKind; focus: string; days: { name: string; items: AiItem[] }[] }[];
 };
 
 /** A PDF sent as-is (Claude reads its text and its page images). One per import. */
@@ -121,7 +139,9 @@ export type AiRequest = {
   gym: { name: string; equipment: string[] } | null;
   exercises: AllowedExercise[];
   /** Plan settings for "plan". */
-  options?: { goal: Goal; days_per_week: number; weeks: number; session_minutes: number };
+  options?: { goal: Goal; days_per_week: number; weeks: number; session_minutes: number; vary?: boolean };
+  /** "edit": the plan is an unsaved draft (a follow-up on the preview), so its later weeks can change too. */
+  draft?: boolean;
   /** Recovery 0–100 for muscles that aren't fully fresh. */
   recovery?: Record<string, number>;
   /** A few lines about recent workouts. */

@@ -26,14 +26,21 @@ export function usePlanActions() {
   const create = useCallback(
     async (opts: {
       name: string; goal: Goal; splitId: string | null; weeks: number; source?: PlanSource; notes?: string | null;
-      days: { name: string; target_muscle_ids: string[]; items: GenItem[] }[];
+      /** In order. `week` (default 1) puts a day in a later week; days are numbered within their week. */
+      days: { name: string; target_muscle_ids: string[]; items: GenItem[]; week?: number }[];
     }) => {
       const plan: Plan = {
         id: newId(), name: opts.name, goal: opts.goal, split_id: opts.splitId, start_date: todayIso(), weeks: opts.weeks,
         source: opts.source ?? "generated", is_active: true, created_at: nowIso(), ...(opts.notes ? { notes: opts.notes } : {}),
         current_week: 1, week_started_at: nowIso(), skipped_day_ids: [], completed_at: null, completion_dismissed_at: null,
       };
-      const days: PlanDay[] = opts.days.map((d, i) => ({ id: newId(), plan_id: plan.id, day_order: i + 1, name: d.name, gym_id: null, target_muscle_ids: d.target_muscle_ids, week: 1 }));
+      const perWeek = new Map<number, number>();
+      const days: PlanDay[] = opts.days.map((d) => {
+        const week = d.week ?? 1;
+        const order = (perWeek.get(week) ?? 0) + 1;
+        perWeek.set(week, order);
+        return { id: newId(), plan_id: plan.id, day_order: order, name: d.name, gym_id: null, target_muscle_ids: d.target_muscle_ids, week };
+      });
       const rows = opts.days.flatMap((d, i) => d.items.map((item, k) => toRow(days[i].id, item, k)));
       await db.transaction("rw", [db.plans, db.plan_days, db.plan_exercises, db.outbox], async () => {
         // Only one active plan.

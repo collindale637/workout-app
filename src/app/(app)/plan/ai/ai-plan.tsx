@@ -8,7 +8,9 @@ import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
 import { aiProfile, allowedAtGym, gymContext, historyLines, recoveryRecord, startAiJob, useAiJob, useAiUsage } from "@/lib/ai/client";
-import { draftSnapshot, planNotes, targetsFor } from "@/lib/ai/apply";
+import { draftSnapshot, draftWeekDays, planNotes, targetsFor } from "@/lib/ai/apply";
+import { draftDaysForWeek, lastScheduledWeek } from "@/lib/ai/weeks";
+import { WeekStepper, type WeekTone } from "@/components/week-stepper";
 import { AiItems, AiProblem, AiThinking, AiUsageNote, Sparkle } from "@/components/ai";
 import { MusclePills } from "@/components/planned";
 import { Chip, PageHeader, StickyBar, btn, field, label } from "@/components/ui/kit";
@@ -38,6 +40,10 @@ export function AiPlanScreen() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [weeks, setWeeks] = useState(8);
+  // "Change it up": the workouts change over the weeks (Batch 20d). The preview then shows each week.
+  const [vary, setVary] = useState(true);
+  const [viewWeek, setViewWeek] = useState(1);
+  const [slow, setSlow] = useState(false);
   const [minutes, setMinutes] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +86,7 @@ export function AiPlanScreen() {
     setStarting(true);
     setError(null);
     const base = original && !followUp ? original : draft ? snapshotOf(draft.plan) : null;
+    setSlow(base ? Boolean(base.later?.length) : vary);
     const include = base?.days.flatMap((d) => d.items.map((i) => i.exercise_id)) ?? [];
     const res = await startAiJob({
       kind: base ? "edit" : "plan",
@@ -87,7 +94,9 @@ export function AiPlanScreen() {
       profile: { ...aiProfile(profile), session_minutes: chosen.minutes },
       gym: gymContext(catalog, gym, gymEquipment),
       exercises: allowedAtGym(catalog, gymEquipment, prefs, include),
-      options: base ? undefined : { goal: chosen.goal, days_per_week: chosen.days, weeks, session_minutes: chosen.minutes },
+      options: base ? undefined : { goal: chosen.goal, days_per_week: chosen.days, weeks, session_minutes: chosen.minutes, vary },
+      // A follow-up on a new plan's preview can change its later weeks too; edits of a saved plan keep theirs.
+      draft: followUp && !editing ? true : undefined,
       recovery: recoveryRecord(recovery?.map),
       history: await historyLines(db, catalog, profile.units),
       plan: base ?? undefined,
@@ -120,7 +129,8 @@ export function AiPlanScreen() {
     if (existing) {
       await actions.applyEdit(existing.plan.id, { name: planName, goal: p.goal, weeks: p.weeks, notes: planNotes(p) ?? existing.plan.notes ?? null, days: dayRows }, existing.days[0]?.week ?? 1);
     } else {
-      await actions.create({ name: planName, goal: p.goal, splitId: null, weeks: p.weeks, source: "ai", notes: planNotes(p), days: dayRows });
+      const allDays = draftWeekDays(p).map(({ week, day }) => ({ week, name: day.name, target_muscle_ids: targetsFor(catalog, day.items), items: day.items }));
+      await actions.create({ name: planName, goal: p.goal, splitId: null, weeks: p.weeks, source: "ai", notes: planNotes(p), days: allDays });
       await setChoice({ mode: "plan", seed: 0 });
     }
     await job.clear();
@@ -134,7 +144,10 @@ export function AiPlanScreen() {
       <main className="flex flex-col gap-4">
         <PageHeader title={title} />
         <AiThinking what={draft || editing ? "Making the changes" : "Building your plan"} />
-        <p className="text-center text-sm font-medium text-muted">Plans take up to a minute. You can leave: it keeps building and your draft will be here when you come back.</p>
+        <p className="text-center text-sm font-medium text-muted">
+          {slow && !editing ? "Plans with changing weeks take 2–3 minutes: each week is written on its own." : "Plans take up to a minute."} You can leave: it keeps
+          building and your draft will be here when you come back.
+        </p>
       </main>
     );
   }
@@ -142,6 +155,24 @@ export function AiPlanScreen() {
   if (draft) {
     const p = draft.plan;
     const oldDay = new Map(original?.days.map((d) => [d.id, new Set(d.items.map((i) => i.exercise_id))]) ?? []);
+    // Week by week, when the workouts change over the plan.
+    const length = lastScheduledWeek(p.weeks);
+    const varied = !editing && Boolean(p.later_weeks?.length) && length > 1;
+    const shownWeek = varied ? Math.min(viewWeek, length) : 1;
+    const view = draftDaysForWeek(p, shownWeek);
+    const own = view.from === shownWeek;
+    const prevDays = own && shownWeek > 1 && view.entry?.kind === "new" ? draftDaysForWeek(p, shownWeek - 1).days : null;
+    const starts = new Set([1, ...(p.later_weeks ?? []).map((w) => w.week)]);
+    const tones: WeekTone[] = Array.from({ length }, (_, i) => (starts.has(i + 1) ? "strong" : "plain"));
+    const weekNote = !own
+      ? `Same workouts as week ${view.from}.`
+      : shownWeek === 1
+        ? "The starting workouts."
+        : view.entry?.kind === "deload"
+          ? `Deload week: the same exercises as week ${shownWeek - 1}, about half the sets.`
+          : view.entry?.kind === "back"
+            ? "Back to full sets after the deload."
+            : view.entry?.focus || `New workouts from week ${shownWeek}.`;
     return (
       <main className="flex flex-col gap-4 pb-24">
         <PageHeader title={editing ? "Proposed changes" : "Your AI plan"} back={editing ? "/plan" : undefined} />
@@ -165,15 +196,43 @@ export function AiPlanScreen() {
           </section>
         )}
 
-        {p.days.map((d, i) => {
+        {varied && (
+          <>
+            <WeekStepper
+              week={shownWeek}
+              length={length}
+              onPick={setViewWeek}
+              tones={tones}
+              labels={tones.map((t, i) => `Week ${i + 1}, ${t === "strong" ? "its own workouts" : "same as the week before"}`)}
+              status={own ? (view.entry?.kind === "deload" ? "Deload" : shownWeek === 1 ? "Starting workouts" : "Different workouts") : `Same as week ${view.from}`}
+              statusClass={own ? "text-accent" : "text-muted"}
+              legend={
+                <div className="flex items-center justify-center gap-4 text-xs font-semibold text-muted">
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded border-2 border-primary/60 bg-primary/25" />Its own workouts</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded bg-card-2" />Same as the week before</span>
+                </div>
+              }
+            />
+            <p className={`rounded-2xl px-3 py-2.5 text-sm font-semibold ${own ? "border border-line bg-card text-ink" : "border border-dashed border-line text-muted"}`}>{weekNote}</p>
+          </>
+        )}
+
+        {view.days.map((d, i) => {
           const before = d.ref_day_id ? oldDay.get(d.ref_day_id) : undefined;
-          const added = editing ? new Set(d.items.map((x) => x.exercise_id).filter((x) => !before?.has(x))) : undefined;
+          const prev = prevDays?.[i] ? new Set(prevDays[i].items.map((x) => x.exercise_id)) : null;
+          const added = editing
+            ? new Set(d.items.map((x) => x.exercise_id).filter((x) => !before?.has(x)))
+            : prev
+              ? new Set(d.items.map((x) => x.exercise_id).filter((x) => !prev.has(x)))
+              : undefined;
           return (
-            <section key={i} className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4">
+            <section key={`${shownWeek}-${i}`} className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4">
               <div className="flex items-baseline gap-2">
                 <span className="display num text-lg font-extrabold text-muted">{i + 1}</span>
                 <h2 className="display text-xl font-extrabold">{d.name}</h2>
                 {editing && !d.ref_day_id && <span className="display text-xs font-extrabold tracking-[0.1em] text-accent">NEW DAY</span>}
+                {varied && own && view.entry?.kind === "deload" && <span className="display text-xs font-extrabold tracking-[0.1em] text-accent">DELOAD</span>}
+                {added && added.size > 0 && !editing && <span className="display ml-auto text-xs font-extrabold tracking-[0.1em] text-accent-soft">{added.size} NEW</span>}
               </div>
               <MusclePills catalog={catalog} ids={targetsFor(catalog, d.items)} max={8} />
               <AiItems catalog={catalog} items={d.items} highlight={added} />
@@ -200,7 +259,11 @@ export function AiPlanScreen() {
             {saving ? "Saving…" : editing ? "Save changes" : "Use this plan"}
           </button>
         </StickyBar>
-        {!editing && <p className="text-center text-sm font-medium text-muted">It becomes your active plan. You can edit any day after.</p>}
+        {!editing && (
+          <p className="text-center text-sm font-medium text-muted">
+            It becomes your active plan{varied ? `, with all ${p.weeks} weeks` : ""}. You can edit any day after.
+          </p>
+        )}
 
         <section className="flex flex-col gap-2 rounded-3xl border border-line bg-card p-4">
           <span className={label}>WANT SOMETHING DIFFERENT?</span>
@@ -297,6 +360,18 @@ export function AiPlanScreen() {
             <div className="flex gap-2">
               {WEEKS.map((w) => <Chip key={w} active={weeks === w} onClick={() => setWeeks(w)} className="flex-1">{w} wk</Chip>)}
             </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className={label}>WORKOUTS EACH WEEK</span>
+            <div className="flex gap-2">
+              <Chip active={!vary} onClick={() => setVary(false)} className="flex-1">Same each week</Chip>
+              <Chip active={vary} onClick={() => setVary(true)} className="flex-1">Change it up</Chip>
+            </div>
+            <p className="text-sm font-medium text-muted">
+              {vary
+                ? `Claude picks new exercises every few weeks and adds a lighter week on longer plans. You can look at each of the ${weeks} weeks before saving. Takes 2–3 minutes.`
+                : `The same workouts all ${weeks} weeks. The fastest option.`}
+            </p>
           </div>
           <p className="text-sm font-medium text-muted">
             {gym ? `Uses only what ${gym.name} has. At another gym, anything it can't do swaps for the closest match.` : "No gym set up yet, so any equipment is fair game."}
