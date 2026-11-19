@@ -196,12 +196,29 @@ What they asked for: """${ask}"""`;
 - For each exercise: "written" exactly as in the source; "standard_name" = what it's usually called; "exercise_id" = the best match from the EXERCISES list, or null if nothing fits; "match" = "exact" when it's clearly the same exercise, "close" when it's similar or a guess (different grip, implement or variation), "none" when exercise_id is null; "is_cardio" for cardio.
 - Common shorthand: RDL = Romanian deadlift, OHP = overhead press, DB = dumbbell, BB = barbell, KB = kettlebell, SL = single-leg, BSS = Bulgarian split squat, SA = single-arm, CGBP = close-grip bench press.
 - Supersets are often written as A1/A2 or with "+" or "SS": give them the same superset_group.
-- If several weeks are listed with changing numbers, use week 1 and describe how it changes in "progression"; set "weeks" to the program length.
+- "days" are week 1 only. If the source lists later weeks (or numbered days, like Day 1–30) whose exercises, order, sets or reps differ from the week before, fill "schedule" with each such week (2–12): "week" and "focus" (one short line on what differs, e.g. "4 × 6 instead of 3 × 10" or "new exercises for days 2 and 4"). Leave out weeks that repeat the week before; leave "schedule" empty for a one-week plan. Programs written by day number: group the training days into weeks of 7 calendar days and leave rest days out. Don't transcribe the later weeks here: each is read separately.
+- "weeks" = the program's length in weeks. Past week 12, say in "problems" that only 12 weeks were read. "progression": how it changes week to week, in a sentence or two.
 - AMRAP or "to failure": put that in notes and use a sensible rep range. Missing sets or reps: use 3 × 8–12 and note "not in source". Cardio: give "minutes".
 - If something can't be read, say what in "problems". If nothing is readable, return an empty "days" list and explain in "problems".
 - "summary": one sentence describing the plan. "goal": the goal it suits best, or null.
-${req.prompt.trim() ? `\nPASTED TEXT:\n"""${req.prompt.trim()}"""` : "\n(No pasted text; read the photos.)"}`;
+${pastedText(req)}`;
   }
+}
+
+const pastedText = (req: AiRequest) => (req.prompt.trim() ? `\nPASTED TEXT:\n"""${req.prompt.trim()}"""` : "\n(No pasted text; read the photos.)");
+
+/** Reading one later week of an imported plan (Batch 20e). */
+export function importWeekTaskBlock(req: AiRequest, week1: { name: string; lines: { written: string }[] }[], schedule: { week: number; focus: string }[], week: number) {
+  const entry = schedule.find((e) => e.week === week);
+  return `TASK: transcribe WEEK ${week} of the workout plan below (pasted text, photos and/or a PDF). Week 1 was already read; the weeks that differ are in the schedule.
+WEEK 1 (as read): ${JSON.stringify(week1.map((d) => ({ name: d.name, exercises: d.lines.map((l) => l.written) })))}
+SCHEDULE: ${JSON.stringify(schedule)}
+WEEK ${week} differs by: ${entry?.focus || "(see the source)"}
+- Return week ${week}'s training days exactly as the source has them: same exercises in the same order, same sets, reps and rest. Don't add, drop or "improve" anything.
+- Same rules for each exercise as before ("written", "standard_name", "exercise_id", "match", "is_cardio", supersets, AMRAP, cardio "minutes"). When it's the same exercise as in week 1, copy week 1's "written" text exactly so it's matched once.
+- Programs written by day number: week ${week} is calendar days ${(week - 1) * 7 + 1}–${week * 7}, training days only.
+- If something can't be read, say what in "problems".
+${pastedText(req)}`;
 }
 
 /* Tool definitions: Claude must answer through these, which keeps the answer in a fixed JSON shape. */
@@ -301,6 +318,11 @@ export const IMPORT_TOOL = {
       summary: { type: "string" },
       progression: { type: "string", description: "How to progress week to week, at most 120 words, complete sentences." },
       problems: nullableStr,
+      schedule: {
+        type: "array",
+        description: "Later weeks (2–12) whose workouts differ from the week before. Empty for a one-week plan.",
+        items: { type: "object", properties: { week: { type: "integer" }, focus: { type: "string" } }, required: ["week", "focus"] },
+      },
       days: {
         type: "array",
         items: {
@@ -405,5 +427,16 @@ export const PICK_TOOL = {
       },
     },
     required: ["picks"],
+  },
+};
+
+/** One later week of an imported plan: the same day shape as the import. */
+export const IMPORT_WEEK_TOOL = {
+  name: "save_import_week",
+  description: "Return one week of the plan read from the source.",
+  input_schema: {
+    type: "object",
+    properties: { days: IMPORT_TOOL.input_schema.properties.days, problems: nullableStr },
+    required: ["days", "problems"],
   },
 };

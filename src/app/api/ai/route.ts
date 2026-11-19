@@ -127,7 +127,10 @@ async function execute(sb: Supabase, req: AiRequest): Promise<Outcome> {
     const usage = await readUsage(sb);
     if (r.empty && (r.kind === "swap" || r.kind === "suggest")) return fail("No AI picks this time.", 422, usage);
     if (r.empty) return fail("Claude couldn't build that with this gym's equipment. Try rewording it, or check the gym's equipment.", 422, usage);
-    const warnings = r.errors.length ? [`Fixed or left out ${r.errors.length} thing${r.errors.length === 1 ? "" : "s"} the AI got wrong. Check it over before accepting.`] : [];
+    // Weeks that couldn't be read or written are worth saying in full; other problems are counted.
+    const notices = r.errors.filter((e) => /^(Couldn't read week|Week \d+ couldn't be written)/.test(e));
+    const fixed = r.errors.length - notices.length;
+    const warnings = [...notices, ...(fixed ? [`Fixed or left out ${fixed} thing${fixed === 1 ? "" : "s"} the AI got wrong. Check it over before accepting.`] : [])];
     let out: AiResponse;
     if (r.kind === "swap" || r.kind === "suggest") out = { ok: true, kind: r.kind, picks: r.value, warnings: [], usage };
     else if (r.kind === "import") out = { ok: true, kind: "import", result: r.value, warnings, usage };
