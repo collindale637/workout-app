@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/units";
+import { PrBadge } from "@/components/workout-summary";
 
 /*
   The fixed blue panel at the bottom of the live workout (lifts only): rest/last-time row, weight and reps
@@ -56,8 +57,9 @@ const white =
   "display flex items-center justify-center rounded-full bg-white font-extrabold tracking-[0.04em] text-primary active:translate-y-px";
 
 /** "✓ Set 2 logged · 70 lb × 10" with Undo, shown for 5 s after a log (the screen owns the timer). */
-/** "Set logged · Undo" (onUndo) or, with `warn`, a message that blocked the Log tap (no Undo). */
-export type DockToast = { text: string; onUndo?: () => void; warn?: boolean };
+/** "Set logged · Undo" (onUndo) or, with `warn`, a message that blocked the Log tap (no Undo). `pr`: the set was a
+    record, so the toast is gold with a PR badge instead of the green check. */
+export type DockToast = { text: string; onUndo?: () => void; warn?: boolean; pr?: boolean };
 
 export function SetDock({
   hidden, onHiddenChange, rest, content, toast = null,
@@ -123,10 +125,11 @@ export function SetDock({
         <div
           data-no-sheet-drag
           role={toast.warn ? "alert" : "status"}
-          className={`absolute inset-x-3 ${ring ? "bottom-[calc(100%+48px)]" : "bottom-[calc(100%+8px)]"} flex h-12 items-center gap-2 rounded-2xl border border-line bg-card-2 pr-0.5 pl-4 text-ink`}
+          className={`absolute inset-x-3 ${ring ? "bottom-[calc(100%+48px)]" : "bottom-[calc(100%+8px)]"} flex h-12 items-center gap-2 rounded-2xl border ${toast.pr ? "border-gold/45 bg-[color-mix(in_srgb,var(--gold-bright)_14%,var(--card-2))]" : "border-line bg-card-2"} pr-0.5 pl-4 text-ink`}
         >
+          {toast.pr && <PrBadge />}
           <span className="num min-w-0 flex-1 truncate text-sm font-bold">
-            <span className={toast.warn ? "text-warn" : "text-good"}>{toast.warn ? "!" : "✓"}</span> {toast.text}
+            {!toast.pr && <span className={toast.warn ? "text-warn" : "text-good"}>{toast.warn ? "!" : "✓"}</span>} {toast.text}
           </span>
           {toast.onUndo && (
             <button type="button" onClick={toast.onUndo} className="display h-11 min-w-11 shrink-0 rounded-xl px-3 text-base font-extrabold text-accent active:bg-line">

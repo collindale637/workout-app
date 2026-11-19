@@ -30,7 +30,12 @@
   --done: var(--good); /* the finished check: same green as weight increases */
   --done-ink: #062414; /* the check mark drawn on --done */
   --band-sky: #5aa9ff; /* quick-cardio band 1 */
-  --band-gold: #ffc533; /* quick-cardio band 2: cobalt's complement */
+  /* Gold, the logo's slash, means "earned": PR badges, trophies, records. Nothing else is gold, so it stays a reward.
+     Not for buttons, links, tabs or warnings (orange). */
+  --gold: #ffc533;
+  --gold-ink: #2a1d00; /* text on a gold fill */
+  --gold-bright: #ffc533; /* fills and text on cobalt: the same in light mode */
+  --gold-soft: rgb(255 197 51 / 0.16); /* behind gold icons and the PR toast */
   --nav-h: calc(55px + max(env(safe-area-inset-bottom), 8px));
 }
 
@@ -44,6 +49,8 @@
   --accent: #1f4bff;
   --accent-soft: #1f4bff;
   --accent-strong: #1f4bff;
+  --gold: #a86f00; /* darker so gold text reads on white */
+  --gold-soft: rgb(255 197 51 / 0.22);
 }
 
 @theme inline {
@@ -63,6 +70,10 @@
   --color-danger: var(--danger);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
+  --color-gold-bright: var(--gold-bright);
+  --color-gold-soft: var(--gold-soft);
   --font-sans: "Barlow", system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
 }

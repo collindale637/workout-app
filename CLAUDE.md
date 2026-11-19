@@ -29,4 +29,8 @@ Before pushing: `npm run lint`, `npm test`, `npm run test:db` and `npm run build
 - Brand: the app is called **Reps**. Logo = the italic cobalt "gym tag" (four white tally notches, gold slash, white
   REPS) in `src/components/logo.tsx` (`RepsLogo`, `RepsMark`); SVG copies and PNG icons are in `public/icons/`. Icons
   are cache-first in the service worker, so bump `VERSION` in `public/sw.js` whenever they change.
+- Gold (`--gold`, the logo's slash) means "earned": PR badges, trophies, record counts, the best-ever number and
+  chart dot, and the live "New PR" toast. Keep it off buttons, links, tabs and warnings (orange). `--gold-bright` is
+  for fills and text on cobalt (same in light mode); `--gold` darkens in light mode for text on white. The recovery
+  map's "recovering" amber stays for now (Collin's call, Nov 2026).
 - Collin wants to learn the technical terms (PR, PWA, RLS…): use them, with a short plain explanation the first time.

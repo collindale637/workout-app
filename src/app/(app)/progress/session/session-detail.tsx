@@ -251,7 +251,7 @@ function ResultCard({ cmp, workoutName, units, nameOf }: { cmp: Comparison; work
   const headline = first
     ? null
     : cmp.up > 0
-      ? `Up on ${cmp.up} of ${n}${r > 0 ? ` · ${r} ${r === 1 ? "record" : "records"}` : ""}`
+      ? `Up on ${cmp.up} of ${n}`
       : cmp.same > 0
         ? `Held ${cmp.same} of ${n}`
         : `Down on ${cmp.down} of ${n}`;
@@ -263,12 +263,17 @@ function ResultCard({ cmp, workoutName, units, nameOf }: { cmp: Comparison; work
   return (
     <section className="flex flex-col gap-2.5 rounded-[28px] bg-primary p-5 text-white">
       <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">{label}</span>
-      {headline && <h2 className="display -mt-1 text-[28px] leading-none font-extrabold">{headline}</h2>}
+      {headline && (
+        <h2 className="display -mt-1 text-[28px] leading-none font-extrabold">
+          {headline}
+          {cmp.up > 0 && r > 0 && <span className="text-gold-bright"> · {r} {r === 1 ? "record" : "records"}</span>}
+        </h2>
+      )}
       <ul className="flex flex-col divide-y divide-white/20">
         {cmp.rows.map((row) => (
           <li key={row.wexId} className="flex min-h-11 items-center gap-2 py-1.5">
             <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{nameOf(row.exerciseId)}</span>
-            {row.record && <PrBadge onBlue />}
+            {row.record && <PrBadge />}
             <span className={`display num shrink-0 text-base font-extrabold ${first ? "text-[#DCE4FF]" : color(row.kind)}`}>{first ? row.best : row.delta}</span>
           </li>
         ))}

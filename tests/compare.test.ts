@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addFinishNote, compareWorkout, findPrevious, historyBefore, setsLine, volumeDeltaText, type CmpSet, type CmpWex, type CmpWorkout } from "@/lib/compare";
+import { addFinishNote, compareWorkout, findPrevious, historyBefore, setRecord, setsLine, volumeDeltaText, type CmpSet, type CmpWex, type CmpWorkout } from "@/lib/compare";
 import { fromDisplayWeight } from "@/lib/units";
 
 const wk = (id: string, started: string, extra: Partial<CmpWorkout> = {}): CmpWorkout => ({
@@ -148,5 +148,37 @@ describe("compare: helpers", () => {
     for (let i = 0; i < 35; i++) notes = addFinishNote(notes, `w${i}`, { at: `2026-11-${String(i % 28 + 1).padStart(2, "0")}T${String(10 + Math.floor(i / 28)).padStart(2, "0")}:00:00Z`, notStarted: [] });
     expect(Object.keys(notes)).toHaveLength(30);
     expect(notes).toHaveProperty("w34");
+  });
+});
+
+describe("setRecord (live PR toast)", () => {
+  const H = { bestWeight: 185, best1RM: 210 };
+  const w = (weight: number, reps: number, type: CmpSet["type"] = "working") => ({ type, weight, reps });
+
+  it("flags a set heavier than ever", () => {
+    expect(setRecord(H, [], w(190, 3))).toEqual({ kind: "weight", value: 190 });
+  });
+  it("flags it again only when today's record goes up", () => {
+    expect(setRecord(H, [w(190, 3)], w(190, 3))).toBeNull();
+    expect(setRecord(H, [w(190, 3)], w(195, 1))).toEqual({ kind: "weight", value: 195 });
+  });
+  it("flags a best estimated max only with the 2.5% margin", () => {
+    // 175 × 10 → 233 (> 210 × 1.025 = 215.25)
+    expect(setRecord(H, [], w(175, 10))?.kind).toBe("e1rm");
+    // 175 × 6 → 210: no
+    expect(setRecord(H, [], w(175, 6))).toBeNull();
+  });
+  it("needs an e1RM above today's earlier sets", () => {
+    expect(setRecord(H, [w(175, 10)], w(175, 10))).toBeNull();
+    expect(setRecord(H, [w(175, 10)], w(175, 11))?.kind).toBe("e1rm");
+  });
+  it("ignores warm-ups, bodyweight sets and first sessions", () => {
+    expect(setRecord(H, [], w(190, 3, "warmup"))).toBeNull();
+    expect(setRecord(H, [], { type: "working", weight: null, reps: 20 })).toBeNull();
+    expect(setRecord(undefined, [], w(190, 3))).toBeNull();
+    expect(setRecord({ bestWeight: 0, best1RM: 0 }, [], w(190, 3))).toBeNull();
+  });
+  it("ignores earlier warm-ups when comparing with today", () => {
+    expect(setRecord(H, [w(200, 1, "warmup")], w(190, 3))).toEqual({ kind: "weight", value: 190 });
   });
 });

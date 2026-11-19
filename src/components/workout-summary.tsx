@@ -1,9 +1,9 @@
 /** Pieces shared by the Finish sheet and the saved-workout screen (UX spec Part 3). */
 
-/** "PR" badge. onBlue: white with blue text, for the blue result card. */
-export function PrBadge({ onBlue = false }: { onBlue?: boolean }) {
+/** "PR" badge: gold, the logo's "earned" color, on cards and on the blue result card alike. */
+export function PrBadge() {
   return (
-    <span className={`display shrink-0 rounded-md px-1.5 py-0.5 text-[11px] leading-none font-extrabold tracking-[0.1em] ${onBlue ? "bg-white text-primary" : "bg-primary text-white"}`}>
+    <span className="display shrink-0 rounded-md bg-gold-bright px-1.5 py-0.5 text-[11px] leading-none font-extrabold tracking-[0.1em] text-gold-ink">
       PR
     </span>
   );
