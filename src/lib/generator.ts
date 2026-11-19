@@ -78,7 +78,7 @@ export const STAPLES: Record<string, 1 | 2> = {
   "Triceps_Pushdown_-_Rope_Attachment": 2, "EZ-Bar_Skullcrusher": 2, Triceps_Overhead_Extension_with_Rope: 2, Standing_Dumbbell_Triceps_Extension: 2,
   Seated_Triceps_Press: 2, Lying_Leg_Curls: 2, Seated_Leg_Curl: 2, Leg_Extensions: 2, Standing_Calf_Raises: 2, Seated_Calf_Raise: 2,
   Standing_Dumbbell_Calf_Raise: 2, Calf_Press_On_The_Leg_Press_Machine: 2, Face_Pull: 2, Cable_Crossover: 2, Dumbbell_Flyes: 2, Butterfly: 2,
-  Incline_Dumbbell_Flyes: 2, Reverse_Flyes: 2, Reverse_Machine_Flyes: 2, Cable_Rear_Delt_Fly: 2, Dumbbell_Lunges: 2, Barbell_Walking_Lunge: 2,
+  Incline_Dumbbell_Flyes: 2, Reverse_Flyes: 2, Reverse_Machine_Flyes: 2, Cable_Rear_Delt_Fly: 2, Dumbbell_Lunges: 2, Barbell_Walking_Lunge: 2, Dumbbell_Walking_Lunge: 2,
   Dumbbell_Rear_Lunge: 2, Split_Squat_with_Dumbbells: 2, Dumbbell_Step_Ups: 2, Hanging_Leg_Raise: 2, Cable_Crunch: 2, Plank: 2, Ab_Roller: 2,
   Pallof_Press: 2, Knee_Hip_Raise_On_Parallel_Bars: 2, Dumbbell_Shrug: 2, Barbell_Shrug: 2, Hyperextensions_Back_Extensions: 2,
   Dumbbell_Hip_Thrust: 2, Machine_Hip_Thrust: 2, Leverage_Iso_Row: 2, Leverage_High_Row: 2, Thigh_Abductor: 2, Thigh_Adductor: 2,

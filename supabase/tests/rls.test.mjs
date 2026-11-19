@@ -15,7 +15,7 @@ await db.exec(`
   grant execute on function auth.uid() to authenticated, anon;
   alter default privileges in schema public grant all on tables to authenticated, anon;
 `);
-for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql", "20261122000100_height_sex.sql", "20261123000100_ai_jobs.sql", "20261124000100_injuries.sql", "20261125000100_dev_notes.sql", "20261126000100_hide_crucifix.sql"]) {
+for (const f of ["20261115000100_schema.sql", "20261115000200_catalog_seed.sql", "20261115000300_lock_trigger_functions.sql", "20261116000100_phase1_logging.sql", "20261116000200_cardio_in_workouts.sql", "20261116000300_phase2_plans.sql", "20261117000100_phase3_ai.sql", "20261118000100_phase4_progress.sql", "20261119000100_outdoor_cardio_gear.sql", "20261119000200_skipped_sets.sql", "20261120000100_ai_pick_kinds.sql", "20261120000200_recovery_times.sql", "20261121000100_cardio_incline.sql", "20261122000100_height_sex.sql", "20261123000100_ai_jobs.sql", "20261124000100_injuries.sql", "20261125000100_dev_notes.sql", "20261126000100_hide_crucifix.sql", "20261127000100_exercise_twins.sql"]) {
   const t = Date.now();
   await db.exec(readFileSync(root + f, "utf8"));
   console.log("applied", f, Date.now() - t, "ms");
@@ -38,6 +38,7 @@ await db.exec(readFileSync(root + "20261123000100_ai_jobs.sql", "utf8"));
 await db.exec(readFileSync(root + "20261124000100_injuries.sql", "utf8"));
 await db.exec(readFileSync(root + "20261125000100_dev_notes.sql", "utf8"));
 await db.exec(readFileSync(root + "20261126000100_hide_crucifix.sql", "utf8"));
+await db.exec(readFileSync(root + "20261127000100_exercise_twins.sql", "utf8"));
 if ((await db.query(`select is_active from public.exercises where id = 'Crucifix'`)).rows[0]?.is_active !== false) throw new Error("Crucifix should be inactive");
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,

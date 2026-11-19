@@ -152,6 +152,7 @@ export const COMMON = {
   "Incline_Push-Up": "Incline Push-Up",
   "Dips_-_Chest_Version": "Chest Dip",
   "Straight-Arm_Dumbbell_Pullover": "Dumbbell Pullover",
+  "Bent-Arm_Barbell_Pullover": "Barbell Pullover",
   "Wide-Grip_Barbell_Bench_Press": "Wide-Grip Bench Press",
   "Dumbbell_Bench_Press_with_Neutral_Grip": "Neutral-Grip Dumbbell Press",
   // Back
@@ -200,7 +201,7 @@ export const COMMON = {
   "Cable_Seated_Lateral_Raise": "Seated Cable Lateral Raise",
   "One-Arm_Side_Laterals": "Single-Arm Lateral Raise",
   "Lateral_Raise_-_With_Bands": "Band Lateral Raise",
-  "Front_Dumbbell_Raise": "Front Raise",
+  "Front_Dumbbell_Raise": "Dumbbell Front Raise",
   "Front_Cable_Raise": "Cable Front Raise",
   "Front_Plate_Raise": "Plate Front Raise",
   "Reverse_Flyes": "Reverse Dumbbell Fly",
@@ -208,7 +209,8 @@ export const COMMON = {
   "Reverse_Machine_Flyes": "Reverse Pec Deck",
   "Cable_Rear_Delt_Fly": "Cable Rear Delt Fly",
   "Band_Pull_Apart": "Band Pull-Apart",
-  "Upright_Barbell_Row": "Upright Row",
+  "Upright_Barbell_Row": "Barbell Upright Row",
+  "Standing_Dumbbell_Upright_Row": "Dumbbell Upright Row",
   "Upright_Cable_Row": "Cable Upright Row",
   "Handstand_Push-Ups": "Handstand Push-Up",
   "External_Rotation_with_Cable": "Cable External Rotation",
@@ -226,7 +228,8 @@ export const COMMON = {
   "Standing_Biceps_Cable_Curl": "Cable Curl",
   "Cable_Hammer_Curls_-_Rope_Attachment": "Cable Rope Hammer Curl",
   "Spider_Curl": "Spider Curl",
-  "Reverse_Barbell_Curl": "Reverse Curl",
+  "Reverse_Barbell_Curl": "Barbell Reverse Curl",
+  "Standing_Dumbbell_Reverse_Curl": "Dumbbell Reverse Curl",
   "Zottman_Curl": "Zottman Curl",
   "Triceps_Pushdown": "Tricep Pushdown",
   "Triceps_Pushdown_-_Rope_Attachment": "Rope Pushdown",
@@ -246,6 +249,7 @@ export const COMMON = {
   "JM_Press": "JM Press",
   "Push-Ups_-_Close_Triceps_Position": "Close-Grip Push-Up",
   "Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench": "Dumbbell Wrist Curl",
+  "Palms-Up_Barbell_Wrist_Curl_Over_A_Bench": "Barbell Wrist Curl",
   "Farmers_Walk": "Farmer's Carry",
   // Legs
   "Barbell_Squat": "Back Squat",
@@ -261,11 +265,12 @@ export const COMMON = {
   "Bodyweight_Squat": "Bodyweight Squat",
   "Barbell_Lunge": "Barbell Lunge",
   "Dumbbell_Lunges": "Dumbbell Lunge",
-  "Dumbbell_Rear_Lunge": "Reverse Lunge",
-  "Barbell_Walking_Lunge": "Walking Lunge",
+  "Dumbbell_Rear_Lunge": "Dumbbell Reverse Lunge",
+  "Barbell_Walking_Lunge": "Barbell Walking Lunge",
   "Bodyweight_Walking_Lunge": "Bodyweight Walking Lunge",
   "Split_Squat_with_Dumbbells": "Dumbbell Split Squat",
   "Dumbbell_Step_Ups": "Dumbbell Step-Up",
+  "Barbell_Step_Ups": "Barbell Step-Up",
   "Romanian_Deadlift": "Romanian Deadlift",
   "Stiff-Legged_Dumbbell_Deadlift": "Dumbbell Romanian Deadlift",
   "Stiff-Legged_Barbell_Deadlift": "Stiff-Leg Deadlift",
@@ -291,6 +296,7 @@ export const COMMON = {
   "Seated_Calf_Raise": "Seated Calf Raise",
   "Calf_Press_On_The_Leg_Press_Machine": "Leg Press Calf Raise",
   "Standing_Dumbbell_Calf_Raise": "Dumbbell Calf Raise",
+  "Standing_Barbell_Calf_Raise": "Barbell Calf Raise",
   "Smith_Machine_Calf_Raise": "Smith Machine Calf Raise",
   "One-Arm_Kettlebell_Swings": "Single-Arm Kettlebell Swing",
   "Power_Clean": "Power Clean",
@@ -353,9 +359,10 @@ export const EXTRA_EXERCISES = [
     instructions: ["Lie face down with your arms overhead in a Y, thumbs up.", "Lift your arms off the floor by squeezing your shoulder blades, hold a second, and lower.", "Repeat with arms straight out to the sides (T), then elbows bent and pulled to your ribs (W). One Y, T and W is one rep."],
   },
   {
-    id: "Bulgarian_Split_Squat", name: "Bulgarian Split Squat", mechanic: "compound", force: "push", level: "intermediate",
+    // Dumbbell version (the id predates the barbell twin below, so plans and history that use it stay put).
+    id: "Bulgarian_Split_Squat", name: "Dumbbell Bulgarian Split Squat", mechanic: "compound", force: "push", level: "intermediate",
     primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],
-    equipment: [["dumbbells", "kettlebells", "barbell"], ["flat_bench", "adjustable_bench", "plyo_box"]],
+    equipment: [["dumbbells", "kettlebells"], ["flat_bench", "adjustable_bench", "plyo_box"]],
     instructions: ["Stand a stride in front of a bench and rest the top of your back foot on it.", "Hold the weights at your sides and lower straight down until your front thigh is about parallel.", "Drive through the front foot to stand back up. Finish all reps, then switch legs."],
   },
   {
@@ -412,6 +419,64 @@ export const EXTRA_EXERCISES = [
     equipment: [["dumbbells", "kettlebells", "weight_plates"], ["flat_bench", "adjustable_bench"]],
     instructions: ["Sit with your upper back against a bench and a dumbbell across your hips.", "Drive your hips up until your body is straight from shoulders to knees.", "Lower and repeat."],
   },
+  // Barbell / dumbbell twins: the same movement with different gear is its own exercise, so its history,
+  // PRs and starting weights stay separate. The classic barbell lifts keep the short name (Deadlift, Bench Press).
+  {
+    id: "Dumbbell_Deadlift", name: "Dumbbell Deadlift", mechanic: "compound", force: "pull", level: "beginner",
+    primary: ["hamstrings", "glutes", "lower_back"], secondary: ["quads", "traps", "forearms"],
+    equipment: [["dumbbells"]],
+    instructions: ["Stand with a dumbbell on the floor outside each foot.", "Hinge at the hips and bend your knees to grip the handles with a flat back and chest up.", "Drive through your feet to stand tall, squeezing your glutes, then lower the weights back down the same way."],
+  },
+  {
+    id: "Dumbbell_Walking_Lunge", name: "Dumbbell Walking Lunge", mechanic: "compound", force: "push", level: "beginner",
+    primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],
+    equipment: [["dumbbells"]],
+    instructions: ["Stand tall with a dumbbell in each hand at your sides.", "Step forward and lower until your back knee nearly touches the floor.", "Push through the front foot and bring the back foot through into the next step. Count each leg."],
+  },
+  {
+    id: "Barbell_Reverse_Lunge", name: "Barbell Reverse Lunge", mechanic: "compound", force: "push", level: "intermediate",
+    primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],
+    equipment: [["barbell"], ["power_rack", "squat_stand"]],
+    instructions: ["Unrack the bar onto your upper back and stand tall.", "Step one foot back and lower until your back knee nearly touches the floor.", "Drive through the front foot to step back to standing. Alternate legs or finish one side first."],
+  },
+  {
+    id: "Barbell_Split_Squat", name: "Barbell Split Squat", mechanic: "compound", force: "push", level: "intermediate",
+    primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],
+    equipment: [["barbell"], ["power_rack", "squat_stand"]],
+    instructions: ["Unrack the bar onto your upper back and take a long split stance.", "Lower straight down until your back knee nearly touches the floor.", "Drive back up through the front foot. Finish all reps, then switch legs."],
+  },
+  {
+    id: "Barbell_Bulgarian_Split_Squat", name: "Barbell Bulgarian Split Squat", mechanic: "compound", force: "push", level: "intermediate",
+    primary: ["quads", "glutes"], secondary: ["hamstrings", "adductors"],
+    equipment: [["barbell"], ["power_rack", "squat_stand"], ["flat_bench", "adjustable_bench", "plyo_box"]],
+    instructions: ["Unrack the bar onto your upper back and rest the top of your back foot on a bench behind you.", "Lower straight down until your front thigh is about parallel.", "Drive through the front foot to stand back up. Finish all reps, then switch legs."],
+  },
+  {
+    id: "Dumbbell_Single_Leg_Romanian_Deadlift", name: "Single-Leg Dumbbell RDL", mechanic: "compound", force: "pull", level: "intermediate",
+    primary: ["hamstrings", "glutes"], secondary: ["lower_back", "abs"],
+    equipment: [["dumbbells"]],
+    instructions: ["Hold a dumbbell in the hand opposite your standing leg.", "Hinge forward and let the free leg reach back until your body is close to level, back flat.", "Squeeze the glute of the standing leg to return to tall. Finish all reps, then switch legs."],
+  },
+  {
+    id: "Barbell_Front_Raise", name: "Barbell Front Raise", mechanic: "isolation", force: "push", level: "beginner",
+    primary: ["front_delts"], secondary: ["side_delts"],
+    equipment: [["barbell", "ez_bar"]],
+    instructions: ["Hold the bar in front of your thighs with an overhand, shoulder-width grip.", "With a slight bend in the elbows, raise it to shoulder height.", "Lower slowly without swinging."],
+  },
+  // From imported plans that had no match in the library.
+  {
+    id: "Assisted_Dip", name: "Assisted Dip", mechanic: "compound", force: "push", level: "beginner",
+    primary: ["triceps", "chest"], secondary: ["front_delts"],
+    equipment: [["assisted_pullup_machine"]],
+    aliases: ["Assisted Dip Machine", "Machine Assisted Dip"],
+    instructions: ["Set the assistance weight (more weight makes it easier) and kneel or stand on the pad, gripping the dip handles.", "Lower until your upper arms are about level with the floor, elbows tucked and chest slightly forward.", "Press back up to straight arms."],
+  },
+  {
+    id: "Single_Leg_Lying_Leg_Curl", name: "Single-Leg Lying Leg Curl", mechanic: "isolation", force: "pull", level: "beginner",
+    primary: ["hamstrings"], secondary: ["calves"],
+    equipment: [["lying_leg_curl"]],
+    instructions: ["Lie face down with one ankle under the pad, knee just off the edge of the bench.", "Curl the pad toward your glutes, keeping your hips down.", "Lower slowly. Finish all reps, then switch legs."],
+  },
   {
     id: "Air_Bike_Cardio", name: "Air Bike", category: "cardio", mechanic: null, force: null, level: "beginner",
     primary: ["quads"], secondary: ["glutes", "hamstrings", "calves"],
@@ -431,6 +496,19 @@ export const EXTRA_EXERCISES = [
     instructions: ["Ride at a steady pace or in intervals."],
   },
 ];
+
+// Other names people write for the same lift, so imported plans match on their own.
+// Only true synonyms go here; a different grip, side or piece of gear is its own exercise.
+export const ALIASES = {
+  Face_Pull: ["Seated Face Pull", "Rope Face Pull", "Cable Face Pull"],
+  Cable_Crossover: ["Cable Fly", "Standing Cable Fly", "Cable Chest Fly"],
+  Dumbbell_Bicep_Curl: ["Dumbbell Supinated Curl", "Supinated Dumbbell Curl"],
+  Cable_One_Arm_Tricep_Extension: ["Single-Arm Rope Pushdown", "Single-Arm Tricep Pushdown", "Single-Arm Cable Pushdown"],
+  Barbell_Deadlift: ["Conventional Deadlift"],
+  Standing_Military_Press: ["Military Press", "Barbell Overhead Press"],
+  Barbell_Squat: ["Barbell Back Squat"],
+  Side_Lateral_Raise: ["Dumbbell Lateral Raise", "Dumbbell Side Lateral Raise"],
+};
 
 // Exercises the generator should never pick (odd equipment, neck work, sport drills).
 export const INACTIVE = new Set([
@@ -511,6 +589,8 @@ export const MUSCLE_OVERRIDES = {
   "Wide-Grip_Lat_Pulldown": { p: ["lats"], s: ["upper_back", "biceps", "rear_delts"] },
   Face_Pull: { p: ["rear_delts"], s: ["upper_back", "traps"] },
   Upright_Barbell_Row: { p: ["side_delts", "traps"], s: ["front_delts", "biceps"] },
+  Standing_Dumbbell_Upright_Row: { p: ["side_delts", "traps"], s: ["front_delts", "biceps"] },
+  Barbell_Step_Ups: { p: ["quads", "glutes"], s: ["hamstrings"] },
   Hammer_Curls: { p: ["biceps"], s: ["forearms"] },
   Farmers_Walk: { p: ["forearms", "traps"], s: ["abs", "obliques", "glutes", "quads"] },
   Rowing_Stationary: { p: ["upper_back", "lats", "quads"], s: ["hamstrings", "glutes", "biceps"] },
