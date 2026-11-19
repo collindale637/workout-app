@@ -1,6 +1,7 @@
-import { IMPORT_TOOL, PICK_SYSTEM, PICK_TOOL, PLAN_TOOL, SYSTEM, WORKOUT_TOOL, contextBlock, pickBlock, taskBlock } from "./prompts";
+import { IMPORT_TOOL, PICK_SYSTEM, PICK_TOOL, PLAN_TOOL, SYSTEM, WEEK_TOOL, WORKOUT_TOOL, contextBlock, pickBlock, taskBlock, weekTaskBlock } from "./prompts";
 import { checkImport, checkPicks, checkPlan, checkWorkout } from "./validate";
-import type { AiImport, AiKind, AiPick, AiPlan, AiRequest, AiWorkout, AllowedExercise } from "./types";
+import { assembleWeeks, checkSchedule, checkWeek } from "./weeks";
+import type { AiDay, AiImport, AiKind, AiPick, AiPlan, AiRequest, AiWorkout, AllowedExercise, WeekChange } from "./types";
 
 /*
   One AI request from start to finish: build the prompt, ask Claude, check the answer, send problems back
@@ -13,6 +14,11 @@ export type Call = { input: unknown; toolUseId: string | null; content: Block[];
 export type CallFn = (opts: { model?: string; system: string; messages: Msg[]; tool: { name: string; description: string; input_schema: Record<string, unknown> }; maxTokens: number }) => Promise<Call>;
 
 export const MAX_TOKENS: Record<AiKind, number> = { plan: 8000, edit: 8000, workout: 3000, day: 3000, import: 10000, swap: 700, suggest: 900 };
+/** One later week of a plan whose workouts change (about the size of a whole one-week plan). */
+export const WEEK_MAX_TOKENS = 8000;
+/** Past this, later weeks skip the second try to fix problems, so the whole build stays inside the server's time limit. */
+const WEEK_RETRY_CUTOFF_MS = 120_000;
+type Tool = Parameters<CallFn>[0]["tool"];
 
 export type RunResult =
   | { kind: "plan" | "edit"; value: AiPlan; errors: string[]; empty: boolean; tokens: { input_tokens: number; output_tokens: number }; calls: number }
@@ -49,6 +55,10 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
   const messages: Msg[] = [{ role: "user", content }];
   const pickExclude = new Set([...(req.today?.items.map((t) => t.id) ?? []), ...(req.swap ? [req.swap.exercise_id] : [])]);
 
+  // A plan's schedule (the weeks whose workouts change) is read with the plan; saved-plan edits keep their weeks as they are.
+  const scheduled = req.kind === "plan" || (req.kind === "edit" && req.draft === true);
+  let schedule: WeekChange[] = [];
+
   const check = (input: unknown): { value: AiPlan | AiWorkout | AiImport | AiPick[]; errors: string[] } => {
     if (isPick) {
       const r = checkPicks(input, allow, { exclude: pickExclude, max: req.kind === "swap" ? 3 : 4 });
@@ -64,7 +74,10 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
         fallbackWeeks: req.options?.weeks ?? req.plan?.weeks ?? 8,
         dayIds: new Set(req.plan?.days.map((d) => d.id) ?? []),
       });
-      return { value: r.plan, errors: r.errors };
+      if (!scheduled) return { value: r.plan, errors: r.errors };
+      const s = checkSchedule(typeof input === "object" && input !== null ? (input as Record<string, unknown>).schedule : undefined, r.plan.weeks);
+      schedule = s.schedule;
+      return { value: r.plan, errors: [...r.errors, ...s.errors] };
     }
     const r = checkWorkout(input, allow);
     return { value: r.workout, errors: r.errors };
@@ -72,24 +85,63 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
 
   const tokens = { input_tokens: 0, output_tokens: 0 };
   let calls = 0;
-  const ask = async (msgs: Msg[], maxTokens: number) => {
-    const c = await callTool({ model, system, messages: msgs, tool, maxTokens });
+  const started = Date.now();
+  const ask = async (msgs: Msg[], maxTokens: number, t: Tool = tool) => {
+    const c = await callTool({ model, system, messages: msgs, tool: t, maxTokens });
     tokens.input_tokens += c.usage.input_tokens;
     tokens.output_tokens += c.usage.output_tokens;
     calls++;
     return c;
   };
 
-  const maxTokens = MAX_TOKENS[req.kind];
-  let call = await ask(messages, maxTokens);
-  // Ran out of room mid-answer: ask again with more room.
-  if (call.truncated) call = await ask(messages, Math.round(maxTokens * 1.6));
-  let { value, errors } = check(call.input);
-  // Anything invalid goes back to Claude once to fix.
-  if (errors.length && !call.truncated) {
-    const retry = await ask([...messages, ...fixMessages(call, errors)], Math.round(maxTokens * 1.6));
-    if (!retry.truncated) ({ value, errors } = check(retry.input));
+  /** Ask, check the answer, and send any problems back once to fix. */
+  async function askChecked<T>(msgs: Msg[], maxTokens: number, t: Tool, checkFn: (input: unknown) => { value: T; errors: string[] }, mayRetry = true) {
+    let call = await ask(msgs, maxTokens, t);
+    // Ran out of room mid-answer: ask again with more room.
+    if (call.truncated) call = await ask(msgs, Math.round(maxTokens * 1.6), t);
+    let r = checkFn(call.input);
+    // Anything invalid goes back to Claude once to fix.
+    if (r.errors.length && !call.truncated && mayRetry) {
+      const retry = await ask([...msgs, ...fixMessages(call, r.errors)], Math.round(maxTokens * 1.6), t);
+      if (!retry.truncated) r = checkFn(retry.input);
+    }
+    return r;
   }
+
+  let { value, errors } = await askChecked(messages, MAX_TOKENS[req.kind], tool, check);
+
+  // Plans whose workouts change: write each "new" week in its own call, all at once.
+  if (isPlan && scheduled && schedule.length && (value as AiPlan).days.length) {
+    const plan = value as AiPlan;
+    const before = req.draft ? (req.plan?.later ?? []) : [];
+    const written = new Map<number, AiDay[]>();
+    await Promise.all(
+      schedule
+        .filter((e) => e.kind === "new")
+        .map(async (e) => {
+          const old = before.find((w) => w.week === e.week && w.kind === "new");
+          const msgs: Msg[] = [{ role: "user", content: [
+            { type: "text", text: contextBlock(req, { gymFiltered: true }) },
+            { type: "text", text: weekTaskBlock(req, plan, schedule, e.week, old?.days ?? null) },
+          ] }];
+          try {
+            const r = await askChecked(msgs, WEEK_MAX_TOKENS, WEEK_TOOL, (input) => {
+              const w = checkWeek(input, allow, e.week, plan.days);
+              return { value: w.days, errors: w.errors };
+            }, Date.now() - started < WEEK_RETRY_CUTOFF_MS);
+            errors.push(...r.errors);
+            written.set(e.week, r.value);
+          } catch (err) {
+            // One week failing (a timeout, say) shouldn't lose the whole plan: that week repeats the one before.
+            console.error(`AI week ${e.week} failed`, err instanceof Error ? err.message : err);
+          }
+        }),
+    );
+    const assembled = assembleWeeks(schedule, written, plan.days, plan.weeks);
+    errors = [...errors, ...assembled.errors];
+    value = { ...plan, later_weeks: assembled.weeks };
+  }
+
   const empty = isPick ? !(value as AiPick[]).length : req.kind === "import" ? false : isPlan ? !(value as AiPlan).days.length : !(value as AiWorkout).items.length;
   return { kind: req.kind, value, errors, empty, tokens, calls } as RunResult;
 }

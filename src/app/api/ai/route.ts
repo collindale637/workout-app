@@ -83,6 +83,8 @@ function parseRequest(body: unknown): AiRequest | string {
   if (!pick && b.kind !== "import" && b.kind !== "edit" && !prompt.trim() && b.kind !== "plan") return "Say what you'd like.";
   if (b.kind === "edit" && (!b.plan || !Array.isArray(b.plan.days))) return "Missing plan to edit.";
   if (b.kind === "edit" && !prompt.trim()) return "Say what to change.";
+  const later = b.plan?.later;
+  if (later !== undefined && (!Array.isArray(later) || later.length > 11 || later.some((w) => !w || !Array.isArray(w.days) || w.days.length > 7))) return "Bad plan weeks.";
   if (b.kind === "plan") {
     const o = b.options;
     if (!o || !GOALS.includes(o.goal) || !(o.days_per_week >= 1 && o.days_per_week <= 7) || !(o.weeks >= 1 && o.weeks <= 52)) return "Missing plan settings.";

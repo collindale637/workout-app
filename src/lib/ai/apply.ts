@@ -1,5 +1,5 @@
 import type { Catalog } from "@/lib/hooks";
-import type { AiItem, AiPlan, PlanSnapshot } from "./types";
+import type { AiDay, AiItem, AiPlan, PlanSnapshot } from "./types";
 
 /** What a day trains: the main muscles of its lifts, in body-map order. Used to regenerate and swap later. */
 export function targetsFor(catalog: Pick<Catalog, "musclesOf" | "muscles">, items: Pick<AiItem, "exercise_id">[]): string[] {
@@ -20,5 +20,17 @@ export function draftSnapshot(p: AiPlan): PlanSnapshot {
     weeks: p.weeks,
     notes: planNotes(p),
     days: p.days.map((d, i) => ({ id: `draft-${i + 1}`, name: d.name, items: d.items })),
+    ...(p.later_weeks?.length ? { later: p.later_weeks.map((w) => ({ week: w.week, kind: w.kind, focus: w.focus, days: w.days.map((d) => ({ name: d.name, items: d.items })) })) } : {}),
   };
+}
+
+/**
+ * Every day to save for a draft, week by week: week 1's days, then each later week's own days. Weeks with no days of
+ * their own repeat the week before (see src/lib/plan-weeks.ts).
+ */
+export function draftWeekDays(p: Pick<AiPlan, "days" | "later_weeks">): { week: number; day: AiDay }[] {
+  return [
+    ...p.days.map((day) => ({ week: 1, day })),
+    ...(p.later_weeks ?? []).flatMap((w) => w.days.map((day) => ({ week: w.week, day: { ...day, ref_day_id: null } }))),
+  ];
 }
