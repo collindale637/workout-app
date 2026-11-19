@@ -111,6 +111,14 @@ body {
   padding-bottom: max(env(safe-area-inset-bottom), 8px);
 }
 
+/* iPhone home-screen app (iOS 26): when a page gets shorter than the screen, WebKit shrinks the app's canvas and fixed
+   bars at the bottom float ~56pt up over a dead band. Today with its sheet minimized is that short, and the switch
+   happening mid-slide made the sheet dip behind the tabs, then jump. Keep Today a pixel taller than the screen while
+   minimized so the page never changes mode. */
+html.sheet-min body {
+  min-height: calc(100lvh + 1px);
+}
+
 /* Recovery "How does it feel?" slider: red → orange → green track, big white thumb (44px touch height). */
 .feel-slider { -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
 .feel-slider::-webkit-slider-runnable-track { height: 12px; border-radius: 999px; background: linear-gradient(90deg, #ff5a5f 0%, #ff8a3d 45%, #3ddc84 100%); }
