@@ -38,3 +38,8 @@ export const PowerIcon = () => (
 export const InfoIcon = ({ size = 22 }: { size?: number }) => (
   <svg {...base} width={size} height={size}><circle cx="12" cy="12" r="9.5" /><path d="M12 11v5.5" /><circle cx="12" cy="7.6" r="0.6" fill="currentColor" /></svg>
 );
+
+/** Undo: a counter-clockwise hook arrow, drawn like the Regenerate and Customize icons (round caps, same weight). */
+export const UndoIcon = ({ size = 18, strokeWidth = 2.5 }: { size?: number; strokeWidth?: number }) => (
+  <svg {...base} width={size} height={size} strokeWidth={strokeWidth}><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
+);

@@ -44,7 +44,7 @@ export function PlanScreen() {
         <h2 className="display text-xl font-extrabold">With AI</h2>
         <Card className="divide-y divide-line overflow-hidden">
           <Link href="/plan/ai" className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
-            <Sparkle size={22} className="shrink-0 text-accent" />
+            <Sparkle size={22} className="shrink-0 text-ai" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-base font-bold">Build with AI</span>
               <span className={`text-sm font-medium ${aiLine ? "text-accent" : "text-muted"}`}>{aiLine ?? "Describe what you want, get a full plan for your gym"}</span>
@@ -52,7 +52,7 @@ export function PlanScreen() {
             <Chevron />
           </Link>
           <Link href="/plan/import" className="flex min-h-16 items-center gap-3 px-4 py-3 active:bg-card-2">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-accent" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-teal" aria-hidden="true">
               <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
             </svg>
             <span className="flex min-w-0 flex-1 flex-col">

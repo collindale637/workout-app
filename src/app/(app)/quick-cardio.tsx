@@ -10,7 +10,7 @@ import type { CardioType } from "@/lib/db/types";
 export const QUICK_CARDIO: CardioType[] = ["walk", "run", "bike", "elliptical"];
 
 /** Colored top band per tile (UX spec 5.2). */
-const BANDS: Record<string, string> = { walk: "var(--band-sky)", run: "var(--chart-2)", bike: "var(--good)", elliptical: "var(--text)" };
+const BANDS: Record<string, string> = { walk: "var(--band-sky)", run: "var(--band-run)", bike: "var(--good)", elliptical: "var(--text)" };
 
 const ICONS: Record<string, React.ReactNode> = {
   walk: <path d="M12 8l-2 5 3 2 1 5M12 8l3 3 3 1M10 13l-3 3M13 6.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" />,
