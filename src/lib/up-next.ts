@@ -1,5 +1,6 @@
 "use client";
 
+import { weekLabel } from "@/lib/plan-weeks";
 import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData } from "@/lib/db/provider";
@@ -131,7 +132,7 @@ function useGenerated(
         };
       }
       return {
-        mode, title: day.name, subtitle: `${plan.plan.name} · Day ${day.day_order} of ${plan.days.length}${seed ? " · regenerated" : ""}`,
+        mode, title: day.name, subtitle: `${plan.plan.name} · ${weekLabel(plan.week, plan.length)} · Day ${day.day_order} of ${plan.days.length}${seed ? " · regenerated" : ""}`,
         targets: day.target_muscle_ids, items: adapted.items, swaps: adapted.swaps, day, plan, seed, source: "plan",
       };
     }

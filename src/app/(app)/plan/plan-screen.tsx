@@ -13,6 +13,7 @@ import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
 import { dayOptions, resolveFilter, splitRows, type SplitFilter } from "@/lib/split-filter";
+import { weekLabel } from "@/lib/plan-weeks";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { Card, Sheet, btn, field } from "@/components/ui/kit";
 import { Sparkle } from "@/components/ai";
@@ -97,7 +98,7 @@ function ActivePlanCard() {
   const [rename, setRename] = useState<string | null>(null);
   const splitName = useLiveQuery(async () => (plan?.plan.split_id ? (await db.splits.get(plan.plan.split_id))?.name : null), [db, plan?.plan.split_id]);
   if (!plan || !catalog) return null;
-  const { plan: p, days, exercises, nextDay, week } = plan;
+  const { plan: p, days, exercises, nextDay, week, length } = plan;
 
   return (
     <section className="flex flex-col gap-3">
@@ -110,12 +111,12 @@ function ActivePlanCard() {
         </div>
         <h2 className="display text-[44px] leading-[0.9] font-extrabold">{p.name}</h2>
         <p className="text-[15px] font-semibold text-[#DCE4FF]">
-          Week {p.weeks ? `${Math.min(week, p.weeks)} of ${p.weeks}` : week}
+          {weekLabel(week, length)}
           {splitName && splitName !== p.name ? ` · ${splitName}` : ""}
           {p.goal ? ` · ${GOAL_LABELS[p.goal]}` : ""}
         </p>
-        {p.weeks && week > p.weeks && (
-          <p className="rounded-2xl bg-white/15 px-3 py-2 text-sm font-semibold">This plan has run its {p.weeks} weeks. Keep going, or build a fresh one below.</p>
+        {p.completed_at && (
+          <p className="rounded-2xl bg-white/15 px-3 py-2 text-sm font-semibold">You finished all {length ?? week} weeks of this plan. Keep going, or build a fresh one below.</p>
         )}
       </div>
 

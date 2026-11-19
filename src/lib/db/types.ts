@@ -185,6 +185,16 @@ export type Plan = {
   is_active: boolean;
   /** AI-built and imported plans: a short overview and how the plan progresses. */
   notes?: string | null;
+  /** 1-based week the plan is on. Moves on when every day of the week is done or skipped. Missing on old rows = 1. */
+  current_week?: number;
+  /** When the current week started (ISO). Null/missing = the plan's start. */
+  week_started_at?: string | null;
+  /** Plan days skipped in the current week; cleared when the week moves on. */
+  skipped_day_ids?: string[];
+  /** Set when the last week was finished. */
+  completed_at?: string | null;
+  /** "Skip for now" on the Plan complete screen. */
+  completion_dismissed_at?: string | null;
   created_at: string;
   updated_at?: string;
 };
@@ -197,6 +207,8 @@ export type PlanDay = {
   gym_id: string | null;
   /** What the day trains; used to regenerate it and to pick swaps. */
   target_muscle_ids: string[];
+  /** Which week of the plan the day belongs to (1–12). Missing on old rows = 1. */
+  week?: number;
   updated_at?: string;
 };
 

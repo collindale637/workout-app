@@ -43,6 +43,8 @@ await db.exec(readFileSync(root + "20261127000200_exercise_twins_2.sql", "utf8")
 await db.exec(readFileSync(root + "20261127000300_preacher_curl_default.sql", "utf8"));
 await db.exec(readFileSync(root + "20261128000100_catalog_ez_preacher_and_more.sql", "utf8"));
 await db.exec(readFileSync(root + "20261128000200_overhead_cable_extension_names.sql", "utf8"));
+await db.exec(readFileSync(root + "20261129000100_plan_weeks.sql", "utf8"));
+await db.exec(readFileSync(root + "20261129000100_plan_weeks.sql", "utf8")); // re-runnable
 if ((await db.query(`select is_active from public.exercises where id = 'Crucifix'`)).rows[0]?.is_active !== false) throw new Error("Crucifix should be inactive");
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,
@@ -94,6 +96,15 @@ r.push(["workout links to plan day", await as(A, `update workouts set plan_day_i
 r.push(["B sees no plans", await as(B, `select (select count(*) from plans)::int plans, (select count(*) from plan_days)::int days, (select count(*) from plan_exercises)::int exs`)]);
 r.push(["B cannot add a day to A's plan", await as(B, `insert into plan_days (plan_id, day_order, name) values ('${P}',2,'Pull')`)]);
 r.push(["B cannot add to A's plan day", await as(B, `insert into plan_exercises (plan_day_id, exercise_id) values ('${D}','Pullups')`)]);
+// Batch 20b: plans by week. Days default to week 1; progress is saved on the plan and only its owner can change it.
+r.push(["A saves week progress", await as(A, `update plans set current_week = 2, week_started_at = now(), skipped_day_ids = array['${D}']::uuid[] where id = '${P}' returning current_week`)]);
+r.push(["B cannot change A's week", await as(B, `update plans set current_week = 9 returning id`)]);
+{
+  const day = (await db.query(`select week from public.plan_days where id = '${D}'`)).rows[0];
+  const plan = (await db.query(`select current_week, cardinality(skipped_day_ids) skipped from public.plans where id = '${P}'`)).rows[0];
+  if (day?.week !== 1) throw new Error("plan days should default to week 1");
+  if (plan?.current_week !== 2 || plan?.skipped !== 1) throw new Error("A's week progress should be saved and untouched by B");
+}
 r.push(["A favorites + excludes", await as(A, `insert into exercise_prefs (exercise_id, favorite, excluded) values ('Pullups', true, false), ('Barbell_Deadlift', false, true) on conflict (owner_id, exercise_id) do update set favorite = excluded.favorite returning exercise_id`)]);
 r.push(["B sees none of A's prefs", await as(B, `select count(*)::int n from exercise_prefs`)]);
 r.push(["new splits present", await as(A, `select s.id, count(d.*)::int days from splits s join split_days d on d.split_id = s.id where s.id in ('phul_4','hybrid_4') group by s.id order by s.id`)]);

@@ -21,6 +21,8 @@ import { dayStyle, dose, type GenItem } from "@/lib/generator";
 import { isCardioExercise } from "@/lib/cardio";
 import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 import { TODAY_TOP_EVENT } from "./today-cardio";
+import { usePlanActions } from "@/lib/plans";
+import { weekLabel } from "@/lib/plan-weeks";
 
 /** Where the exercise sheet sits: a bar above the tabs, under the card (follows it as the page scrolls), or full height. */
 type SheetMode = "min" | "default" | "max";
@@ -43,6 +45,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const { gym, equipment, equipmentRows } = useActiveGym();
   const { choice, setChoice } = useUpNextChoice();
   const { start } = useWorkoutActions();
+  const planActions = usePlanActions();
   const lastSets = useLastSets((up?.items ?? []).map((i) => i.exercise_id));
   const who = useStartingProfile();
   const [options, setOptions] = useState(false);
@@ -272,6 +275,22 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         </div>
         <h1 className="display text-[44px] leading-[0.85] font-extrabold tracking-[-0.02em] break-words">{up.title}</h1>
         <p className="-mt-1 text-sm font-semibold text-[#DCE4FF]">{up.subtitle}</p>
+        {up.mode === "plan" && up.plan && up.plan.days.length > 1 && (
+          // This week: green = done, light = skipped, faint = still to do.
+          <div
+            className="-mt-1 grid gap-1"
+            style={{ gridTemplateColumns: `repeat(${up.plan.days.length}, minmax(0, 1fr))` }}
+            role="img"
+            aria-label={`This week: ${up.plan.doneThisWeek.size} done${up.plan.skippedThisWeek.size ? `, ${up.plan.skippedThisWeek.size} skipped` : ""} of ${up.plan.days.length}`}
+          >
+            {up.plan.days.map((d) => (
+              <span
+                key={d.id}
+                className={`h-1.5 rounded-full ${up.plan!.doneThisWeek.has(d.id) ? "bg-good" : up.plan!.skippedThisWeek.has(d.id) ? "bg-white/55" : "bg-white/20"}`}
+              />
+            ))}
+          </div>
+        )}
         {rd && (
           <div className="flex flex-col gap-2 rounded-2xl bg-black/20 px-3 py-2">
             {/* One line so the card stays short and the list gets the room. */}
@@ -559,7 +578,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         <div className="flex flex-col gap-2">
           {up.plan && (
             <div className="flex flex-col gap-2 rounded-2xl bg-card-2 p-3">
-              <span className="text-sm font-bold text-muted">{up.plan.plan.name}</span>
+              <span className="text-sm font-bold text-muted">{up.plan.plan.name} · {weekLabel(up.plan.week, up.plan.length)}</span>
               <div className="flex flex-wrap gap-2">
                 {up.plan.days.map((d) => {
                   const on = up.mode === "plan" && up.day?.id === d.id;
@@ -573,13 +592,32 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
                       }}
                       className={`min-h-11 rounded-2xl border-2 px-3 text-sm font-bold ${on ? "border-accent-strong bg-primary/15 text-accent-soft" : "border-line bg-card"}`}
                     >
+                      {up.plan?.doneThisWeek.has(d.id) ? "✓ " : ""}
                       {d.day_order}. {d.name}
-                      {up.plan?.nextDay?.id === d.id ? " · next" : ""}
+                      {up.plan?.skippedThisWeek.has(d.id) ? " · skipped" : up.plan?.nextDay?.id === d.id ? " · next" : ""}
                     </button>
                   );
                 })}
               </div>
             </div>
+          )}
+          {up.mode === "plan" && up.plan && up.day && !up.plan.doneThisWeek.has(up.day.id) && !up.plan.skippedThisWeek.has(up.day.id) && (
+            <>
+              <button
+                type="button"
+                className={btn.secondary}
+                onClick={async () => {
+                  const planId = up.plan!.plan.id;
+                  const dayId = up.day!.id;
+                  await setChoice({ mode: "plan", seed: 0 });
+                  await planActions.skipDay(planId, dayId);
+                  setOptions(false);
+                }}
+              >
+                Skip {up.day.name} this week
+              </button>
+              <p className="-mt-1 px-1 text-sm font-medium text-muted">A skipped day counts toward finishing the week. The week moves on once every day is done or skipped.</p>
+            </>
           )}
           <button type="button" className={btn.secondary} onClick={async () => { await setChoice({ mode: "fresh", seed: 0 }); setOptions(false); }}>
             Target fresh muscles

@@ -118,7 +118,7 @@ export function AiPlanScreen() {
     const planName = (name ?? p.name).trim() || p.name;
     const dayRows = p.days.map((d) => ({ ref_day_id: d.ref_day_id, name: d.name, target_muscle_ids: targetsFor(catalog, d.items), items: d.items }));
     if (existing) {
-      await actions.applyEdit(existing.plan.id, { name: planName, goal: p.goal, weeks: p.weeks, notes: planNotes(p) ?? existing.plan.notes ?? null, days: dayRows });
+      await actions.applyEdit(existing.plan.id, { name: planName, goal: p.goal, weeks: p.weeks, notes: planNotes(p) ?? existing.plan.notes ?? null, days: dayRows }, existing.days[0]?.week ?? 1);
     } else {
       await actions.create({ name: planName, goal: p.goal, splitId: null, weeks: p.weeks, source: "ai", notes: planNotes(p), days: dayRows });
       await setChoice({ mode: "plan", seed: 0 });
