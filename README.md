@@ -1,4 +1,4 @@
-# Rep — workout coach (working name)
+# Reps — workout coach
 
 A family-only "personal trainer in your pocket": plans built from your goals and the equipment at
 whichever gym you're in, live workout logging with RPE on every set, muscle recovery, and progress.

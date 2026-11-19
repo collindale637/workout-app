@@ -7,7 +7,7 @@
   - Supabase calls are never cached here; workout data lives in the app's own offline database and syncs.
   Bump VERSION to force every phone to drop old caches.
 */
-const VERSION = "v5";
+const VERSION = "v6";
 const PAGES = `pages-${VERSION}`;
 const ASSETS = `assets-${VERSION}`;
 const IMAGES = `images-${VERSION}`;
