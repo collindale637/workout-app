@@ -589,6 +589,8 @@ export const ALIASES = {
   One_Arm_Dumbbell_Preacher_Curl: ["Preacher Curl"],
   // "Cable Tricep Extension(s)" is how many plans write a rope or bar pushdown.
   Triceps_Pushdown: ["Cable Tricep Extension", "Cable Tricep Extensions", "Cable Triceps Extension"],
+  // The overhead version is its own exercise (rope, low pulley), so it gets its own names.
+  Triceps_Overhead_Extension_with_Rope: ["Overhead Cable Tricep Extension", "Overhead Cable Triceps Extension", "Cable Overhead Tricep Extension", "Cable Overhead Triceps Extension", "Overhead Rope Tricep Extension"],
 };
 
 // Dataset names that should NOT stay as an alias, because they now belong to a different version of the lift.
