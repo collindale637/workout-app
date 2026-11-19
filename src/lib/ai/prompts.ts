@@ -134,7 +134,7 @@ Keep what the request doesn't touch. It should still fit ${req.profile.session_m
 
 What they asked for: """${ask}"""`;
     case "import":
-      return `TASK: read the workout plan below (pasted text and/or photos) and turn it into structured data.
+      return `TASK: read the workout plan below (pasted text, photos and/or a PDF) and turn it into structured data.
 - Transcribe faithfully: same days, same exercises in the same order, same sets, reps and rest. Don't add, drop or "improve" anything.
 - For each exercise: "written" exactly as in the source; "standard_name" = what it's usually called; "exercise_id" = the best match from the EXERCISES list, or null if nothing fits; "match" = "exact" when it's clearly the same exercise, "close" when it's similar or a guess (different grip, implement or variation), "none" when exercise_id is null; "is_cardio" for cardio.
 - Common shorthand: RDL = Romanian deadlift, OHP = overhead press, DB = dumbbell, BB = barbell, KB = kettlebell, SL = single-leg, BSS = Bulgarian split squat, SA = single-arm, CGBP = close-grip bench press.

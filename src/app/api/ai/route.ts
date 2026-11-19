@@ -4,7 +4,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { AI_FAST_MODEL, AI_MODEL, AI_MONTHLY_CAP_USD, AiError, aiConfigured, callTool, costUsd } from "@/lib/ai/claude";
 import { runAi } from "@/lib/ai/run";
 import { GOALS } from "@/lib/ai/validate";
-import { MAX_IMAGES, MAX_IMPORT_TEXT, MAX_PROMPT, PICK_KINDS, type AiKind, type AiRequest, type AiResponse, type AiWorkout, type AiUsage } from "@/lib/ai/types";
+import { MAX_IMAGES, MAX_IMPORT_TEXT, MAX_PDF_BYTES, MAX_PROMPT, PICK_KINDS, type AiKind, type AiRequest, type AiResponse, type AiWorkout, type AiUsage } from "@/lib/ai/types";
 
 /*
   The one door to Claude. POST asks for a plan, an edit, a workout, a plan day, or an import; GET reports
@@ -19,6 +19,7 @@ export const maxDuration = 300;
 
 const KINDS: AiKind[] = ["plan", "edit", "workout", "day", "import", "swap", "suggest"];
 const MAX_IMAGE_CHARS = 2_000_000; // ~1.5 MB per image after base64
+const MAX_PDF_CHARS = Math.ceil(MAX_PDF_BYTES / 3) * 4 + 4; // the PDF limit, after base64
 
 type Supabase = Awaited<ReturnType<typeof getSupabaseServer>>;
 
@@ -66,7 +67,15 @@ function parseRequest(body: unknown): AiRequest | string {
     if (!img || typeof img.data !== "string" || !["image/jpeg", "image/png", "image/webp"].includes(img.media_type)) return "Unsupported photo.";
     if (img.data.length > MAX_IMAGE_CHARS) return "A photo is too large.";
   }
-  if (b.kind === "import" && !prompt.trim() && !images.length) return "Paste the plan or add a photo.";
+  let pdf: AiRequest["pdf"];
+  if (b.pdf !== undefined) {
+    if (b.kind !== "import") return "Only an import can include a PDF.";
+    // "JVBER" is "%PDF-" in base64.
+    if (typeof b.pdf.data !== "string" || b.pdf.media_type !== "application/pdf" || !b.pdf.data.startsWith("JVBER")) return "Unsupported PDF.";
+    if (b.pdf.data.length > MAX_PDF_CHARS) return "That PDF is too large.";
+    pdf = { media_type: "application/pdf", data: b.pdf.data };
+  }
+  if (b.kind === "import" && !prompt.trim() && !images.length && !pdf) return "Paste the plan, or add a photo or PDF.";
   const pick = PICK_KINDS.includes(b.kind);
   if (pick && (!b.today || !Array.isArray(b.today.items))) return "Missing the workout.";
   if (pick && b.exercises.length > 60) return "Too many candidates sent.";
@@ -79,7 +88,7 @@ function parseRequest(body: unknown): AiRequest | string {
     if (!o || !GOALS.includes(o.goal) || !(o.days_per_week >= 1 && o.days_per_week <= 7) || !(o.weeks >= 1 && o.weeks <= 52)) return "Missing plan settings.";
   }
   if (b.background && b.kind !== "plan" && b.kind !== "edit") return "Only plans and edits can run in the background.";
-  return { ...(b as AiRequest), prompt, images };
+  return { ...(b as AiRequest), prompt, images, pdf };
 }
 
 /** Runs one request to the end and logs its cost. Never throws: every outcome comes back as a body and a status. */

@@ -10,11 +10,11 @@ import { GOAL_LABELS } from "@/lib/profile";
 import { isAvailable } from "@/lib/availability";
 import { isCardioExercise } from "@/lib/cardio";
 import { createCustomExercise } from "@/lib/custom-exercise";
-import { aiProfile, askAI, libraryForImport, prepareImage, useAiUsage } from "@/lib/ai/client";
+import { aiProfile, askAI, libraryForImport, prepareImage, preparePdf, useAiUsage } from "@/lib/ai/client";
 import { buildMatchIndex, matchLine, type MatchStatus } from "@/lib/ai/match";
 import { planNotes, targetsFor } from "@/lib/ai/apply";
 import { normalizeSupersets } from "@/lib/ai/validate";
-import { MAX_IMAGES, type AiImage, type AiImport, type ImportLine } from "@/lib/ai/types";
+import { MAX_IMAGES, type AiImage, type AiImport, type AiPdf, type ImportLine } from "@/lib/ai/types";
 import { AiProblem, AiThinking, AiUsageNote, Sparkle } from "@/components/ai";
 import { ExercisePicker } from "@/components/exercise-picker";
 import { repsLabel } from "@/components/planned";
@@ -41,6 +41,7 @@ export function ImportScreen() {
 
   const [text, setText] = useState("");
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [pdf, setPdf] = useState<AiPdf | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ data: AiImport; warnings: string[] } | null>(null);
@@ -56,11 +57,26 @@ export function ImportScreen() {
   const index = useMemo(() => (catalog ? buildMatchIndex(catalog.exercises) : null), [catalog]);
   if (!inputs.ready || !catalog || !profile || !index) return null;
 
-  async function addPhotos(files: FileList | null) {
+  async function addFiles(files: FileList | null) {
     if (!files) return;
     setError(null);
+    const all = [...files];
+    const pdfs = all.filter((f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name));
+    if (pdfs.length) {
+      if (pdfs.length > 1) setError("One PDF at a time.");
+      try {
+        setPdf(await preparePdf(pdfs[0]));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't read that PDF.");
+      }
+    }
+    await addPhotos(all.filter((f) => !pdfs.includes(f)));
+  }
+
+  async function addPhotos(files: File[]) {
+    if (!files.length) return;
     const room = MAX_IMAGES - photos.length;
-    const list = [...files].slice(0, room);
+    const list = files.slice(0, room);
     if (files.length > room) setError(`Up to ${MAX_IMAGES} photos at a time.`);
     try {
       const added = await Promise.all(list.map(async (f) => ({ id: crypto.randomUUID(), url: URL.createObjectURL(f), image: await prepareImage(f) })));
@@ -81,12 +97,13 @@ export function ImportScreen() {
       gym: null,
       exercises: libraryForImport(catalog, prefs),
       images: photos.map((p) => p.image),
+      pdf: pdf ?? undefined,
     });
     setBusy(false);
     if (r.usage) setUsage(r.usage);
     if (!r.ok) return setError(r.error);
     if (r.kind !== "import") return;
-    if (!r.result.days.length) return setError(r.result.problems ?? "Couldn't find a workout plan in that. Try a clearer photo or paste the text.");
+    if (!r.result.days.length) return setError(r.result.problems ?? "Couldn't find a workout plan in that. Try a clearer photo or PDF, or paste the text.");
     const next = new Map<string, Resolution>();
     r.result.days.forEach((d, di) =>
       d.lines.forEach((l, li) => {
@@ -156,7 +173,7 @@ export function ImportScreen() {
       <main className="flex flex-col gap-4">
         <PageHeader title="Import a plan" />
         <AiThinking what="Reading your plan" />
-        <p className="text-center text-sm font-medium text-muted">Photos take a little longer. Keep this screen open.</p>
+        <p className="text-center text-sm font-medium text-muted">Photos and PDFs take a little longer. Keep this screen open.</p>
       </main>
     );
   }
@@ -324,8 +341,8 @@ export function ImportScreen() {
     <main className="flex flex-col gap-4 pb-6">
       <PageHeader title="Import a plan" back="/plan" />
       <p className="-mt-2 text-base font-medium text-muted">
-        Paste a plan, or add up to {MAX_IMAGES} screenshots or photos (a coach&apos;s PDF, your notes app, a whiteboard). Claude reads it, then you check every exercise
-        before it&apos;s saved.
+        Paste a plan, upload a PDF (a coach&apos;s program, up to 3 MB), or add up to {MAX_IMAGES} screenshots or photos (your notes app, a whiteboard). Claude reads
+        it, then you check every exercise before it&apos;s saved.
       </p>
       <label className="flex flex-col gap-2">
         <span className={label}>PASTE THE PLAN</span>
@@ -339,7 +356,13 @@ export function ImportScreen() {
       </label>
 
       <div className="flex flex-col gap-2">
-        <span className={label}>PHOTOS</span>
+        <span className={label}>PDF, SCREENSHOTS OR PHOTOS</span>
+        {pdf && (
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-line bg-card-2 py-1 pr-1 pl-4">
+            <span className="min-w-0 truncate text-base font-bold">{pdf.name ?? "Plan.pdf"}</span>
+            <button type="button" aria-label="Remove PDF" className="flex h-11 w-11 shrink-0 items-center justify-center text-xl font-bold text-muted" onClick={() => setPdf(null)}>×</button>
+          </div>
+        )}
         {photos.length > 0 && (
           <div className="grid grid-cols-3 gap-2">
             {photos.map((p) => (
@@ -361,14 +384,14 @@ export function ImportScreen() {
             ))}
           </div>
         )}
-        <input ref={fileInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { void addPhotos(e.target.files); e.target.value = ""; }} />
-        <button type="button" className={btn.secondary} disabled={photos.length >= MAX_IMAGES} onClick={() => fileInput.current?.click()}>
-          + Add {photos.length ? "more photos" : "screenshots or photos"}
+        <input ref={fileInput} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => { void addFiles(e.target.files); e.target.value = ""; }} />
+        <button type="button" className={btn.secondary} disabled={photos.length >= MAX_IMAGES && !!pdf} onClick={() => fileInput.current?.click()}>
+          + Add {photos.length || pdf ? "more files" : "a PDF, screenshots or photos"}
         </button>
       </div>
 
       {error && <AiProblem>{error}</AiProblem>}
-      <button type="button" className={btn.primary} disabled={!text.trim() && !photos.length} onClick={read}>
+      <button type="button" className={btn.primary} disabled={!text.trim() && !photos.length && !pdf} onClick={read}>
         <Sparkle /> Read my plan
       </button>
       <AiUsageNote usage={usage} />

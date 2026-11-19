@@ -108,6 +108,9 @@ export type PlanSnapshot = {
   days: { id: string; name: string; items: AiItem[] }[];
 };
 
+/** A PDF sent as-is (Claude reads its text and its page images). One per import. */
+export type AiPdf = { media_type: "application/pdf"; data: string; name?: string };
+
 export type AiImage = { media_type: "image/jpeg" | "image/png" | "image/webp"; data: string };
 
 export type AiRequest = {
@@ -128,6 +131,8 @@ export type AiRequest = {
   /** "workout" / "day": what's there now (the starting point), and the day's name. */
   current?: { name: string; items: AiItem[] };
   images?: AiImage[];
+  /** "import": a PDF to read instead of (or along with) photos. */
+  pdf?: AiPdf;
   /** "swap" / "suggest": the workout in progress. */
   today?: { name: string; items: TodayItem[] };
   /** "swap": the exercise being replaced, and why (from the chips), if given. */
@@ -157,5 +162,7 @@ export type AiResponse =
   | { ok: false; error: string; usage?: AiUsage };
 
 export const MAX_IMAGES = 5;
+/** Vercel caps a request body at about 4.5 MB and base64 adds a third, so keep the PDF itself under 3 MB. */
+export const MAX_PDF_BYTES = 3_000_000;
 export const MAX_PROMPT = 4000;
 export const MAX_IMPORT_TEXT = 20000;

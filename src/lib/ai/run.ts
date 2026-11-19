@@ -39,6 +39,7 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
   const tool = isPick ? PICK_TOOL : req.kind === "import" ? IMPORT_TOOL : isPlan ? PLAN_TOOL : WORKOUT_TOOL;
   const system = isPick ? PICK_SYSTEM : SYSTEM;
   const content: Block[] = [];
+  if (req.pdf) content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: req.pdf.data } });
   for (const img of req.images ?? []) content.push({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } });
   if (isPick) content.push({ type: "text", text: pickBlock(req) });
   else {
