@@ -12,6 +12,7 @@ import { doseLabel } from "@/components/planned";
 import { usePlanActions } from "@/lib/plans";
 import { useUpNextChoice } from "@/lib/up-next";
 import { GOAL_LABELS } from "@/lib/profile";
+import { dayOptions, resolveFilter, splitRows, type SplitFilter } from "@/lib/split-filter";
 import { GymSwitcher } from "@/components/gym-switcher";
 import { Card, Sheet, btn, field } from "@/components/ui/kit";
 import { Sparkle } from "@/components/ai";
@@ -222,6 +223,8 @@ function ActivePlanCard() {
   );
 }
 
+const SPLIT_FILTER_KEY = "splitFilter";
+
 function SplitLibrary({ hasActive }: { hasActive: boolean }) {
   const { db } = useData();
   const { profile } = useProfile();
@@ -230,39 +233,60 @@ function SplitLibrary({ hasActive }: { hasActive: boolean }) {
     const [s, d] = await Promise.all([db.splits.orderBy("id").toArray(), db.split_days.toArray()]);
     return s.sort((a, b) => a.sort_order - b.sort_order).map((x) => ({ ...x, days: d.filter((y) => y.split_id === x.id).sort((a, b) => a.day_order - b.day_order) }));
   }, [db]);
-  const [showAll, setShowAll] = useState(false);
-  if (!splits || !catalog) return null;
+  // The last choice stays on the phone ("splitFilter": "all" or a number of days). null = never chosen.
+  const saved = useLiveQuery(async () => (await db.getMeta<SplitFilter>(SPLIT_FILTER_KEY)) ?? null, [db]);
+  if (!splits || !catalog || saved === undefined) return null;
   if (!splits.length) {
     return <p className="text-sm font-medium text-muted">The split library downloads with the exercise library. Connect once to get it.</p>;
   }
   const want = profile?.days_per_week ?? 4;
-  const fits = (n: number) => Math.abs(n - want) <= 1;
-  const shown = showAll ? splits : splits.filter((s) => fits(s.days_per_week));
+  const options = dayOptions(splits);
+  const filter = resolveFilter(saved, want, options);
+  const rows = splitRows(splits, filter);
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
+      <div className="flex min-h-11 items-center justify-between gap-3">
         <h2 className="display text-xl font-extrabold">{hasActive ? "Start a new plan" : "Split library"}</h2>
-        <button type="button" className={btn.ghost} onClick={() => setShowAll(!showAll)}>
-          {showAll ? `Around ${want} days` : "Show all"}
-        </button>
+        <label className="relative block">
+          <span className="sr-only">Days a week</span>
+          <select
+            value={String(filter)}
+            onChange={(e) => void db.setMeta(SPLIT_FILTER_KEY, e.target.value === "all" ? "all" : Number(e.target.value))}
+            className="display h-11 appearance-none rounded-full border border-line bg-card pr-9 pl-4 text-base font-extrabold tracking-[0.04em] text-accent-soft uppercase"
+          >
+            {options.map((d) => (
+              <option key={d} value={d}>{d} days a week</option>
+            ))}
+            <option value="all">All splits</option>
+          </select>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-accent-soft" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </label>
       </div>
-      {!showAll && <p className="-mt-1 text-sm font-medium text-muted">Splits that fit about {want} days a week.</p>}
+      <p className="-mt-1 text-sm font-medium text-muted">
+        {filter === "all" ? "All splits, grouped by days a week." : `Splits for ${filter} days a week${filter === want ? " (your usual)." : "."}`}
+      </p>
       <ul className="flex flex-col gap-2">
-        {shown.map((s) => (
-          <li key={s.id}>
-            <Link href={`/plan/new?split=${s.id}`} className="flex flex-col gap-2 rounded-3xl border border-line bg-card px-4 py-3 active:bg-card-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="display text-xl font-extrabold">{s.name}</span>
-                <span className={`display shrink-0 text-sm font-extrabold tracking-[0.06em] ${s.days_per_week === want ? "text-accent" : "text-muted"}`}>
-                  {s.days_per_week} DAYS
-                </span>
-              </div>
-              <span className="text-sm font-medium text-muted">{s.description}</span>
-              <span className="text-xs font-bold tracking-[0.04em] text-accent-soft">{[...new Set(s.days.map((d) => d.name))].join(" · ")}</span>
-            </Link>
-          </li>
-        ))}
+        {rows.map((r) =>
+          r.kind === "header" ? (
+            <li key={`h${r.days}`} className="display mt-2 text-base font-extrabold tracking-[0.08em] text-muted uppercase">{r.days} days a week</li>
+          ) : (
+            <li key={r.split.id}>
+              <Link href={`/plan/new?split=${r.split.id}`} className="flex flex-col gap-2 rounded-3xl border border-line bg-card px-4 py-3 active:bg-card-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="display text-xl font-extrabold">{r.split.name}</span>
+                  <span className={`display shrink-0 text-sm font-extrabold tracking-[0.06em] ${r.split.days_per_week === want ? "text-accent" : "text-muted"}`}>
+                    {r.split.days_per_week} DAYS
+                  </span>
+                </div>
+                <span className="text-sm font-medium text-muted">{r.split.description}</span>
+                <span className="text-xs font-bold tracking-[0.04em] text-accent-soft">{[...new Set(r.split.days.map((d) => d.name))].join(" · ")}</span>
+              </Link>
+            </li>
+          ),
+        )}
       </ul>
     </section>
   );
