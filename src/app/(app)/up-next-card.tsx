@@ -13,6 +13,7 @@ import { useUpNext, useUpNextChoice } from "@/lib/up-next";
 import { doseLabel, suggestionLabel, supersetLetter } from "@/components/planned";
 import { MuscleChooser } from "@/components/muscle-chooser";
 import { Sheet, btn } from "@/components/ui/kit";
+import { UndoIcon } from "@/components/icons";
 import { ExerciseInfo } from "@/components/exercise-info";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { NotesForm, RowIcon, SmartExercisePicker } from "@/components/exercise-actions";
@@ -383,8 +384,8 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         {seed > 0 && up.mode !== "ai" && (
           // The generator is seeded, so stepping the seed back rebuilds the earlier workout exactly.
           <div className="-mb-1 flex items-center justify-center gap-2">
-            <button type="button" className="display min-h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-white" onClick={() => setChoice({ ...choice!, mode: up.mode, dayId: up.day?.id ?? null, seed: seed - 1 })}>
-              ↶ Undo
+            <button type="button" className="display flex min-h-11 items-center gap-1.5 px-3 text-sm font-extrabold tracking-[0.06em] text-white" onClick={() => setChoice({ ...choice!, mode: up.mode, dayId: up.day?.id ?? null, seed: seed - 1 })}>
+              <UndoIcon size={16} /> Undo
             </button>
             {seed > 1 && (
               <>
@@ -463,7 +464,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
                 <span className={chipOutline}>Set up a plan →</span>
               </Link>
             )}
-            {up.edited && <ChipButton onClick={() => void undoEdits()}>↺ Undo changes</ChipButton>}
+            {up.edited && <ChipButton onClick={() => void undoEdits()}><span className="inline-flex items-center gap-1.5"><UndoIcon size={14} /> Undo changes</span></ChipButton>}
             {muscleChips.map((m) => (
               <span key={m} className="flex h-8 shrink-0 items-center rounded-full bg-primary/15 px-3 text-sm font-semibold whitespace-nowrap text-accent-soft">
                 {m}

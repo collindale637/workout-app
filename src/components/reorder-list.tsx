@@ -96,6 +96,8 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
     return () => document.removeEventListener("pointerdown", close);
   }, [openId]);
 
+  /** The row's action layer (Swap / How-to / Remove). It stays hidden unless the row is open or being swiped, so its red never peeks out at the face's rounded corners. */
+  const actionsOf = (id: string) => list.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"] [data-actions]`) ?? null;
   const faceOf = (id: string) => list.current?.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"] [data-face]`) ?? null;
 
   function beginDrag() {
@@ -166,6 +168,14 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
       face.style.transform = open ? `translateX(-${actionsWidth(it)}px)` : "";
     }
     setOpenId(open ? id : null);
+    if (!open) {
+      // Hide the action layer again once the face has slid back over it.
+      setTimeout(() => {
+        const f = faceOf(id);
+        const layer = actionsOf(id);
+        if (layer && f && !f.style.transform) layer.style.visibility = "";
+      }, 200);
+    }
   }
 
   const handlers = (it: ReorderItem) => ({
@@ -187,6 +197,8 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
         if (Math.abs(dx) > SLOP && Math.abs(dx) > Math.abs(dy)) {
           s.mode = "swipe";
           clearTimeout(s.timer);
+          const layer = actionsOf(it.id);
+          if (layer) layer.style.visibility = "visible";
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           if (openId && openId !== it.id) settleSwipe(openId, false);
         } else if (Math.abs(dy) > SLOP) {
@@ -235,7 +247,7 @@ export function ReorderList({ items, onReorder }: { items: ReorderItem[]; onReor
           <li key={it.id} data-row={it.id} className={`relative ${draggingId === it.id ? "z-10" : ""} ${it.liClassName ?? ""}`}>
             {it.before}
             <div className="relative">
-              <div className="absolute inset-0 flex justify-end overflow-hidden rounded-[14px]" aria-hidden={!open}>
+              <div data-actions className={`absolute inset-0 flex justify-end overflow-hidden rounded-[14px] ${open ? "visible!" : "invisible"}`} aria-hidden={!open}>
                 {it.actions.map((a) => (
                   <button
                     key={a.key}

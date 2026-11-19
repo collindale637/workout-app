@@ -18,6 +18,7 @@ import { doseLabel, MusclePills, supersetLetter } from "@/components/planned";
 import { PageHeader, Sheet, btn, field, label } from "@/components/ui/kit";
 import { ReorderList, type ReorderItem } from "@/components/reorder-list";
 import { TargetsEditor } from "@/components/targets-editor";
+import { UndoIcon } from "@/components/icons";
 import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 import { targetsFor } from "@/lib/ai/apply";
 import type { PlanExercise } from "@/lib/db/types";
@@ -177,8 +178,8 @@ export function DayEditor() {
       </div>
       {before.length > 0 && (
         <div className="-mt-2 flex items-center justify-center gap-2">
-          <button type="button" className="display min-h-11 px-3 text-sm font-extrabold tracking-[0.06em] text-accent" onClick={() => void restore(false)}>
-            ↶ Undo regenerate
+          <button type="button" className="display flex min-h-11 items-center gap-1.5 px-3 text-sm font-extrabold tracking-[0.06em] text-accent" onClick={() => void restore(false)}>
+            <UndoIcon size={16} /> Undo regenerate
           </button>
           {before.length > 1 && (
             <>
