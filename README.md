@@ -134,6 +134,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261128000200_overhead_cable_extension_names.sql` | "Overhead Cable Tricep Extension" and similar written names now match Overhead Cable Extension | ✓ |
 | `20261129000100_plan_weeks.sql` | Plans by week: `plan_days.week` (1–12), and on `plans` the progress fields `current_week`, `week_started_at`, `skipped_day_ids`, `completed_at`, `completion_dismissed_at` | ✓ |
 | `20261130000100_ai_request_calls.sql` | `ai_requests.calls`: how many Claude calls each AI request took; `ai_log_request()` gains an optional `p_calls` | ✓ |
+| `20261201000100_catalog_batch1_aliases_equipment.sql` | Exercise library batch 1: 40 lifts get the names people search for (Yates Row, Meadows Row, Nordic Curl, V-Up…), kettlebell / EZ-bar / band options on existing lifts, equipment fixes (Drag Curl, Weighted Bench Dip, banded barbell lifts need bands, decline/incline benches), 3 duplicates hidden, Air Bike (floor ab) renamed Bicycle Crunch | ✓ |
 
 ## One-time setup
 
