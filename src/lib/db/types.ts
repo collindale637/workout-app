@@ -75,6 +75,8 @@ export type Profile = {
   avoid_areas?: AvoidArea[];
   /** A short note the AI reads ("left shoulder pinches overhead"). */
   injury_note?: string | null;
+  /** When the first-run tutorial was finished or skipped; null = show it after onboarding. Missing on older saved profiles = null. */
+  tutorial_seen_at?: string | null;
 };
 
 export type GymTemplate = "commercial" | "home" | "hotel" | "bodyweight" | "custom";

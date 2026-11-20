@@ -32,6 +32,9 @@ export const SyncIcon = () => (
 export const SparkleIcon = () => (
   <svg {...base}><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z" /><path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" strokeWidth="1.6" /></svg>
 );
+export const PlayIcon = () => (
+  <svg {...base}><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></svg>
+);
 export const PowerIcon = () => (
   <svg {...base}><path d="M12 3.5v8" /><path d="M7 6.8a7.5 7.5 0 1 0 10 0" /></svg>
 );

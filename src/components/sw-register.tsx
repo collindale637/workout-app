@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { listenForInstallPrompt } from "@/lib/install";
 
 /** Registers /sw.js in production so the home-screen app loads offline. */
 export function ServiceWorkerRegister() {
   useEffect(() => {
+    // Android's install offer can arrive before the tutorial opens; catch it from the start.
+    listenForInstallPrompt();
     if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
     navigator.serviceWorker

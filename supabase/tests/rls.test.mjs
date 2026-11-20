@@ -59,6 +59,8 @@ await db.exec(readFileSync(root + "20261202000400_catalog_photos_matched.sql", "
 await db.exec(readFileSync(root + "20261202000400_catalog_photos_matched.sql", "utf8")); // re-runnable
 await db.exec(readFileSync(root + "20261203000100_catalog_search_aliases.sql", "utf8"));
 await db.exec(readFileSync(root + "20261203000100_catalog_search_aliases.sql", "utf8")); // re-runnable
+await db.exec(readFileSync(root + "20261204000100_tutorial_seen.sql", "utf8"));
+await db.exec(readFileSync(root + "20261204000100_tutorial_seen.sql", "utf8")); // re-runnable
 {
   // Alternate names are appended once, never doubled by a re-run.
   const [{ aliases }] = (await db.query(`select aliases from public.exercises where id = 'Assisted_Pull-Up_Machine'`)).rows;
@@ -88,6 +90,8 @@ r.push(["A sets active gym", await as(A, `update profiles set active_gym_id='aaa
 r.push(["B cannot see A's gym", await as(B, `select count(*)::int n from gyms`)]);
 r.push(["B cannot add equipment to A's gym", await as(B, `insert into gym_equipment (gym_id, equipment_id) values ('aaaaaaaa-0000-0000-0000-000000000001','barbell')`)]);
 r.push(["B cannot set A's gym active", await as(B, `update profiles set active_gym_id='aaaaaaaa-0000-0000-0000-000000000001' returning id`)]);
+r.push(["A marks the tutorial seen", await as(A, `update profiles set tutorial_seen_at = now() returning tutorial_seen_at is not null seen`)]);
+r.push(["B cannot mark A's tutorial seen", await as(B, `update profiles set tutorial_seen_at = now() where id='${A}' returning id`)]);
 r.push(["B cannot edit A's profile", await as(B, `update profiles set display_name='hacked' where id='${A}' returning id`)]);
 r.push(["A logs workout", await as(A, `insert into workouts (id, gym_id) values ('bbbbbbbb-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001') returning id`)]);
 r.push(["A adds exercise", await as(A, `insert into workout_exercises (id, workout_id, exercise_id, sort_order) values ('cccccccc-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000001','Barbell_Bench_Press_-_Medium_Grip',1) returning id`)]);

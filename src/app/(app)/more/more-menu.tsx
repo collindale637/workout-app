@@ -12,7 +12,8 @@ import { Sheet, btn, field, label } from "@/components/ui/kit";
 import { GOAL_LABELS } from "@/lib/profile";
 import { useAiUsage } from "@/lib/ai/client";
 import { useIsAppAdmin } from "@/lib/dev-notes";
-import { DumbbellIcon, GymIcon, InboxIcon, MailIcon, PowerIcon, ProfileIcon, SparkleIcon, SyncIcon } from "@/components/icons";
+import { Tutorial } from "@/components/tutorial";
+import { DumbbellIcon, GymIcon, InboxIcon, MailIcon, PlayIcon, PowerIcon, ProfileIcon, SparkleIcon, SyncIcon } from "@/components/icons";
 
 /** A coloured square icon at the start of a row (settings-app style). */
 function Badge({ children, tone }: { children: React.ReactNode; tone: string }) {
@@ -57,6 +58,7 @@ export function MoreMenu() {
   const lastSynced = useLiveQuery(() => db.getMeta<string>("lastSyncedAt"), [db]);
   const { usage } = useAiUsage();
   const [noteOpen, setNoteOpen] = useState(false);
+  const [tutorial, setTutorial] = useState(false);
   // Only the admin account (Collin) gets the inbox row; the server enforces it too.
   const admin = useIsAppAdmin();
 
@@ -89,6 +91,14 @@ export function MoreMenu() {
           <RowText title="Exercise library" detail="Browse, search, add your own" />
           <Chevron />
         </Link>
+      </Group>
+
+      <Group title="HELP">
+        <button type="button" className={rowCls} onClick={() => setTutorial(true)}>
+          <Badge tone="bg-primary text-white"><PlayIcon /></Badge>
+          <RowText title="Show tutorial" detail="Add to Home Screen and a tour of the app" />
+          <Chevron />
+        </button>
       </Group>
 
       <Group title="HELP MAKE IT BETTER">
@@ -152,6 +162,8 @@ export function MoreMenu() {
           <span className="flex-1 text-base font-bold">Sign out</span>
         </button>
       </Group>
+
+      {tutorial && <Tutorial onClose={() => setTutorial(false)} />}
 
       <Sheet open={noteOpen} onClose={() => setNoteOpen(false)} title="Note to developer">
         <NoteForm onDone={() => setNoteOpen(false)} />

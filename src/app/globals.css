@@ -154,6 +154,28 @@ html.sheet-min body {
   to { opacity: 1; transform: none; }
 }
 
+/* First-run tutorial (src/components/tutorial.tsx): slide up in, pulsing ring on the thing to tap, a row swiping open. */
+@keyframes tutorial-in {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes tutorial-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tutorial-pulse {
+  0%, 100% { outline-offset: 2px; }
+  50% { outline-offset: 5px; }
+}
+@keyframes tutorial-swipe {
+  0%, 15% { transform: none; }
+  35%, 70% { transform: translateX(-208px); }
+  90%, 100% { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[tutorial-"] { animation: none !important; }
+}
+
 /* ---- Page motion (React <ViewTransition> + <Link transitionTypes>) ----
    ‹ back: the page you're on slides off to the right, the one behind comes in from the left (iOS-style, no fade).
    ⌄ minimize is done in src/lib/slide-away.ts instead (Safari didn't move the fixed set panel). */

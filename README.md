@@ -140,6 +140,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261202000300_catalog_batch4.sql` | Exercise library batch 4: 114 more exercises (sports and activity logs like Soccer, Tennis and Rock Climbing; strongman and Olympic variations; paused and tempo lifts; band, cable, sandbag and machine variations) and 6 new equipment items (pullover machine, Viking press, agility ladder, heavy bag, carry frame, Husafell stone). New rows only. Safe to re-run. | ✓ |
 | `20261202000400_catalog_photos_matched.sql` | Adds photos to 10 added exercises (Walking Lunge, Air Bike, Spin Bike, EZ-bar Preacher Curl, Neutral-Grip Pull-Up, Alternating DB Bench Press, Single-Arm Machine Curl, Hip CARs, Shoulder CARs, Arc Trainer) that match an existing photo set. Only fills empty photo lists. Safe to re-run. | ✓ |
 | `20261203000100_catalog_search_aliases.sql` | Exercise library batch 5: 1,129 alternate names on 504 exercises so search and imported plans find them by the names people use (Gravitron, Skullcrusher, RFESS, Assault Bike, Hex Bar Deadlift, "Squat" = back squat, "Leg Curl" = lying leg curl, foam-roll names for the SMR stretches…). Appends only names an exercise doesn't have yet. Safe to re-run. | ✓ |
+| `20261204000100_tutorial_seen.sql` | Adds `profiles.tutorial_seen_at`: when someone finished or skipped the first-run tutorial (null = show it after onboarding). Safe to re-run. | ✓ |
 
 ## One-time setup
 
