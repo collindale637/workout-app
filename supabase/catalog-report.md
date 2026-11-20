@@ -392,3 +392,117 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Suspension Y/T Raise | isolation | rear_delts | upper_back, traps | suspension_trainer or gymnastic_rings |
 | Smith Machine Shrug | isolation | traps |  | smith_machine |
 | Cross-Body Cable Extension | isolation | triceps |  | cable_crossover |
+| Archer Pull-Up | vertical_pull | lats | biceps | pull_up_bar |
+| Band-Assisted Chin-Up | vertical_pull | lats | biceps | pull_up_bar + resistance_bands |
+| Helms Row | horizontal_pull | upper_back | rear_delts | dumbbells + adjustable_bench |
+| Kroc Row | horizontal_pull | upper_back | lats, biceps, forearms | dumbbells |
+| L-Sit Pull-Up | vertical_pull | lats | abs, biceps | pull_up_bar |
+| Plate-Loaded Lat Pulldown | vertical_pull | lats | upper_back | lat_pulldown |
+| Ring Pull-Up | vertical_pull | lats | biceps | gymnastic_rings |
+| Wide-Grip Seated Cable Row | horizontal_pull | upper_back | rear_delts, lats | cable_row_station or cable_crossover |
+| Band Hammer Curl | isolation | biceps | forearms | resistance_bands |
+| Cable Concentration Curl | isolation | biceps |  | cable_crossover or cable_pulley |
+| Chin-Up Hold | vertical_pull | biceps |  | pull_up_bar |
+| Plate Curl | isolation | biceps | forearms | weight_plates |
+| Seated Hammer Curl | isolation | biceps | forearms | dumbbells + flat_bench or adjustable_bench |
+| Single-Arm Machine Curl | isolation | biceps |  | bicep_curl_machine |
+| Waiter Curl | isolation | biceps |  | dumbbells |
+| Hack Squat Calf Raise | isolation | calves |  | hack_squat_machine |
+| Arc Trainer | cardio | quads |  | none |
+| Basketball | cardio | quads |  | none |
+| Cross-Country Skiing | cardio | quads |  | none |
+| Dance | cardio | quads |  | none |
+| Golf | cardio | quads |  | none |
+| Kayaking | cardio | lats |  | none |
+| Martial Arts | cardio | quads |  | none |
+| Pickleball | cardio | quads |  | none |
+| Rock Climbing | cardio | forearms |  | none |
+| Soccer | cardio | quads |  | none |
+| Tennis | cardio | quads |  | none |
+| Alternating Dumbbell Bench Press | horizontal_push | chest | front_delts, triceps | dumbbells + flat_bench or adjustable_bench |
+| Band Push-Up | horizontal_push | chest | front_delts, triceps | resistance_bands |
+| Deficit Push-Up | horizontal_push | chest | front_delts, triceps | none |
+| Incline Close-Grip Bench Press | horizontal_push | triceps | chest, front_delts | barbell + adjustable_bench + power_rack or squat_stand |
+| Landmine Squeeze Press | other | chest | front_delts, triceps | barbell + landmine |
+| Larsen Press | other | chest | front_delts, triceps | barbell + flat_bench or adjustable_bench + power_rack or squat_stand |
+| Machine Pullover | isolation | lats | chest | pullover_machine |
+| Medicine Ball Push-Up | horizontal_push | chest | triceps, front_delts | medicine_ball |
+| Pseudo Planche Push-Up | horizontal_push | chest | front_delts, triceps | none |
+| Single-Arm Incline Dumbbell Press | horizontal_push | chest | front_delts, triceps | dumbbells + adjustable_bench |
+| Single-Arm Machine Chest Press | horizontal_push | chest | front_delts, triceps | chest_press_machine |
+| Spoto Press | other | chest | triceps, front_delts | barbell + flat_bench or adjustable_bench + power_rack or squat_stand |
+| Straight Bar Dip | horizontal_push | triceps | chest | pull_up_bar or power_rack |
+| Agility Ladder Drills | other | calves |  | agility_ladder |
+| Battle Rope Slams | other | front_delts | abs | battle_ropes |
+| Crab Walk | other | triceps | glutes | none |
+| Heavy Bag Boxing | other | front_delts |  | heavy_bag |
+| Man Maker | other | front_delts, quads | chest, upper_back, glutes | dumbbells |
+| Pogo Jumps | other | calves |  | none |
+| Sandbag Bear-Hug Carry | carry | abs | upper_back | sandbag |
+| Sandbag Clean | hinge | glutes |  | sandbag |
+| Single-Leg Box Jump | other | quads |  | plyo_box |
+| Squat Thrust | squat | quads |  | none |
+| Band Dead Bug | core | abs |  | resistance_bands |
+| Cross-Body Mountain Climber | core | obliques | abs | none |
+| Sandbag Get-Up | core | abs |  | sandbag |
+| Slider Pike | core | abs |  | sliders |
+| Standing Ab Wheel Rollout | core | abs | lats | ab_wheel |
+| Weighted Decline Sit-Up | core | abs |  | decline_bench + weight_plates or dumbbells |
+| Weighted Plank | core | abs |  | weight_plates or weight_vest |
+| Band Wrist Extension | isolation | forearms |  | resistance_bands |
+| Dumbbell Wrist Deviation | isolation | forearms |  | dumbbells |
+| Reverse Cable Wrist Curl | isolation | forearms |  | cable_crossover or cable_pulley |
+| Towel Pull-Up | vertical_pull | forearms | lats | pull_up_bar |
+| Adductor Ball Squeeze | isolation | adductors |  | stability_ball or medicine_ball |
+| Glute Bridge March | hinge | glutes | hamstrings, abs | none |
+| Smith Machine Glute Kickback | isolation | glutes |  | smith_machine |
+| American Kettlebell Swing | hinge | glutes | hamstrings, front_delts | kettlebells |
+| B-Stance RDL | hinge | hamstrings | glutes | dumbbells |
+| Band Leg Press | squat | quads | glutes | resistance_bands |
+| Barbell Single-Leg RDL | hinge | hamstrings | glutes | barbell |
+| Cable Squat | squat | quads | glutes | cable_crossover or cable_pulley |
+| Deficit Reverse Lunge | lunge | glutes | quads | dumbbells + plyo_box or weight_plates |
+| Goblet Reverse Lunge | lunge | quads | glutes | dumbbells or kettlebells |
+| Landmine Reverse Lunge | lunge | quads | glutes | barbell + landmine |
+| Landmine Romanian Deadlift | hinge | hamstrings | glutes | barbell + landmine |
+| Low-Bar Squat | squat | quads | glutes, hamstrings | barbell + power_rack or squat_stand |
+| Pause Front Squat | squat | quads |  | barbell + power_rack or squat_stand |
+| Paused Deadlift | hinge | lower_back | hamstrings, glutes | barbell |
+| Reverse Hack Squat | squat | glutes | hamstrings, quads | hack_squat_machine |
+| Safety Squat Bar Split Squat | lunge | quads | glutes | safety_squat_bar + power_rack or squat_stand |
+| Sandbag Squat | squat | quads | glutes, abs | sandbag |
+| Single-Leg Seated Leg Curl | isolation | hamstrings |  | seated_leg_curl |
+| Slider Reverse Lunge | lunge | quads | glutes | sliders |
+| Smith Machine Box Squat | squat | quads | glutes | smith_machine + plyo_box or flat_bench |
+| Smith Machine Deadlift | hinge | glutes | hamstrings, lower_back | smith_machine |
+| Smith Machine Hack Squat | squat | quads | glutes | smith_machine |
+| Spanish Squat | squat | quads |  | resistance_bands |
+| Trap Bar Jump | other | quads | glutes | trap_bar |
+| Wide-Stance Leg Press | squat | quads | glutes, adductors | leg_press |
+| Dumbbell Good Morning | hinge | hamstrings | lower_back, glutes | dumbbells |
+| Jefferson Curl | isolation | lower_back | hamstrings | barbell or dumbbells or kettlebells |
+| Safety Squat Bar Good Morning | squat | hamstrings | lower_back, glutes | safety_squat_bar + power_rack or squat_stand |
+| Hip CARs | mobility | glutes |  | none |
+| Scorpion Stretch | mobility | lower_back |  | none |
+| Shoulder CARs | mobility | front_delts |  | none |
+| Behind-the-Neck Jerk | vertical_push | front_delts |  | barbell + power_rack or squat_stand |
+| Hang Power Snatch | hinge | glutes | traps | barbell |
+| Muscle Clean | hinge | traps |  | barbell |
+| Sots Press | other | front_delts | quads | barbell |
+| Tall Clean | hinge | traps |  | barbell |
+| Axle Press | other | front_delts | triceps | axle_bar + power_rack or squat_stand |
+| Behind-the-Back Cable Lateral Raise | isolation | side_delts |  | cable_crossover or cable_pulley |
+| Kettlebell Bottoms-Up Press | other | front_delts | forearms | kettlebells |
+| Lu Raise | isolation | side_delts | front_delts | dumbbells or weight_plates |
+| Viking Press | other | front_delts | triceps | viking_press |
+| Axle Clean and Press | hinge | front_delts |  | axle_bar |
+| Circus Dumbbell Press | vertical_push | front_delts |  | dumbbells |
+| Frame Carry | carry | forearms |  | carry_frame |
+| Husafell Stone Carry | carry | abs |  | husafell_stone |
+| Keg Carry | carry | abs |  | keg |
+| Band Shrug | isolation | traps |  | resistance_bands |
+| EZ-Bar Upright Row | other | side_delts | traps | ez_bar |
+| Band Tricep Kickback | isolation | triceps |  | resistance_bands |
+| California Press | isolation | triceps |  | barbell + flat_bench or adjustable_bench |
+| Close-Grip Floor Press | horizontal_push | triceps | chest | barbell |
+| Incline Dumbbell Skull Crusher | isolation | triceps |  | dumbbells + adjustable_bench |
