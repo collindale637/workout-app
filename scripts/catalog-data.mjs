@@ -2661,3 +2661,19 @@ export const MUSCLE_OVERRIDES = {
   Dumbbell_Shoulder_Press: { p: ["front_delts"], s: ["side_delts", "triceps"] },
   Side_Lateral_Raise: { p: ["side_delts"], s: ["traps"] },
 };
+
+// Photos for added exercises: id -> id of a free-exercise-db exercise whose photos show the same movement
+// (same lift, only the name or small setup detail differs). Only near-identical matches; everything else
+// stays without a photo until we have one that really shows it.
+export const IMAGE_FROM = {
+  Dumbbell_Walking_Lunge: "Dumbbell_Lunges",
+  Air_Bike_Cardio: "Air_Bike",
+  Spin_Bike: "Bicycling_Stationary",
+  EZ_Bar_Preacher_Curl: "Preacher_Curl",
+  "Neutral-Grip_Pull-Up": "V-Bar_Pullup",
+  Alternating_Dumbbell_Bench_Press: "Dumbbell_Bench_Press",
+  "Single-Arm_Machine_Curl": "Machine_Bicep_Curl",
+  Hip_CARs: "Standing_Hip_Circles",
+  Shoulder_CARs: "Shoulder_Circles",
+  Arc_Trainer: "Elliptical_Trainer",
+};
