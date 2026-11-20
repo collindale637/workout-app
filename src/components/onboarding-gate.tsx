@@ -3,8 +3,9 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useData, useProfile } from "@/lib/db/provider";
+import { FirstRunTutorial } from "@/components/tutorial";
 
-/** Sends new people to the short welcome flow before anything else. */
+/** Sends new people to the short welcome flow before anything else, then shows the tutorial once on Today. */
 export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const { db, userId } = useData();
   const { profile } = useProfile();
@@ -27,5 +28,11 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   }, [needsWelcome, db, userId, router]);
 
   if (!profile) return null;
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {/* After onboarding, the tutorial opens once on Today (not over a page someone deep-linked to). */}
+      {pathname === "/" && <FirstRunTutorial />}
+    </>
+  );
 }
