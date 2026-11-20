@@ -10,8 +10,14 @@ import type { AiDay, AiImport, ImportWeek, AiKind, AiPick, AiPlan, AiRequest, Ai
 
 type Block = Record<string, unknown>;
 export type Msg = { role: "user" | "assistant"; content: string | Block[] };
-export type Call = { input: unknown; toolUseId: string | null; content: Block[]; usage: { input_tokens: number; output_tokens: number }; truncated: boolean };
-export type CallFn = (opts: { model?: string; system: string; messages: Msg[]; tool: { name: string; description: string; input_schema: Record<string, unknown> }; maxTokens: number }) => Promise<Call>;
+export type Usage = { input_tokens: number; output_tokens: number; cache_write?: number; cache_read?: number };
+export type Call = { input: unknown; toolUseId: string | null; content: Block[]; usage: Usage; truncated: boolean };
+type ToolDef = { name: string; description: string; input_schema: Record<string, unknown> };
+/**
+ * `tool` is the one to answer with. `tools`, when given, is the whole list sent with the call: a build that makes
+ * several calls sends the same list every time so the prompt cache can be reused (tools are the start of the cache).
+ */
+export type CallFn = (opts: { model?: string; system: string; messages: Msg[]; tool: ToolDef; tools?: ToolDef[]; maxTokens: number }) => Promise<Call>;
 
 export const MAX_TOKENS: Record<AiKind, number> = { plan: 8000, edit: 8000, workout: 3000, day: 3000, import: 10000, swap: 700, suggest: 900 };
 /** One later week of a plan whose workouts change (about the size of a whole one-week plan). */
@@ -48,10 +54,17 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
   const source: Block[] = [];
   if (req.pdf) source.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: req.pdf.data } });
   for (const img of req.images ?? []) source.push({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } });
+  // Builds that can take several calls (changing weeks, multi-week imports) cache the shared start of the request:
+  // the PDF or photos, then the person, gym and exercise list. Later calls read it back at a tenth of the price.
+  const cached = req.kind === "import" || (req.kind === "plan" && req.options?.vary === true) || (req.kind === "edit" && req.draft === true);
+  const toolset = cached ? (req.kind === "import" ? [IMPORT_TOOL, IMPORT_WEEK_TOOL] : [PLAN_TOOL, WEEK_TOOL]) : undefined;
+  const contextText = (gymFiltered: boolean): Block => ({
+    type: "text", text: contextBlock(req, { gymFiltered }), ...(cached ? { cache_control: { type: "ephemeral" } } : {}),
+  });
   const content: Block[] = [...source];
   if (isPick) content.push({ type: "text", text: pickBlock(req) });
   else {
-    content.push({ type: "text", text: contextBlock(req, { gymFiltered: req.kind !== "import" }) });
+    content.push(contextText(req.kind !== "import"));
     content.push({ type: "text", text: taskBlock(req) });
   }
   const messages: Msg[] = [{ role: "user", content }];
@@ -88,13 +101,15 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
     return { value: r.workout, errors: r.errors };
   };
 
-  const tokens = { input_tokens: 0, output_tokens: 0 };
+  const tokens = { input_tokens: 0, output_tokens: 0, cache_write: 0, cache_read: 0 };
   let calls = 0;
   const started = Date.now();
   const ask = async (msgs: Msg[], maxTokens: number, t: Tool = tool) => {
-    const c = await callTool({ model, system, messages: msgs, tool: t, maxTokens });
+    const c = await callTool({ model, system, messages: msgs, tool: t, tools: toolset, maxTokens });
     tokens.input_tokens += c.usage.input_tokens;
     tokens.output_tokens += c.usage.output_tokens;
+    tokens.cache_write += c.usage.cache_write ?? 0;
+    tokens.cache_read += c.usage.cache_read ?? 0;
     calls++;
     return c;
   };
@@ -126,7 +141,7 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
         .map(async (e) => {
           const old = before.find((w) => w.week === e.week && w.kind === "new");
           const msgs: Msg[] = [{ role: "user", content: [
-            { type: "text", text: contextBlock(req, { gymFiltered: true }) },
+            contextText(true),
             { type: "text", text: weekTaskBlock(req, plan, schedule, e.week, old?.days ?? null) },
           ] }];
           try {
@@ -155,7 +170,7 @@ export async function runAi(req: AiRequest, callTool: CallFn, model?: string): P
       importSchedule.map(async (e) => {
         const msgs: Msg[] = [{ role: "user", content: [
           ...source,
-          { type: "text", text: contextBlock(req, { gymFiltered: false }) },
+          contextText(false),
           { type: "text", text: importWeekTaskBlock(req, imp.days, importSchedule, e.week) },
         ] }];
         try {

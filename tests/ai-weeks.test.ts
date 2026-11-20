@@ -163,7 +163,7 @@ describe("the AI pipeline for plans with changing weeks", () => {
     const plan = r.value as AiPlan;
     expect(plan.later_weeks?.map((w) => [w.week, w.kind])).toEqual([[3, "new"], [6, "deload"], [7, "back"]]);
     expect(plan.later_weeks?.[1].days[0].items.map((i) => [i.exercise_id, i.sets])).toEqual([["Incline", 2], ["Row", 2]]);
-    expect(r.tokens).toEqual({ input_tokens: 200, output_tokens: 100 });
+    expect(r.tokens).toMatchObject({ input_tokens: 200, output_tokens: 100 });
   });
 
   it("keeps the plan when one week fails, and that week repeats the one before", async () => {

@@ -102,7 +102,8 @@ async function execute(sb: Supabase, req: AiRequest): Promise<Outcome> {
   }
 
   const model = PICK_KINDS.includes(req.kind) ? AI_FAST_MODEL : AI_MODEL;
-  let tokens = { input_tokens: 0, output_tokens: 0 };
+  let tokens = { input_tokens: 0, output_tokens: 0, cache_write: 0, cache_read: 0 };
+  let calls = 0;
   const log = async (ok: boolean) => {
     const { error } = await sb.rpc("ai_log_request", {
       p_type: req.kind,
@@ -111,13 +112,20 @@ async function execute(sb: Supabase, req: AiRequest): Promise<Outcome> {
       p_output_tokens: tokens.output_tokens,
       p_cost_usd: Number(costUsd(model, tokens).toFixed(5)),
       p_ok: ok,
+      p_calls: calls,
     });
     if (error) console.error("ai_log_request failed", error.message);
   };
   // Count tokens as they're spent, so a call that fails halfway is still logged.
   const counted: typeof callTool = async (opts) => {
     const c = await callTool(opts);
-    tokens = { input_tokens: tokens.input_tokens + c.usage.input_tokens, output_tokens: tokens.output_tokens + c.usage.output_tokens };
+    calls++;
+    tokens = {
+      input_tokens: tokens.input_tokens + c.usage.input_tokens,
+      output_tokens: tokens.output_tokens + c.usage.output_tokens,
+      cache_write: tokens.cache_write + (c.usage.cache_write ?? 0),
+      cache_read: tokens.cache_read + (c.usage.cache_read ?? 0),
+    };
     return c;
   };
 

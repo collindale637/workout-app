@@ -150,3 +150,6 @@ export function checkImportSchedule(raw: unknown): { schedule: { week: number; f
   }
   return { schedule: out.sort((a, b) => a.week - b.week), errors };
 }
+
+/** Build with AI's "Workouts each week": what you picked, else Change it up on plans longer than 4 weeks (Batch 21). */
+export const varyDefault = (weeks: number, picked: boolean | null) => picked ?? weeks > 4;
