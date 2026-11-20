@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useCatalog } from "@/lib/hooks";
 import { usePrefs } from "@/lib/smart";
+import { matchesSearch, searchTerms } from "@/lib/ai/match";
 import { AREA_LABELS, AVOID_AREAS, INJURY_DISCLAIMER, INJURY_NOTE_MAX, injuryExcluded, type AvoidArea } from "@/lib/injuries";
 import { Chip, field, label } from "@/components/ui/kit";
 
@@ -32,9 +33,12 @@ export function AvoidEditor({
   );
   const never = useMemo(() => (catalog ? catalog.exercises.filter((e) => prefs.get(e.id)?.excluded) : []), [catalog, prefs]);
   const results = useMemo(() => {
-    const t = q.trim().toLowerCase();
+    const t = q.trim();
     if (!catalog || t.length < 2) return [];
-    return catalog.exercises.filter((e) => e.is_active && (e.is_common || e.owner_id) && !prefs.get(e.id)?.excluded && e.name.toLowerCase().includes(t)).slice(0, 6);
+    const terms = searchTerms(t);
+    return catalog.exercises
+      .filter((e) => e.is_active && (e.is_common || e.owner_id) && !prefs.get(e.id)?.excluded && matchesSearch(`${e.name} ${e.aliases.join(" ")}`, terms))
+      .slice(0, 6);
   }, [catalog, prefs, q]);
 
   const toggle = (a: AvoidArea) => onAreas(areas.includes(a) ? areas.filter((x) => x !== a) : [...areas, a]);
