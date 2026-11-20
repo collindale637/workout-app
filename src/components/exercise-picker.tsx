@@ -8,6 +8,7 @@ import { MUSCLE_GROUPS } from "@/lib/defaults";
 import { Chip, btn, field } from "@/components/ui/kit";
 import type { Exercise } from "@/lib/db/types";
 import type { SmartPicks } from "@/lib/ai/picks";
+import { expandQueryWords } from "@/lib/ai/match";
 
 type Filter = { kind: "all" } | { kind: "group"; muscles: string[]; label: string } | { kind: "cardio" } | { kind: "stretch" };
 
@@ -71,7 +72,7 @@ export function ExercisePicker({
   const results = useMemo(() => {
     if (!catalog) return [];
     const exclude = new Set(excludeIds);
-    const words = q.split(/\s+/).filter(Boolean);
+    const words = expandQueryWords(q.split(/\s+/).filter(Boolean));
     const list = catalog.exercises.filter((e) => {
       if (!e.is_active || exclude.has(e.id)) return false;
       if (filter.kind === "cardio" && e.category !== "cardio") return false;

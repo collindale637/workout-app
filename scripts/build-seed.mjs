@@ -10,7 +10,7 @@
 // exercise name, since the dataset only has one coarse equipment field.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { ALIASES, COMMON, DROP_ALIASES, EQUIPMENT, EXTRA_EXERCISES, INACTIVE, MUSCLE_OVERRIDES, MUSCLES, SOURCE_URL, SPLITS } from "./catalog-data.mjs";
+import { ALIASES, COMMON, DROP_ALIASES, EQUIPMENT, EQUIPMENT_ADD_GROUPS, EQUIPMENT_OPTIONS, EQUIPMENT_OVERRIDES, EXTRA_EXERCISES, INACTIVE, MUSCLE_OVERRIDES, MUSCLES, RENAMES, SOURCE_URL, SPLITS } from "./catalog-data.mjs";
 
 const OUT = new URL("../supabase/migrations/20261115000200_catalog_seed.sql", import.meta.url);
 const REPORT = new URL("../supabase/catalog-report.md", import.meta.url);
@@ -280,6 +280,13 @@ for (const ex of raw) {
   const name = ex.name.toLowerCase().replace(/[_,()/]/g, " ").replace(/\s+/g, " ").trim();
   const roles = musclesFor(ex, name);
   const groups = equipmentFor(ex, name);
+  if (EQUIPMENT_OVERRIDES[ex.id]) groups.splice(0, groups.length, ...EQUIPMENT_OVERRIDES[ex.id].map((g) => [...g]));
+  for (const [have, add] of EQUIPMENT_OPTIONS[ex.id] ?? []) {
+    const g = groups.find((x) => x.includes(have));
+    if (!g) throw new Error(`EQUIPMENT_OPTIONS: ${ex.id} has no ${have}`);
+    if (!g.includes(add)) g.push(add);
+  }
+  for (const g of EQUIPMENT_ADD_GROUPS[ex.id] ?? []) groups.push([...g]);
   if (groups.some((g) => g.includes("__unmapped_machine"))) {
     if (INACTIVE.has(ex.id)) groups.splice(0, groups.length, ...groups.filter((g) => !g.includes("__unmapped_machine")));
     else unmapped.push(ex.id);
@@ -287,7 +294,7 @@ for (const ex of raw) {
   const display = COMMON[ex.id];
   exercises.push({
     id: ex.id,
-    name: display ?? ex.name,
+    name: display ?? RENAMES[ex.id] ?? ex.name,
     aliases: [...(display && display !== ex.name ? [ex.name] : []), ...(ALIASES[ex.id] ?? [])].filter((a) => !(DROP_ALIASES[ex.id] ?? []).includes(a)),
     category: CATEGORY[ex.category] ?? "strength",
     movement_pattern: patternFor(ex, name, roles),
@@ -325,6 +332,7 @@ for (const e of exercises) {
 }
 for (const id of Object.keys(COMMON)) if (!ids.has(id)) throw new Error(`COMMON id not in dataset: ${id}`);
 for (const id of Object.keys(ALIASES)) if (!ids.has(id)) throw new Error(`ALIASES id not in catalog: ${id}`);
+for (const m of [RENAMES, EQUIPMENT_OVERRIDES, EQUIPMENT_ADD_GROUPS, EQUIPMENT_OPTIONS]) for (const id of Object.keys(m)) if (!ids.has(id)) throw new Error(`batch 1 map id not in catalog: ${id}`);
 for (const id of Object.keys(DROP_ALIASES)) if (!ids.has(id)) throw new Error(`DROP_ALIASES id not in catalog: ${id}`);
 for (const [, , item] of exEquip) {
   if (item === "__unmapped_machine") continue;

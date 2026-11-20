@@ -16,12 +16,21 @@ export type LineMatch = { status: MatchStatus; exerciseId: string | null; candid
 const SHORTHAND: Record<string, string> = {
   rdl: "romanian deadlift", sldl: "stiff legged deadlift", ohp: "overhead press", bss: "bulgarian split squat",
   cgbp: "close grip bench press", db: "dumbbell", dbs: "dumbbell", bb: "barbell", kb: "kettlebell", ez: "ez bar",
-  sl: "single leg", sa: "single arm", ghr: "glute ham raise", bw: "bodyweight",
+  sl: "single leg", sa: "single arm", ghr: "glute ham raise", bw: "bodyweight", sm: "smith",
   pullup: "pull up", pullups: "pull up", chinup: "chin up", chinups: "chin up",
   pushup: "push up", pushups: "push up", situp: "sit up", skullcrusher: "skull crusher", skullcrushers: "skull crusher",
   flye: "fly", flyes: "fly", flies: "fly", presses: "press", crunches: "crunch",
   tricep: "triceps", bicep: "biceps", delts: "delt", rev: "reverse",
 };
+
+/**
+  Search box: "db press" → "dumbbell press", "ohp" → "overhead press". Two-letter shorthand that is also the start of
+  real words people type ("sl" → sled, slider) is left alone, since the search runs while typing.
+*/
+const TYPING_AMBIGUOUS = new Set(["sl", "sa", "sm", "rev"]);
+export function expandQueryWords(words: string[]): string[] {
+  return words.flatMap((w) => (!TYPING_AMBIGUOUS.has(w) && SHORTHAND[w] ? SHORTHAND[w].split(" ") : [w]));
+}
 
 /** Words that don't help tell exercises apart. */
 const STOP = new Set(["the", "a", "with", "and", "on", "of", "to", "x", "version", "exercise", "medium", "grip", "-"]);

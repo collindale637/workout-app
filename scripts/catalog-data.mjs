@@ -591,6 +591,84 @@ export const ALIASES = {
   Triceps_Pushdown: ["Cable Tricep Extension", "Cable Tricep Extensions", "Cable Triceps Extension"],
   // The overhead version is its own exercise (rope, low pulley), so it gets its own names.
   Triceps_Overhead_Extension_with_Rope: ["Overhead Cable Tricep Extension", "Overhead Cable Triceps Extension", "Cable Overhead Tricep Extension", "Cable Overhead Triceps Extension", "Overhead Rope Tricep Extension"],
+  // Batch 1 (Nov 2026): common names for lifts that already exist under the dataset's wording.
+  "Reverse_Grip_Bent-Over_Rows": ["Yates Row"],
+  Lying_Cambered_Barbell_Row: ["Seal Row", "Barbell Seal Row"],
+  "One-Arm_Long_Bar_Row": ["Meadows Row"],
+  Alternating_Kettlebell_Row: ["Gorilla Row"],
+  Suspended_Row: ["Ring Row"],
+  Inverted_Row: ["Australian Pull-Up", "Bodyweight Row"],
+  Pullups: ["Wide-Grip Pull-Up"],
+  "Single-Arm_Linear_Jammer": ["Single-Arm Landmine Press"],
+  Log_Lift: ["Log Press"],
+  Reverse_Machine_Flyes: ["Rear Delt Fly Machine", "Machine Rear Delt Fly"],
+  Dumbbell_Prone_Incline_Curl: ["Dumbbell Spider Curl"],
+  Olympic_Squat: ["High-Bar Squat"],
+  Split_Jump: ["Jumping Lunge", "Jump Lunge"],
+  Snatch_Deadlift: ["Snatch-Grip Deadlift"],
+  Natural_Glute_Ham_Raise: ["Nordic Curl", "Nordic Hamstring Curl"],
+  Platform_Hamstring_Slides: ["Sliding Leg Curl"],
+  Hip_Lift_with_Band: ["Banded Glute Bridge"],
+  Hip_Extension_with_Bands: ["Band Glute Kickback"],
+  Glute_Kickback: ["Donkey Kick", "Quadruped Kickback"],
+  "Jackknife_Sit-Up": ["V-Up"],
+  Suspended_Reverse_Crunch: ["TRX Knee Tuck"],
+  Medicine_Ball_Full_Twist: ["Medicine Ball Russian Twist"],
+  Standing_Cable_Lift: ["Low-to-High Cable Woodchop"],
+  Lateral_Bound: ["Skater Jump"],
+  Standing_Long_Jump: ["Broad Jump"],
+  Power_Jerk: ["Push Jerk"],
+  Cat_Stretch: ["Cat-Cow"],
+  Front_Leg_Raises: ["Leg Swings"],
+  Ankle_On_The_Knee: ["Figure-4 Stretch"],
+  Chest_And_Front_Of_Shoulder_Stretch: ["Doorway Pec Stretch"],
+  "Close-Grip_Dumbbell_Press": ["Dumbbell Squeeze Press"],
+  "Push-Ups_-_Close_Triceps_Position": ["Diamond Push-Up"],
+  "Smith_Single-Leg_Split_Squat": ["Smith Machine Bulgarian Split Squat"],
+  Romanian_Deadlift: ["RDL", "Barbell RDL"],
+  Standing_Military_Press: ["OHP"],
+  Hyperextensions_Back_Extensions: ["45-Degree Back Extension"],
+  Walking_Treadmill: ["Incline Walk", "Incline Treadmill Walk"],
+  Knee_Hip_Raise_On_Parallel_Bars: ["Vertical Knee Raise"],
+  Butterfly: ["Machine Fly", "Chest Fly Machine"],
+  Incline_Dumbbell_Bench_With_Palms_Facing_In: ["Hammer Grip Incline DB Bench Press"],
+};
+
+// Batch 1: the same exercise under a clearer name (id unchanged, so plans and history are untouched).
+export const RENAMES = {
+  Air_Bike: "Bicycle Crunch", // the floor ab exercise; the cardio machine is Air_Bike_Cardio
+};
+
+// Equipment fixes that replace the name-based guess entirely: id -> option groups (empty = no equipment).
+export const EQUIPMENT_OVERRIDES = {
+  Drag_Curl: [["barbell"]], // was sled + barbell; the "drag" is the bar up your torso
+  "Calf-Machine_Shoulder_Shrug": [["standing_calf_machine"]],
+  Sledgehammer_Swings: [["sledgehammer"]],
+  Weighted_Bench_Dip: [["flat_bench", "adjustable_bench"], ["weight_plates", "dumbbells"]], // plate on the lap, not dip bars
+  Chin_To_Chest_Stretch: [],
+  Body_Tricep_Press: [["smith_machine", "power_rack", "squat_stand"]],
+  "Smith_Single-Leg_Split_Squat": [["smith_machine"], ["flat_bench", "adjustable_bench", "plyo_box"]],
+};
+
+// Extra option groups: every group listed must be met. id -> groups to append.
+export const EQUIPMENT_ADD_GROUPS = {
+  Squat_with_Bands: [["resistance_bands"]], Box_Squat_with_Bands: [["resistance_bands"]], Deadlift_with_Bands: [["resistance_bands"]],
+  Rack_Pull_with_Bands: [["resistance_bands"]], Sumo_Deadlift_with_Bands: [["resistance_bands"]],
+  Reverse_Band_Bench_Press: [["resistance_bands"]], Reverse_Band_Box_Squat: [["resistance_bands"]], Reverse_Band_Deadlift: [["resistance_bands"]],
+  Reverse_Band_Power_Squat: [["resistance_bands"]], Reverse_Band_Sumo_Deadlift: [["resistance_bands"]],
+  "Close-Grip_EZ-Bar_Curl_with_Band": [["resistance_bands"]], "Band_Assisted_Pull-Up": [["resistance_bands"]],
+  Decline_Crunch: [["decline_bench", "adjustable_bench"]], Decline_Oblique_Crunch: [["decline_bench", "adjustable_bench"]],
+  Decline_Reverse_Crunch: [["decline_bench", "adjustable_bench"]],
+  Incline_Cable_Flye: [["adjustable_bench"]], Incline_Cable_Chest_Press: [["adjustable_bench"]], Cable_Incline_Triceps_Extension: [["adjustable_bench"]],
+};
+
+// Extra alternatives inside a group: id -> [[item already in the group, item to add alongside it], ...].
+export const EQUIPMENT_OPTIONS = {
+  Standing_Overhead_Barbell_Triceps_Extension: [["barbell", "ez_bar"]], Reverse_Barbell_Curl: [["barbell", "ez_bar"]], Upright_Barbell_Row: [["barbell", "ez_bar"]],
+  Plie_Dumbbell_Squat: [["dumbbells", "kettlebells"]], Dumbbell_Lunges: [["dumbbells", "kettlebells"]], Dumbbell_Rear_Lunge: [["dumbbells", "kettlebells"]],
+  Dumbbell_Walking_Lunge: [["dumbbells", "kettlebells"]], Split_Squat_with_Dumbbells: [["dumbbells", "kettlebells"]], Dumbbell_Step_Ups: [["dumbbells", "kettlebells"]],
+  "Stiff-Legged_Dumbbell_Deadlift": [["dumbbells", "kettlebells"]], Dumbbell_Shrug: [["dumbbells", "kettlebells"]], Standing_Dumbbell_Calf_Raise: [["dumbbells", "kettlebells"]],
+  Pallof_Press: [["cable_crossover", "resistance_bands"]], Standing_Cable_Wood_Chop: [["cable_crossover", "resistance_bands"]],
 };
 
 // Dataset names that should NOT stay as an alias, because they now belong to a different version of the lift.
@@ -606,6 +684,8 @@ export const INACTIVE = new Set([
   "Lying_Face_Down_Plate_Neck_Resistance", "Lying_Face_Up_Plate_Neck_Resistance", "Seated_Head_Harness_Neck_Resistance",
   "Linear_3-Part_Start_Technique", "Linear_Acceleration_Wall_Drill", "Moving_Claw_Series", "Prone_Manual_Hamstring",
   "Kneeling_Arm_Drill", "Bodyweight_Flyes", "Otis-Up", "Cocoons", "Lunge_Sprint", "Crucifix",
+  // Batch 1: duplicates (kept: Push-Ups_With_Feet_Elevated, Incline_Dumbbell_Bench_With_Palms_Facing_In) and a jump (Split Jump covers it).
+  "Decline_Push-Up", "Hammer_Grip_Incline_DB_Bench_Press", "Split_Squats",
 ]);
 
 // Splits. Day targets use muscle ids.

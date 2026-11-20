@@ -30,7 +30,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Pull-Up | vertical_pull | lats | upper_back, biceps, rear_delts | pull_up_bar |
 | Chin-Up | vertical_pull | lats, biceps | upper_back, rear_delts, forearms | pull_up_bar |
 | Weighted Pull-Up | vertical_pull | lats | biceps, upper_back | pull_up_bar + dip_belt or weight_vest or dumbbells |
-| Band-Assisted Pull-Up | vertical_pull | lats | abs, forearms, upper_back, biceps | pull_up_bar |
+| Band-Assisted Pull-Up | vertical_pull | lats | abs, forearms, upper_back, biceps | pull_up_bar + resistance_bands |
 | Lat Pulldown | vertical_pull | lats | upper_back, biceps, rear_delts | lat_pulldown or cable_crossover |
 | Close-Grip Lat Pulldown | vertical_pull | lats | biceps, upper_back, rear_delts | lat_pulldown or cable_crossover |
 | Underhand Lat Pulldown | vertical_pull | lats | biceps, upper_back, rear_delts | lat_pulldown or cable_crossover |
@@ -55,7 +55,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Rack Pull | hinge | lower_back | forearms, glutes, hamstrings, traps | barbell + power_rack or squat_stand |
 | Back Extension | hinge | lower_back | glutes, hamstrings | back_extension_bench or ghd |
 | Barbell Shrug | isolation | traps |  | barbell |
-| Dumbbell Shrug | isolation | traps |  | dumbbells |
+| Dumbbell Shrug | isolation | traps |  | dumbbells or kettlebells |
 | Face Pull | other | rear_delts | upper_back, traps | cable_crossover or cable_pulley |
 | Overhead Press | vertical_push | front_delts | side_delts, triceps, upper_back | barbell + power_rack or squat_stand |
 | Seated Barbell Press | vertical_push | front_delts | triceps, side_delts | barbell + flat_bench or adjustable_bench + power_rack or squat_stand |
@@ -79,7 +79,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Reverse Pec Deck | isolation | rear_delts |  | pec_deck |
 | Cable Rear Delt Fly | isolation | rear_delts |  | cable_crossover |
 | Band Pull-Apart | isolation | rear_delts | upper_back, traps | resistance_bands |
-| Barbell Upright Row | other | side_delts, traps | front_delts, biceps | barbell |
+| Barbell Upright Row | other | side_delts, traps | front_delts, biceps | barbell or ez_bar |
 | Dumbbell Upright Row | other | side_delts, traps | front_delts, biceps | dumbbells |
 | Cable Upright Row | other | traps | side_delts | cable_crossover or cable_pulley |
 | Handstand Push-Up | vertical_push | front_delts | triceps, side_delts | none |
@@ -98,7 +98,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Cable Curl | isolation | biceps |  | cable_crossover or cable_pulley |
 | Cable Rope Hammer Curl | isolation | biceps |  | cable_crossover or cable_pulley |
 | Spider Curl | isolation | biceps |  | ez_bar or barbell + flat_bench or adjustable_bench |
-| Barbell Reverse Curl | isolation | biceps | forearms | barbell |
+| Barbell Reverse Curl | isolation | biceps | forearms | barbell or ez_bar |
 | Dumbbell Reverse Curl | isolation | biceps | forearms | dumbbells |
 | Zottman Curl | isolation | biceps | forearms | dumbbells |
 | Tricep Pushdown | isolation | triceps |  | cable_crossover or cable_pulley |
@@ -109,7 +109,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Skull Crusher | isolation | triceps | forearms | ez_bar or barbell + flat_bench or adjustable_bench |
 | Dumbbell Skull Crusher | isolation | triceps |  | dumbbells + flat_bench or adjustable_bench |
 | Overhead Dumbbell Extension | isolation | triceps |  | dumbbells |
-| Barbell Overhead Triceps Extension | isolation | triceps | front_delts | barbell |
+| Barbell Overhead Triceps Extension | isolation | triceps | front_delts | barbell or ez_bar |
 | Seated Overhead Dumbbell Extension | isolation | triceps |  | dumbbells + flat_bench or adjustable_bench |
 | Tricep Kickback | isolation | triceps |  | dumbbells |
 | Close-Grip Bench Press | horizontal_push | triceps | chest, front_delts | barbell + flat_bench or adjustable_bench + power_rack or squat_stand |
@@ -134,15 +134,15 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Single-Leg Extension | isolation | quads |  | leg_extension |
 | Bodyweight Squat | squat | quads | glutes, hamstrings | none |
 | Barbell Lunge | lunge | quads, glutes | hamstrings, adductors | barbell + power_rack or squat_stand |
-| Dumbbell Lunge | lunge | quads, glutes | hamstrings, adductors | dumbbells |
-| Dumbbell Reverse Lunge | lunge | quads, glutes | hamstrings, adductors | dumbbells |
+| Dumbbell Lunge | lunge | quads, glutes | hamstrings, adductors | dumbbells or kettlebells |
+| Dumbbell Reverse Lunge | lunge | quads, glutes | hamstrings, adductors | dumbbells or kettlebells |
 | Barbell Walking Lunge | lunge | quads, glutes | hamstrings, adductors | barbell + power_rack or squat_stand |
 | Bodyweight Walking Lunge | lunge | quads | calves, glutes, hamstrings | none |
-| Dumbbell Split Squat | lunge | quads, glutes | hamstrings, adductors | dumbbells |
-| Dumbbell Step-Up | lunge | quads, glutes | hamstrings | plyo_box or flat_bench or adjustable_bench + dumbbells |
+| Dumbbell Split Squat | lunge | quads, glutes | hamstrings, adductors | dumbbells or kettlebells |
+| Dumbbell Step-Up | lunge | quads, glutes | hamstrings | plyo_box or flat_bench or adjustable_bench + dumbbells or kettlebells |
 | Barbell Step-Up | lunge | quads, glutes | hamstrings | plyo_box or flat_bench or adjustable_bench + barbell |
 | Romanian Deadlift | hinge | hamstrings, glutes | lower_back, forearms | barbell |
-| Dumbbell Romanian Deadlift | hinge | hamstrings, glutes | lower_back, forearms | dumbbells |
+| Dumbbell Romanian Deadlift | hinge | hamstrings, glutes | lower_back, forearms | dumbbells or kettlebells |
 | Stiff-Leg Deadlift | hinge | hamstrings | glutes, lower_back | barbell |
 | Sumo Deadlift | hinge | glutes, hamstrings, adductors | quads, lower_back, traps, forearms | barbell |
 | Trap Bar Deadlift | hinge | quads, glutes | hamstrings, lower_back, traps, forearms | trap_bar |
@@ -165,7 +165,7 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Standing Calf Raise | isolation | calves |  | standing_calf_machine |
 | Seated Calf Raise | isolation | calves |  | seated_calf_machine |
 | Leg Press Calf Raise | isolation | calves | glutes | leg_press |
-| Dumbbell Calf Raise | isolation | calves |  | dumbbells |
+| Dumbbell Calf Raise | isolation | calves |  | dumbbells or kettlebells |
 | Barbell Calf Raise | isolation | calves |  | barbell |
 | Smith Machine Calf Raise | isolation | calves |  | smith_machine |
 | Single-Arm Kettlebell Swing | hinge | hamstrings | calves, glutes, lower_back, front_delts | kettlebells |
@@ -181,10 +181,10 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Barbell Rollout | core | abs | lower_back, front_delts | barbell |
 | Crunch | core | abs |  | none |
 | Reverse Crunch | core | abs |  | none |
-| Decline Crunch | core | abs |  | none |
+| Decline Crunch | core | abs |  | decline_bench or adjustable_bench |
 | Russian Twist | core | obliques | lower_back | none |
-| Pallof Press | core | obliques, abs |  | cable_crossover or cable_pulley |
-| Cable Woodchop | core | obliques | front_delts | cable_crossover or cable_pulley |
+| Pallof Press | core | obliques, abs |  | cable_crossover or cable_pulley or resistance_bands |
+| Cable Woodchop | core | obliques | front_delts | cable_crossover or cable_pulley or resistance_bands |
 | Dead Bug | core | abs |  | none |
 | Mountain Climber | core | abs | quads, front_delts | none |
 | Sit-Up | core | abs |  | none |
