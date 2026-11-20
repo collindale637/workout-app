@@ -4,7 +4,7 @@ import { fetchAll } from "./sync";
 import type { Equipment, Exercise, ExerciseEquipment, ExerciseMuscle, Muscle, Split, SplitDay } from "./types";
 
 /** Bump when the catalog seed changes so every phone downloads it again. */
-export const CATALOG_VERSION = "2026-12-02.2";
+export const CATALOG_VERSION = "2026-12-02.3";
 
 /**
  * Copies the shared exercise library (muscles, equipment, ~900 exercises and their tags, the split library) onto the phone,
