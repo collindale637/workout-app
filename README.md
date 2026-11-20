@@ -136,6 +136,7 @@ More → Sync shows the status. The exercise library downloads once (about 1 MB)
 | `20261130000100_ai_request_calls.sql` | `ai_requests.calls`: how many Claude calls each AI request took; `ai_log_request()` gains an optional `p_calls` | ✓ |
 | `20261201000100_catalog_batch1_aliases_equipment.sql` | Exercise library batch 1: 40 lifts get the names people search for (Yates Row, Meadows Row, Nordic Curl, V-Up…), kettlebell / EZ-bar / band options on existing lifts, equipment fixes (Drag Curl, Weighted Bench Dip, banded barbell lifts need bands, decline/incline benches), 3 duplicates hidden, Air Bike (floor ab) renamed Bicycle Crunch | ✓ |
 | `20261202000100_catalog_batch2_staples.sql` | Exercise library batch 2: 89 staples that were missing (Pendlay Row, Neutral-Grip Pull-Up, Knee and Archer Push-Ups, Pistol and Sissy Squats, Bird Dog, Copenhagen Plank, band and cable versions, mobility stretches, Hiking, Sprints and Swimming). New rows only; nothing existing changes. Safe to re-run. | ✓ |
+| `20261202000200_catalog_batch3.sql` | Exercise library batch 3: 65 more exercises (Paused Bench Press, Cossack Squat, Devil Press, Hindu Push-Up, carries, cable and suspension variations, mobility stretches, Rucking / Yoga / Pilates / HIIT logs) and 4 new equipment items (sliders, hand gripper, rotary torso machine, back extension machine). New rows only. Safe to re-run. | ✓ |
 
 ## One-time setup
 
