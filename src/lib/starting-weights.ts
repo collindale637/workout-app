@@ -9,7 +9,7 @@ import type { Experience, ExerciseEquipment, GymEquipment, Sex } from "./db/type
     - women and anyone who skipped the question are scaled down (the cautious direction; you can always go up),
     - the guess is converted to this exercise's equipment (dumbbells are per hand; machines run as-is),
     - turned into a weight you could do for the top of the rep range with ~3 reps left in the tank,
-    - trimmed 10% because the first session is for finding the weight, and
+    - trimmed 22% because the first session is for finding the weight (was 10%; first sessions ran 10–20% heavy), and
     - rounded to what the gym can actually load (bar weight + plate steps, dumbbell steps, kettlebell ladder, stack).
   Height only caps bodyweight at a BMI-30 equivalent, since extra body fat doesn't add lifting strength.
   These are estimates, not prescriptions. The live workout labels them as such, and once you log a lift the
@@ -190,6 +190,6 @@ export function estimateStartingWeight(args: {
 
   const reps = args.repMax ?? args.repMin ?? 10;
   const working = (oneRm * factor) / (1 + (reps + 3) / 30);
-  const raw = working * 0.9;
+  const raw = working * 0.78;
   return roundTo(raw, loadFor(args.needs, args.gymRows), implement);
 }

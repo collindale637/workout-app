@@ -70,10 +70,20 @@ export function weekProgress<T extends Pick<PlanDay, "id" | "week" | "day_order"
   const done = new Set(
     finished.filter((w) => w.plan_day_id && w.ended_at && ids.has(w.plan_day_id) && Date.parse(w.ended_at) >= since).map((w) => w.plan_day_id!),
   );
+  let lastAt = -Infinity;
   const skipped = new Set((plan.skipped_day_ids ?? []).filter((id) => ids.has(id) && !done.has(id)));
   const weekComplete = days.length > 0 && days.every((d) => done.has(d.id) || skipped.has(d.id));
   const lastWeek = length !== null && week >= length;
-  let nextDay = days.find((d) => !done.has(d.id) && !skipped.has(d.id)) ?? null;
+  // Keep going in order from the day you last finished (start on day 2 and you get 3, 4, 5, then back to 1),
+  // rather than snapping back to the first day you haven't done.
+  const open = (d: T) => !done.has(d.id) && !skipped.has(d.id);
+  let lastOrder = -Infinity;
+  for (const w of finished) {
+    if (!w.plan_day_id || !w.ended_at || Date.parse(w.ended_at) < since) continue;
+    const d = days.find((x) => x.id === w.plan_day_id);
+    if (d && Date.parse(w.ended_at) >= lastAt) { lastAt = Date.parse(w.ended_at); lastOrder = d.day_order; }
+  }
+  let nextDay = days.find((d) => open(d) && d.day_order > lastOrder) ?? days.find(open) ?? null;
   if (!nextDay) nextDay = (weekComplete && !lastWeek ? daysForWeek(allDays, week + 1)[0] : days[0]) ?? null;
   return { week, length, days, done, skipped, weekComplete, lastWeek, nextDay };
 }
