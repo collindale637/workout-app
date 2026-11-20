@@ -7,7 +7,7 @@ import { detectPlatform, isStandalone, useInstallPrompt, type InstallPlatform } 
 import { btn } from "@/components/ui/kit";
 import { RepsMark } from "@/components/logo";
 import { Sparkle } from "@/components/ai";
-import { READY_AVG } from "@/lib/readiness";
+import { STATE_COLOR } from "@/components/body-map";
 
 /*
   First-run tutorial (Nov 2026, option 1): a full-screen, swipeable walkthrough.
@@ -17,7 +17,8 @@ import { READY_AVG } from "@/lib/readiness";
     stay sharp and follow the app's units and gym names.
 */
 
-type Step = { id: string; art: React.ReactNode; title: string; body: React.ReactNode };
+/** tall: a bigger picture area. bare: the picture draws its own cards (no framed box). */
+type Step = { id: string; art: React.ReactNode; title: string; body: React.ReactNode; tall?: boolean; bare?: boolean };
 
 type Close = (how: "done" | "skip") => void;
 
@@ -68,7 +69,7 @@ export function TutorialView({ onClose, kg, rpe, gymNames, here }: { onClose: Cl
       title: "Log every set",
       body: (
         <>
-          Flick the wheels to your weight and reps (tap the number to type it), then <b className="text-ink">Log set</b>. RPE is how hard it felt, 1–10; it starts at{" "}
+          Choose your weight and reps, then <b className="text-ink">Log set</b>. RPE is how hard it felt, 1–10; it starts at{" "}
           {rpe}. Rest starts on its own, and a record gets a <b className="text-gold">gold PR</b>.
         </>
       ),
@@ -87,15 +88,16 @@ export function TutorialView({ onClose, kg, rpe, gymNames, here }: { onClose: Cl
     {
       id: "track",
       art: <TrackArt />,
+      tall: true,
       title: "See what's ready, see what's earned",
       body: (
         <>
-          <b className="text-ink">Recovery</b> shows how fresh each muscle is from the last 7 days; tap one to say how it feels. <b className="text-ink">Progress</b> has
-          your calendar, records, lift charts, bodyweight and cardio.
+          <b className="text-ink">Recovery</b> shows how fresh each muscle is based on past workouts, or tap it to adjust manually.{" "}
+          <b className="text-ink">Progress</b> has your calendar, records, lift charts, bodyweight and cardio.
         </>
       ),
     },
-    { id: "done", art: <ReadyArt />, title: "You're all set", body: "Let's get your first workout on the books." },
+    { id: "done", art: <ReadyArt />, bare: true, title: "You're all set", body: "Let's get your first workout on the books." },
   ];
 
   const last = steps.length - 1;
@@ -177,7 +179,7 @@ export function TutorialView({ onClose, kg, rpe, gymNames, here }: { onClose: Cl
                   <InstallStep active={i === index} onInstalled={() => go(i + 1)} />
                 ) : (
                   <>
-                    <Art>{s.art}</Art>
+                    {s.bare ? s.art : <Art tall={s.tall}>{s.art}</Art>}
                     <h2 className="display mt-5 text-[34px] leading-[0.95] font-extrabold italic">{s.title}</h2>
                     <p className="mt-2 text-base leading-snug font-medium text-muted">{s.body}</p>
                   </>
@@ -210,11 +212,11 @@ export function TutorialView({ onClose, kg, rpe, gymNames, here }: { onClose: Cl
 }
 
 /** The picture area at the top of each step. */
-function Art({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Art({ children, className = "", tall = false }: { children: React.ReactNode; className?: string; tall?: boolean }) {
   return (
     <div
       aria-hidden="true"
-      className={`relative flex h-[min(300px,40dvh)] shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-line bg-gradient-to-b from-card-2 to-card ${className}`}
+      className={`relative flex ${tall ? "h-[min(380px,50dvh)]" : "h-[min(300px,40dvh)]"} shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-line bg-gradient-to-b from-card-2 to-card ${className}`}
     >
       {children}
     </div>
@@ -224,14 +226,23 @@ function Art({ children, className = "" }: { children: React.ReactNode; classNam
 // ---------------------------------------------------------------- Add to Home Screen
 
 const IOS_STEPS = [
-  { tab: "Tap ⋯", text: <>In Safari, tap <b className="text-ink">⋯</b> beside the address bar (or the <b className="text-ink">Share</b> button if you see it).</> },
-  { tab: "Add to Home", text: <>Tap <b className="text-ink">Share</b>, scroll down and tap <b className="text-ink">Add to Home Screen</b>. Not there? Tap View More.</> },
-  { tab: "Tap Add", text: <>Tap <b className="text-ink">Add</b>. From now on, open Reps from its icon: it runs full screen and works offline.</> },
+  {
+    tab: <>Tap <ShareGlyph size={15} /></>,
+    key: "share",
+    text: (
+      <>
+        Tap the <b className="text-ink">Share</b> button <ShareGlyph size={18} className="-mt-1 text-ink" /> at the bottom of Safari. Don&apos;t see it? Tap{" "}
+        <b className="text-ink">⋯</b> first.
+      </>
+    ),
+  },
+  { tab: "Add to Home", key: "add", text: <>Scroll down and tap <b className="text-ink">Add to Home Screen</b>. Not there? Tap View More.</> },
+  { tab: "Tap Add", key: "confirm", text: <>Tap <b className="text-ink">Add</b>. From now on, open Reps from its icon: it runs full screen and works offline.</> },
 ];
 const ANDROID_STEPS = [
-  { tab: "Tap ⋮", text: <>In Chrome, tap the <b className="text-ink">⋮</b> menu at the top right.</> },
-  { tab: "Add to Home", text: <>Tap <b className="text-ink">Add to Home screen</b> (or <b className="text-ink">Install app</b>).</> },
-  { tab: "Tap Install", text: <>Tap <b className="text-ink">Install</b>. From now on, open Reps from its icon: it runs full screen and works offline.</> },
+  { tab: "Tap ⋮", key: "menu", text: <>In Chrome, tap the <b className="text-ink">⋮</b> menu at the top right.</> },
+  { tab: "Add to Home", key: "add", text: <>Tap <b className="text-ink">Add to Home screen</b> (or <b className="text-ink">Install app</b>).</> },
+  { tab: "Tap Install", key: "confirm", text: <>Tap <b className="text-ink">Install</b>. From now on, open Reps from its icon: it runs full screen and works offline.</> },
 ];
 
 function InstallStep({ active, onInstalled }: { active: boolean; onInstalled: () => void }) {
@@ -292,7 +303,7 @@ function InstallStep({ active, onInstalled }: { active: boolean; onInstalled: ()
           <div className="mt-3 grid grid-cols-3 gap-2">
             {steps.map((s, i) => (
               <button
-                key={s.tab}
+                key={s.key}
                 type="button"
                 onClick={() => {
                   setSub(i);
@@ -322,6 +333,15 @@ const Ico = ({ d, size = 20 }: { d: string; size?: number }) => (
     <path d={d} />
   </svg>
 );
+const SHARE = "M12 3v12M8 7l4-4 4 4M7 10H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1";
+/** Safari's Share icon (a box with an arrow up), drawn inline with text. */
+function ShareGlyph({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={`inline-block align-middle ${className}`} aria-label="Share">
+      <path d={SHARE} />
+    </svg>
+  );
+}
 const PLUS_BOX = "M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM12 8v8M8 12h8";
 const pulseBase = "outline-2 animate-[tutorial-pulse_1.8s_ease-in-out_infinite]";
 const pulse = `${pulseBase} outline-accent-strong`;
@@ -360,11 +380,22 @@ function InstallPicture({ platform, sub }: { platform: "ios" | "android"; sub: n
     <div className="absolute inset-x-10 top-14 bottom-0 overflow-hidden rounded-t-[22px] border border-b-0 border-line bg-bg">
       {platform === "ios" ? (
         <>
-          <div className={sub === 0 ? "" : "opacity-35"}>{page}</div>
+          <div className={sub === 0 ? "" : "opacity-35"}>
+            <div className="m-2 mb-0 flex h-8 items-center gap-2 rounded-full bg-card px-3 text-xs text-muted">
+              <Ico d="M4 7h16M4 12h16M4 17h16" size={14} />
+              <span className="flex-1 truncate">reps · your site</span>
+            </div>
+            {page}
+          </div>
           {sub === 0 && (
-            <div className="absolute inset-x-0 bottom-0 flex h-14 items-center gap-2 border-t border-line bg-card px-3 text-muted">
-              <span className="flex-1 truncate rounded-full bg-bg px-3 py-1.5 text-xs">reps · your site</span>
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full text-lg font-extrabold text-white outline ${pulse}`}>⋯</span>
+            <div className="absolute inset-x-2 bottom-2 flex h-12 items-center justify-around rounded-full bg-card text-muted">
+              <Ico d="M15 5l-7 7 7 7" size={20} />
+              <span className="opacity-40"><Ico d="M9 5l7 7-7 7" size={20} /></span>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-full bg-primary/25 text-white outline ${pulse}`}>
+                <ShareGlyph size={22} />
+              </span>
+              <Ico d="M4 6.5C6 5 9 5 12 6.5 15 5 18 5 20 6.5V19c-2-1.5-5-1.5-8 0-3-1.5-6-1.5-8 0z M12 6.5V19" size={20} />
+              <Ico d="M8 8h11v11H8zM5 16V5h11" size={20} />
             </div>
           )}
           {sub === 1 && (
@@ -567,66 +598,97 @@ function GymArt({ names, here }: { names: string[]; here: string }) {
   );
 }
 
-/** Recovery's "Every muscle" tiles above Progress's month calendar. */
-function TrackArt() {
-  const tiles: [string, number][] = [["Chest", 94], ["Quads", 88], ["Lats", 55], ["Hamstrings", 42]];
-  // A few days in a month: lift (blue), cardio (teal), both (split), today (ring).
-  const days: ("l" | "c" | "b" | "" | "t")[] = ["l", "", "c", "l", "", "b", "", "l", "", "c", "l", "", "", "t"];
+/** A tab name with its bottom-bar icon, so each half of the picture says which tab it is. */
+function TabLabel({ d, children }: { d: string; children: React.ReactNode }) {
   return (
-    <div className="flex w-[86%] flex-col gap-3">
-      <div className="grid grid-cols-2 gap-2">
-        {tiles.map(([n, s]) => (
-          <div key={n} className="rounded-xl bg-card-2 px-2.5 py-2">
-            <div className="flex justify-between text-xs font-bold">
-              <span>{n}</span>
-              <span className="num">{s}%</span>
-            </div>
-            <div className="mt-1.5 h-1.5 rounded-full bg-line">
-              <div className={`h-full rounded-full ${s >= READY_AVG ? "bg-good" : "bg-warn"}`} style={{ width: `${s}%` }} />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="rounded-2xl bg-card-2 p-2.5">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="display text-sm font-extrabold">November</span>
-          <span className="flex items-center gap-1 rounded-full bg-gold px-2 py-0.5 text-[10px] font-extrabold tracking-[0.06em] text-gold-ink">PR</span>
+    <span className="display flex items-center gap-1.5 text-xs font-extrabold tracking-[0.12em] text-accent">
+      <Ico d={d} size={14} />
+      {children}
+    </span>
+  );
+}
+
+/** Two labelled cards: Recovery (muscles with their state, one being adjusted by hand) and Progress (a new record). */
+function TrackArt() {
+  const rows: { name: string; score: number; state: "fresh" | "recovering" | "fatigued"; note: string }[] = [
+    { name: "Chest", score: 94, state: "fresh", note: "Fresh" },
+    { name: "Quads", score: 62, state: "recovering", note: "Ready in ~14 h" },
+    { name: "Hamstrings", score: 38, state: "fatigued", note: "Ready in ~30 h" },
+  ];
+  return (
+    <div className="flex w-[90%] flex-col gap-2.5">
+      <div className="flex flex-col gap-2 rounded-2xl bg-card-2 p-3">
+        <div className="flex items-center justify-between">
+          <TabLabel d="M3 12h4l3-8 4 16 3-8h4">RECOVERY</TabLabel>
+          <span className="text-[10px] font-bold tracking-[0.1em] text-muted">FROM YOUR WORKOUTS</span>
         </div>
-        <div className="grid grid-cols-7 gap-1">
-          {days.map((d, i) => (
+        {rows.map((r) => {
+          const tapped = r.state === "fatigued";
+          return (
+            <div key={r.name} className={`flex flex-col gap-1 rounded-xl px-2 py-1.5 ${tapped ? `bg-primary/15 outline ${pulse}` : ""}`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm font-bold">{r.name}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="text-[11px] font-semibold text-muted">{r.note}</span>
+                  <span className="display num text-base leading-none font-extrabold" style={{ color: STATE_COLOR[r.state] }}>{r.score}%</span>
+                </span>
+              </div>
+              <span className="h-1.5 rounded-full bg-card">
+                <span className="block h-full rounded-full" style={{ width: `${r.score}%`, background: STATE_COLOR[r.state] }} />
+              </span>
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-1.5 pl-2">
+          <span className="text-[11px] font-bold text-accent-soft">Feels?</span>
+          {["Wrecked", "Sore", "Fine", "Fresh"].map((f) => (
             <span
-              key={i}
-              className={`num flex aspect-square items-center justify-center rounded-md text-[11px] font-bold ${
-                d === "l" ? "bg-chart-1 text-white" : d === "c" ? "bg-chart-2 text-white" : d === "t" ? "text-ink ring-2 ring-accent-strong" : "bg-card text-muted"
-              }`}
-              style={d === "b" ? { background: "linear-gradient(90deg, var(--chart-1) 50%, var(--chart-2) 50%)", color: "#fff" } : undefined}
+              key={f}
+              className={`flex h-6 flex-1 items-center justify-center rounded-lg border text-[10px] font-bold ${f === "Fine" ? "border-accent-strong bg-primary/15 text-accent-soft" : "border-line text-muted"}`}
             >
-              {i + 7}
+              {f}
             </span>
           ))}
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 rounded-2xl bg-card-2 p-3">
+        <TabLabel d="M4 20V11M10 20V5M16 20v-6M21 20H3">PROGRESS</TabLabel>
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-soft text-gold">
+            <Ico d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4" size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold">Bench Press</span>
+            <span className="block text-[11px] font-semibold text-muted">New record · est. max</span>
+          </span>
+          <svg width="74" height="30" viewBox="0 0 74 30" className="shrink-0" aria-hidden="true">
+            <path d="M2 25 L14 22 L26 23 L38 17 L50 15 L62 9 L70 5" fill="none" stroke="var(--chart-1)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="70" cy="5" r="3.5" fill="var(--gold)" />
+          </svg>
+          <span className="display num text-xl leading-none font-extrabold text-gold">205</span>
         </div>
       </div>
     </div>
   );
 }
 
-/** Last step: where the other things live. */
+/** Last step: four big cards for where the other things live. */
 function ReadyArt() {
-  const row = (icon: React.ReactNode, title: string, text: string) => (
-    <div className="flex items-start gap-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-card-2 text-accent">{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-[15px] font-bold">{title}</span>
-        <span className="block text-[13px] leading-snug font-medium text-muted">{text}</span>
-      </span>
-    </div>
-  );
+  const cards: { icon: React.ReactNode; tone: string; title: string; text: string }[] = [
+    { icon: <Sparkle size={24} />, tone: "bg-[#2a1d45] text-ai", title: "Plans + AI", text: "Plan tab: pick a split, Build with AI or import a plan." },
+    { icon: <Ico d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M12 19.5h.01" size={24} />, tone: "bg-[#13301f] text-good", title: "No signal? Fine", text: "Log offline. It syncs when you're back online." },
+    { icon: <Ico d="M3.5 5.5h17v13h-17zM3.5 7.5l8.5 6 8.5-6" size={24} />, tone: "bg-[#3a2414] text-[#ffb27a]", title: "Found a bug?", text: "More → Note to developer." },
+    { icon: <Ico d="M8 5.5v13l10.5-6.5z" size={22} />, tone: "bg-primary text-white", title: "See this again", text: "More → Show tutorial." },
+  ];
   return (
-    <div className="flex w-full flex-col gap-3.5 px-5">
-      {row(<Sparkle size={18} className="text-ai" />, "Plans and AI", "Plan tab: pick a split, Build with AI, or import a plan from text or screenshots.")}
-      {row(<Ico d="M2 9a15 15 0 0 1 20 0M5.5 12.5a10 10 0 0 1 13 0M9 16a5 5 0 0 1 6 0M12 19.5h.01" size={18} />, "Works with no signal", "Log in the gym offline. It syncs when you're back online.")}
-      {row(<Ico d="M3.5 5.5h17v13h-17zM3.5 7.5l8.5 6 8.5-6" size={18} />, "Found a bug?", "More → Note to developer.")}
-      {row(<Ico d="M7 4l13 8-13 8z" size={16} />, "See this again", "More → Show tutorial.")}
+    <div aria-hidden="true" className="grid shrink-0 grid-cols-2 gap-2.5">
+      {cards.map((c) => (
+        <div key={c.title} className="flex min-h-[min(170px,22dvh)] flex-col gap-2.5 rounded-[22px] border border-line bg-card p-4">
+          <span className={`flex h-12 w-12 items-center justify-center rounded-[14px] ${c.tone}`}>{c.icon}</span>
+          <span className="display text-xl leading-none font-extrabold">{c.title}</span>
+          <span className="text-[13px] leading-snug font-medium text-muted">{c.text}</span>
+        </div>
+      ))}
     </div>
   );
 }
