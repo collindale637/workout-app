@@ -11,6 +11,7 @@ import { formatMax, formatWeight, toDisplayWeight, weightUnit } from "@/lib/unit
 import { LineChart, Sparkline } from "@/components/charts";
 import { Card, Chip, Empty, PageHeader, field } from "@/components/ui/kit";
 import type { Units } from "@/lib/db/types";
+import { matchesSearch, searchTerms } from "@/lib/ai/match";
 import { prText, Trophy } from "../progress-screen";
 
 const DAY = 86_400_000;
@@ -173,8 +174,11 @@ function AllLifts() {
   const units: Units = profile?.units ?? "lb";
   const lifts = useMemo(() => (data ? topLifts(data.sessions, now, 1000) : []), [data, now]);
   if (!data) return null;
-  const needle = q.trim().toLowerCase();
-  const shown = lifts.filter((l) => !needle || (data.catalog.byId.get(l.exerciseId)?.name ?? "").toLowerCase().includes(needle));
+  const terms = searchTerms(q);
+  const shown = lifts.filter((l) => {
+    const e = data.catalog.byId.get(l.exerciseId);
+    return !terms.length || matchesSearch(`${e?.name ?? ""} ${e?.aliases.join(" ") ?? ""}`, terms);
+  });
   const u = weightUnit(units);
   return (
     <main className="flex flex-col gap-4 pb-4">

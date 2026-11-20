@@ -29,7 +29,38 @@ const SHORTHAND: Record<string, string> = {
 */
 const TYPING_AMBIGUOUS = new Set(["sl", "sa", "sm", "rev"]);
 export function expandQueryWords(words: string[]): string[] {
-  return words.flatMap((w) => (!TYPING_AMBIGUOUS.has(w) && SHORTHAND[w] ? SHORTHAND[w].split(" ") : [w]));
+  return words.flatMap((w) => {
+    const long = TYPING_AMBIGUOUS.has(w) ? undefined : SHORTHAND[w];
+    // "tricep" → "triceps" would only narrow a substring search ("Band Tricep Pushdown" has no "triceps"), so keep it as typed.
+    return long && !long.includes(w) ? long.split(" ") : [w];
+  });
+}
+
+/** Plurals whose singular isn't just the word minus "s" ("calves" → "Calf Raise"). */
+const IRREGULAR: Record<string, string> = { calves: "calf" };
+
+/**
+  Search box: each typed word becomes the forms it can take in a name or alternate name. As typed or as shorthand
+  spelled out ("db" → dumbbell), or its singular ("curls" → curl, "farmers" → Farmer's). Hyphens split words, so
+  "pull-up" finds "Pullups" and "Pull-Up".
+*/
+export function searchTerms(q: string): string[][][] {
+  return q
+    .toLowerCase()
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .map((w) => {
+      const forms = [expandQueryWords([w])];
+      const one = IRREGULAR[w] ?? singular(w);
+      if (one !== w) forms.push([one]);
+      return forms;
+    });
+}
+
+/** True when every typed word shows up (in one of its forms) in the text: name plus alternate names. */
+export function matchesSearch(text: string, terms: string[][][]): boolean {
+  const hay = text.toLowerCase();
+  return terms.every((forms) => forms.some((parts) => parts.every((p) => hay.includes(p))));
 }
 
 /** Words that don't help tell exercises apart. */

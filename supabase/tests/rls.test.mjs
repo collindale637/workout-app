@@ -57,6 +57,13 @@ await db.exec(readFileSync(root + "20261202000300_catalog_batch4.sql", "utf8"));
 await db.exec(readFileSync(root + "20261202000300_catalog_batch4.sql", "utf8")); // re-runnable
 await db.exec(readFileSync(root + "20261202000400_catalog_photos_matched.sql", "utf8"));
 await db.exec(readFileSync(root + "20261202000400_catalog_photos_matched.sql", "utf8")); // re-runnable
+await db.exec(readFileSync(root + "20261203000100_catalog_search_aliases.sql", "utf8"));
+await db.exec(readFileSync(root + "20261203000100_catalog_search_aliases.sql", "utf8")); // re-runnable
+{
+  // Alternate names are appended once, never doubled by a re-run.
+  const [{ aliases }] = (await db.query(`select aliases from public.exercises where id = 'Assisted_Pull-Up_Machine'`)).rows;
+  if (!aliases.includes("Gravitron") || aliases.filter((a) => a === "Gravitron").length !== 1) throw new Error("Gravitron alias missing or doubled");
+}
 if ((await db.query(`select is_active from public.exercises where id = 'Crucifix'`)).rows[0]?.is_active !== false) throw new Error("Crucifix should be inactive");
 const one = async (sql) => (await db.query(sql)).rows;
 console.log(await one(`select (select count(*) from muscles) muscles, (select count(*) from equipment) equipment,

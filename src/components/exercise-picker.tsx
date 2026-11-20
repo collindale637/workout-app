@@ -8,7 +8,7 @@ import { MUSCLE_GROUPS } from "@/lib/defaults";
 import { Chip, btn, field } from "@/components/ui/kit";
 import type { Exercise } from "@/lib/db/types";
 import type { SmartPicks } from "@/lib/ai/picks";
-import { expandQueryWords } from "@/lib/ai/match";
+import { matchesSearch, searchTerms } from "@/lib/ai/match";
 
 type Filter = { kind: "all" } | { kind: "group"; muscles: string[]; label: string } | { kind: "cardio" } | { kind: "stretch" };
 
@@ -72,7 +72,7 @@ export function ExercisePicker({
   const results = useMemo(() => {
     if (!catalog) return [];
     const exclude = new Set(excludeIds);
-    const words = expandQueryWords(q.split(/\s+/).filter(Boolean));
+    const terms = searchTerms(q);
     const list = catalog.exercises.filter((e) => {
       if (!e.is_active || exclude.has(e.id)) return false;
       if (filter.kind === "cardio" && e.category !== "cardio") return false;
@@ -82,10 +82,7 @@ export function ExercisePicker({
         const prim = (catalog.musclesOf.get(e.id) ?? []).filter((m) => m.role === "primary").map((m) => m.muscle_id);
         if (!prim.some((m) => filter.muscles.includes(m))) return false;
       }
-      if (words.length) {
-        const hay = `${e.name} ${e.aliases.join(" ")}`.toLowerCase();
-        if (!words.every((w) => hay.includes(w))) return false;
-      }
+      if (terms.length && !matchesSearch(`${e.name} ${e.aliases.join(" ")}`, terms)) return false;
       if (atGymOnly && gymEquipment && !isAvailable(catalog.needs.get(e.id) ?? [], gymEquipment)) return false;
       return true;
     });
