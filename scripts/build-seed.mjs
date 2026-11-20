@@ -10,7 +10,7 @@
 // exercise name, since the dataset only has one coarse equipment field.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { ALIASES, COMMON, DROP_ALIASES, EQUIPMENT, EQUIPMENT_ADD_GROUPS, EQUIPMENT_OPTIONS, EQUIPMENT_OVERRIDES, EXTRA_EXERCISES, INACTIVE, MUSCLE_OVERRIDES, MUSCLES, RENAMES, SOURCE_URL, SPLITS } from "./catalog-data.mjs";
+import { ALIASES, COMMON, DROP_ALIASES, EQUIPMENT, EQUIPMENT_ADD_GROUPS, EQUIPMENT_OPTIONS, EQUIPMENT_OVERRIDES, EXTRA_EXERCISES, IMAGE_FROM, INACTIVE, MUSCLE_OVERRIDES, MUSCLES, RENAMES, SOURCE_URL, SPLITS } from "./catalog-data.mjs";
 
 const OUT = new URL("../supabase/migrations/20261115000200_catalog_seed.sql", import.meta.url);
 const REPORT = new URL("../supabase/catalog-report.md", import.meta.url);
@@ -317,7 +317,8 @@ for (const ex of EXTRA_EXERCISES) {
   exercises.push({
     id: ex.id, name: ex.name, aliases: [...(ex.aliases ?? []), ...(ALIASES[ex.id] ?? [])], category: ex.category ?? "strength",
     movement_pattern: patternFor({ category: ex.category ?? "strength", mechanic: ex.mechanic }, name, roles),
-    mechanic: ex.mechanic, force: ex.force, level: ex.level, instructions: ex.instructions, images: [],
+    mechanic: ex.mechanic, force: ex.force, level: ex.level, instructions: ex.instructions,
+    images: IMAGE_FROM[ex.id] ? (exercises.find((e) => e.id === IMAGE_FROM[ex.id])?.images ?? []) : [],
     is_common: true, is_active: true, source: "catalog",
   });
   for (const [muscle, role] of roles) exMuscles.push([ex.id, muscle, role]);
