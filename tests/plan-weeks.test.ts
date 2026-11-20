@@ -36,6 +36,17 @@ describe("week progress", () => {
     expect(p.weekComplete).toBe(false);
   });
 
+  it("carries on from the day you last finished, then wraps back to days you skipped past", () => {
+    const five = [1, 2, 3, 4, 5].map((n) => day(`d${n}`, 1, n));
+    const fin = (id: string, t: string) => ({ plan_day_id: id, ended_at: `2026-11-2${t}T10:00:00Z` });
+    // Started on day 2: after days 2, 3, 4 the next one is day 5, not day 1.
+    expect(weekProgress(plan(), five, [fin("d2", "1"), fin("d3", "2"), fin("d4", "3")]).nextDay?.id).toBe("d5");
+    // After day 5 it wraps to day 1, the only one left.
+    const p = weekProgress(plan(), five, [fin("d2", "1"), fin("d3", "2"), fin("d4", "3"), fin("d5", "4")]);
+    expect(p.nextDay?.id).toBe("d1");
+    expect(p.weekComplete).toBe(false);
+  });
+
   it("finishes the week when every day is done or skipped, and points at next week", () => {
     const p = weekProgress(plan({ current_week: 4, skipped_day_ids: ["a2"] }), blocks, [{ plan_day_id: "a1", ended_at: "2026-11-21T10:00:00Z" }]);
     expect(p.weekComplete).toBe(true);
