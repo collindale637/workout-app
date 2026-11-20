@@ -327,3 +327,68 @@ Spot-check list for the most-used exercises. Regenerate with `node scripts/build
 | Trap Bar Shrug | isolation | traps | forearms | trap_bar |
 | Band Tricep Pushdown | isolation | triceps |  | resistance_bands |
 | Cable Tricep Kickback | isolation | triceps |  | cable_crossover or cable_pulley |
+| Assisted Chin-Up | vertical_pull | lats | biceps | assisted_pullup_machine |
+| Band Straight-Arm Pulldown | vertical_pull | lats |  | resistance_bands |
+| Jumping Pull-Up | vertical_pull | lats | biceps | pull_up_bar |
+| Suspension Bicep Curl | isolation | biceps |  | suspension_trainer or gymnastic_rings |
+| HIIT Class | cardio | quads |  | none |
+| Pilates Session | cardio | abs |  | none |
+| Rucking | cardio | quads |  | none |
+| Yoga Session | cardio | abs |  | none |
+| Decline Cable Fly | isolation | chest |  | cable_crossover |
+| Hindu Push-Up | horizontal_push | chest | front_delts, triceps | none |
+| Lying Cable Pullover | isolation | lats | chest | cable_crossover or cable_pulley + flat_bench or adjustable_bench |
+| Paused Bench Press | horizontal_push | chest | front_delts, triceps | barbell + flat_bench or adjustable_bench + power_rack or squat_stand |
+| Single-Arm Cable Chest Press | horizontal_push | chest | front_delts, triceps, obliques | cable_crossover or cable_pulley |
+| Spiderman Push-Up | horizontal_push | chest | obliques, triceps | none |
+| Suspension Chest Fly | isolation | chest | front_delts | suspension_trainer or gymnastic_rings |
+| Burpee Box Jump-Over | other | quads |  | plyo_box |
+| Devil Press | other | front_delts | chest, glutes | dumbbells |
+| Double-Unders | other | calves |  | jump_rope |
+| Medicine Ball Rotational Throw | core | obliques |  | medicine_ball |
+| Shadow Boxing | other | front_delts |  | none |
+| Bear Plank Hold | core | abs |  | none |
+| Body Saw | core | abs |  | suspension_trainer or gymnastic_rings |
+| Bosu Crunch | core | abs |  | bosu_ball |
+| Decline Sit-Up | core | abs |  | decline_bench or adjustable_bench |
+| Front Rack Carry | carry | abs | upper_back | kettlebells or dumbbells |
+| High Plank | core | abs |  | none |
+| Hollow Rock | core | abs |  | none |
+| Overhead Carry | carry | front_delts | abs | dumbbells or kettlebells |
+| Plank Jacks | core | abs |  | none |
+| RKC Plank | core | abs |  | none |
+| Rotary Torso Machine | core | obliques | abs | rotary_torso_machine |
+| Side Plank Hip Dip | core | obliques |  | none |
+| Slider Mountain Climber | core | abs | front_delts | sliders |
+| Standing Oblique Crunch | core | obliques |  | none |
+| Stir the Pot | core | abs |  | stability_ball |
+| Weighted Dead Bug | core | abs |  | dumbbells or kettlebells |
+| Hand Gripper | isolation | forearms |  | hand_gripper |
+| Band Seated Hip Abduction | isolation | abductors |  | resistance_bands |
+| Frog Pump | isolation | glutes | adductors | none |
+| Side-Lying Hip Adduction | isolation | adductors |  | none |
+| Bodyweight Step-Up | lunge | quads | glutes | plyo_box or flat_bench |
+| Cable Standing Leg Curl | isolation | hamstrings |  | cable_crossover or cable_pulley |
+| Cossack Squat | squat | adductors | quads, glutes | none |
+| Dumbbell Curtsy Lunge | lunge | glutes | quads | dumbbells or kettlebells |
+| Heel-Elevated Goblet Squat | squat | quads |  | dumbbells or kettlebells |
+| Pause Squat | squat | quads | glutes | barbell + power_rack or squat_stand |
+| Single-Leg RDL (Bodyweight) | hinge | hamstrings | glutes | none |
+| Slider Hamstring Curl | isolation | hamstrings | glutes | sliders |
+| Smith Machine Reverse Lunge | lunge | quads | glutes | smith_machine |
+| Suspension Pistol Squat | lunge | quads | glutes | suspension_trainer or gymnastic_rings |
+| Back Extension Machine (Seated) | hinge | lower_back | glutes | back_extension_machine |
+| Weighted Back Extension | hinge | lower_back | glutes, hamstrings | back_extension_bench or ghd + weight_plates or dumbbells |
+| Butterfly Stretch | mobility | adductors |  | none |
+| Frog Stretch | mobility | adductors |  | none |
+| Happy Baby | mobility | glutes |  | none |
+| Knee-to-Wall Ankle Mobilization | mobility | calves |  | none |
+| Sleeper Stretch | mobility | rear_delts |  | none |
+| Band Front Raise | isolation | front_delts |  | resistance_bands |
+| Dumbbell Rear Delt Row | horizontal_pull | rear_delts | upper_back | dumbbells |
+| Dumbbell Z Press | other | front_delts | triceps, abs | dumbbells |
+| Incline Dumbbell Reverse Fly | isolation | rear_delts | upper_back | dumbbells + adjustable_bench |
+| Incline Dumbbell Y-Raise | isolation | side_delts | rear_delts, traps | dumbbells + adjustable_bench |
+| Suspension Y/T Raise | isolation | rear_delts | upper_back, traps | suspension_trainer or gymnastic_rings |
+| Smith Machine Shrug | isolation | traps |  | smith_machine |
+| Cross-Body Cable Extension | isolation | triceps |  | cable_crossover |
