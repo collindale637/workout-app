@@ -127,3 +127,19 @@ export function formatWait(hours: number) {
   const days = Math.round((hours / 24) * 2) / 2;
   return `~${String(days).replace(".5", "½")} days`;
 }
+
+/**
+ * The rows on the Up Next card: the body parts (Chest, Back, Shoulders, Arms, Core, Legs) the workout trains, in the order
+ * its target muscles first appear. Each group holds only the workout's own muscles, so Arms on a push day is just triceps.
+ * A muscle the body-part list doesn't know gets a row of its own.
+ */
+export function targetGroups(targets: string[]): MuscleGroup[] {
+  const groups: MuscleGroup[] = [];
+  for (const t of targets) {
+    const name = FIXED_VIEWS.body_part.find((g) => g.muscles.includes(t))?.name ?? t;
+    const group = groups.find((g) => g.name === name);
+    if (group) group.muscles.push(t);
+    else groups.push({ name, muscles: [t] });
+  }
+  return groups;
+}
