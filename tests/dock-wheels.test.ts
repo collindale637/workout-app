@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { repsWheel, weightWheel, wheelNumber } from "@/lib/units";
+import { repsWheel, secondsWheel, weightWheel, wheelNumber } from "@/lib/units";
 
 describe("dock weight wheel", () => {
   it("lb: 0 to 1000 in 5s, picks the current weight", () => {
@@ -50,5 +50,31 @@ describe("dock reps wheel", () => {
   it("unset reps show a dash", () => {
     expect(repsWheel(null)).toEqual(expect.objectContaining({ index: 0 }));
     expect(repsWheel(null).values[0]).toBeNull();
+  });
+});
+
+describe("dock seconds wheel (timed holds)", () => {
+  it("1 s steps to a minute, then 5 s steps to 5 minutes", () => {
+    const w = secondsWheel(45);
+    expect(w.values[0]).toBe(1);
+    expect(w.values[59]).toBe(60);
+    expect(w.values[60]).toBe(65);
+    expect(w.values.at(-1)).toBe(300);
+    expect(w.values[w.index]).toBe(45);
+  });
+  it("slots in a timed value off the steps", () => {
+    const w = secondsWheel(97);
+    expect(w.values[w.index]).toBe(97);
+    expect(w.values[w.index - 1]).toBe(95);
+    expect(w.values[w.index + 1]).toBe(100);
+  });
+  it("a hold past 5 minutes still lands", () => {
+    const w = secondsWheel(420);
+    expect(w.values.at(-1)).toBe(420);
+    expect(w.index).toBe(w.values.length - 1);
+  });
+  it("an unset value shows a dash first", () => {
+    expect(secondsWheel(null).values[0]).toBeNull();
+    expect(secondsWheel(null).index).toBe(0);
   });
 });

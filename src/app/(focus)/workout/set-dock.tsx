@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/units";
+import { useNow } from "@/lib/use-now";
 import { PrBadge } from "@/components/workout-summary";
 
 /*
@@ -34,6 +35,11 @@ export type DockSet = {
   big: string;
   /** Hidden bar ring when not resting: set N of total. */
   progress: { set: number; total: number };
+  /**
+   * Timed holds (plank): a stopwatch. Idle, "Start timer" sits beside Log. Running, the seconds wheel becomes the clock and
+   * Log becomes Stop (logLabel / onLog already say so); stopping fills the seconds for you to log.
+   */
+  timer?: { startedAt: number | null; goal: number | null; onStart: () => void };
 };
 
 export type DockUpNext = {
@@ -169,7 +175,9 @@ function HiddenRow({ rest, content, onShow }: { rest: DockRest | null; content: 
       <RaisedRing rest={rest} progress={content.progress} onShow={onShow} />
       <button type="button" onClick={onShow} className="flex min-w-0 flex-col items-start text-left" aria-label="Show the set panel">
         <span className="display num max-w-full truncate text-[11px] leading-none font-bold tracking-[0.12em] text-[#DCE4FF]">{content.micro}</span>
-        <span className="display num mt-1 block max-w-full truncate text-[24px] leading-none font-extrabold">{content.big}</span>
+        <span className="display num mt-1 block max-w-full truncate text-[24px] leading-none font-extrabold">
+          {content.timer?.startedAt ? <HoldClock startedAt={content.timer.startedAt} goal={content.timer.goal} /> : content.big}
+        </span>
       </button>
       <span />
       <button type="button" onClick={content.onLog} className={`${white} h-[50px] max-w-full justify-self-end truncate px-4 text-lg`}>
@@ -269,7 +277,7 @@ function ShownRows({ rest, content }: { rest: DockRest | null; content: DockSet 
       {status}
       <div className="grid h-[150px] grid-cols-2 gap-2.5">
         <Wheel {...content.weight} />
-        <Wheel {...content.reps} />
+        {content.timer?.startedAt ? <TimerTile startedAt={content.timer.startedAt} goal={content.timer.goal} /> : <Wheel {...content.reps} />}
       </div>
       <div className="mt-2 flex h-[42px] items-center gap-2">
         {content.rpe ? (
@@ -281,11 +289,60 @@ function ShownRows({ rest, content }: { rest: DockRest | null; content: DockSet 
           <span className="pl-1 text-sm font-bold text-[#DCE4FF]">WARM-UP · NO RPE</span>
         )}
       </div>
-      <button type="button" onClick={content.onLog} className={`${white} mt-2.5 h-14 w-full text-xl`}>
-        {content.logLabel}
-      </button>
+      <div className="mt-2.5 flex gap-2">
+        {content.timer && !content.timer.startedAt && (
+          <button type="button" onClick={content.timer.onStart} className="display flex h-14 shrink-0 items-center justify-center gap-1.5 rounded-full bg-white/15 px-5 text-xl font-extrabold tracking-[0.04em] active:bg-white/25">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M6 4l14 8-14 8z" /></svg>
+            Timer
+          </button>
+        )}
+        <button type="button" onClick={content.onLog} className={`${white} h-14 min-w-0 flex-1 text-xl`}>
+          {content.logLabel}
+        </button>
+      </div>
     </>
   );
+}
+
+/** The hold that last buzzed, so hiding and showing the panel mid-hold doesn't buzz again. */
+let buzzedFor = 0;
+
+/** Whole seconds since `startedAt`, redrawn four times a second so the clock never skips. Buzzes once when the goal is reached. */
+function useHold(startedAt: number, goal: number | null) {
+  const now = useNow(250);
+  const sec = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const reached = goal !== null && sec >= goal;
+  useEffect(() => {
+    if (!reached || buzzedFor === startedAt) return;
+    buzzedFor = startedAt;
+    if ("vibrate" in navigator) navigator.vibrate?.([200, 100, 200]);
+  }, [reached, startedAt]);
+  return { sec, reached };
+}
+
+/** The running hold on the reps side of the panel: big clock, the goal, and a bar filling toward it. */
+function TimerTile({ startedAt, goal }: { startedAt: number; goal: number | null }) {
+  const { sec, reached } = useHold(startedAt, goal);
+  const pct = goal ? Math.min(1, sec / goal) : 0;
+  return (
+    <div role="timer" aria-label={`Hold ${formatDuration(sec)}${goal ? `, goal ${formatDuration(goal)}` : ""}`} className="relative flex h-[150px] flex-col items-center justify-center rounded-[18px] bg-black/15">
+      <span className="display num text-[56px] leading-none font-extrabold" style={reached ? { color: REST_DONE } : undefined}>{formatDuration(sec)}</span>
+      <span className="display mt-2 text-[12px] leading-none font-bold tracking-[0.1em] text-[#DCE4FF]">
+        {goal ? (reached ? "GOAL REACHED" : `GOAL ${formatDuration(goal)}`) : "SECONDS"}
+      </span>
+      {goal ? (
+        <div className="absolute inset-x-4 bottom-4 h-1.5 overflow-hidden rounded-full bg-white/20">
+          <div className="h-full rounded-full transition-[width] duration-300 ease-linear" style={{ width: `${pct * 100}%`, background: reached ? REST_DONE : "#fff" }} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** The same clock as one line, for the hidden bar. */
+function HoldClock({ startedAt, goal }: { startedAt: number; goal: number | null }) {
+  const { sec, reached } = useHold(startedAt, goal);
+  return <span style={reached ? { color: REST_DONE } : undefined}>{formatDuration(sec)}</span>;
 }
 
 /** One wheel row, in px. Three rows show: the one above, the picked one on the white bar, the one below. */

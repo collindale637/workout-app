@@ -57,6 +57,21 @@ export function repsWheel(reps: number | null) {
   return { values, index: Math.max(0, index) };
 }
 
+/**
+ * Values for the seconds wheel (timed holds): 1 s steps to a minute, then 5 s steps to 5 minutes. A timed or typed value
+ * off those steps (47 s, 6:10) is slotted in so the wheel can land on it. "—" (null) only while unset.
+ */
+export function secondsWheel(sec: number | null) {
+  const grid = [...Array.from({ length: 60 }, (_, i) => i + 1), ...Array.from({ length: 48 }, (_, i) => 65 + i * 5)];
+  if (sec !== null && sec >= 1 && !grid.includes(sec)) {
+    grid.push(sec);
+    grid.sort((a, b) => a - b);
+  }
+  const values: (number | null)[] = sec === null || sec < 1 ? [null, ...grid] : grid;
+  const index = sec === null || sec < 1 ? 0 : values.indexOf(sec);
+  return { values, index: Math.max(0, index) };
+}
+
 /** "185", "92.5", "BW" */
 /** Axis label: whole numbers, with one decimal only when the tick needs it (180.5). */
 export function formatTick(v: number) {

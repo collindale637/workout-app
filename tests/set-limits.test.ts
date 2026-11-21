@@ -20,3 +20,12 @@ describe("setProblem", () => {
     expect(setProblem(5000, 5, "kg")).toMatch(/kg\.$/);
   });
 });
+
+describe("timed holds", () => {
+  it("allow up to 10 minutes of seconds, and say seconds", () => {
+    expect(setProblem(null, 120, "lb", true)).toBeNull();
+    expect(setProblem(null, 600, "lb", true)).toBeNull();
+    expect(setProblem(null, 601, "lb", true)).toBe("Seconds must be 1–600.");
+    expect(setProblem(null, 120, "lb")).toBe("Reps must be 1–100.");
+  });
+});

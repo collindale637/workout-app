@@ -17,6 +17,7 @@ import { NextUpRow } from "@/components/next-up-row";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import type { Units, WorkoutSet } from "@/lib/db/types";
 import { Card, PageHeader, Sheet, btn } from "@/components/ui/kit";
+import { isTimed } from "@/lib/generator";
 import { EditSetForm } from "@/components/edit-set-form";
 
 export function SessionDetail() {
@@ -213,6 +214,10 @@ function WorkoutDetail({ id, justDone, back }: { id: string; justDone: boolean; 
           <EditSetForm
             set={editSet}
             units={units}
+            timed={(() => {
+              const w = wexs.find((x) => x.id === editSet.workout_exercise_id);
+              return w ? isTimed(catalog.byId.get(w.exercise_id)?.name ?? "", w.notes) : false;
+            })()}
             defaultRpe={defaultRpe}
             onSave={async (changes) => {
               await actions.updateSet(editSet.id, changes);
