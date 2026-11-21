@@ -7,7 +7,10 @@ import { label } from "@/components/ui/kit";
 
 export type Targets = { sets: number; repMin: number; repMax: number; rest: number };
 
-const REPS = Array.from({ length: 30 }, (_, i) => String(i + 1));
+const REPS = Array.from({ length: 30 }, (_, i) => i + 1);
+/** Seconds for a hold's range: 5 s steps to 3 minutes, plus any off-step target the plan already has (a 32 s AI target). */
+const secondsOptions = (have: number[]) => [...new Set([...Array.from({ length: 36 }, (_, i) => (i + 1) * 5), ...have])].sort((a, b) => a - b);
+const nearest = (opts: number[], v: number) => opts.reduce((best, o, i) => (Math.abs(o - v) < Math.abs(opts[best] - v) ? i : best), 0);
 const SAVE_AFTER_MS = 350;
 
 const chip =
@@ -19,9 +22,11 @@ const chip =
  * (shortly after you stop), so there's no Save button; "✓ Saved" flashes to confirm.
  */
 export function TargetsEditor({
-  initial, onSave, onSwap, onInfo, superset, onRemove, removeLabel,
+  initial, timed = false, onSave, onSwap, onInfo, superset, onRemove, removeLabel,
 }: {
   initial: Targets;
+  /** A hold (plank): the range is in seconds, not reps. */
+  timed?: boolean;
   onSave: (t: Targets) => void | Promise<void>;
   onSwap?: () => void;
   onInfo?: () => void;
@@ -31,6 +36,10 @@ export function TargetsEditor({
   removeLabel?: string;
 }) {
   const [t, setT] = useState(initial);
+  // Fixed when the sheet opens, so the wheel doesn't reshuffle under your finger.
+  const [opts] = useState<number[]>(() => (timed ? secondsOptions([initial.repMin, initial.repMax]) : REPS));
+  const optStrings = opts.map(String);
+  const word = timed ? "Seconds" : "Reps";
   const [saved, setSaved] = useState(false);
   const pending = useRef<Targets | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,21 +83,21 @@ export function TargetsEditor({
   };
 
   // The two wheels keep low ≤ high by pushing the other one along.
-  const setMin = (i: number) => change({ ...t, repMin: i + 1, repMax: Math.max(t.repMax, i + 1) });
-  const setMax = (i: number) => change({ ...t, repMax: i + 1, repMin: Math.min(t.repMin, i + 1) });
+  const setMin = (i: number) => change({ ...t, repMin: opts[i], repMax: Math.max(t.repMax, opts[i]) });
+  const setMax = (i: number) => change({ ...t, repMax: opts[i], repMin: Math.min(t.repMin, opts[i]) });
 
   return (
     <div className="flex flex-col gap-3">
       {/* Rep range (design 2): dark card like Sets / Rest, blue selection bar, white numbers. */}
       <div className="relative rounded-[20px] bg-card-2 px-2 pt-2.5 pb-2">
-        <p className={`${label} text-center`}>REPS</p>
+        <p className={`${label} text-center`}>{word.toUpperCase()}</p>
         <span className={`absolute top-2.5 right-3 text-xs font-bold tracking-[0.06em] text-good transition-opacity ${saved ? "opacity-100" : "opacity-0"}`} role="status">
           {saved ? "✓ SAVED" : ""}
         </span>
         <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-1">
-          <Wheel tone="dark" label="Reps from" options={REPS} index={t.repMin - 1} onPick={setMin} onTap={() => {}} />
+          <Wheel tone="dark" label={`${word} from`} options={optStrings} index={nearest(opts, t.repMin)} onPick={setMin} onTap={() => {}} />
           <span className="display px-1 text-2xl font-extrabold text-muted" aria-hidden="true">–</span>
-          <Wheel tone="dark" label="Reps to" options={REPS} index={t.repMax - 1} onPick={setMax} onTap={() => {}} />
+          <Wheel tone="dark" label={`${word} to`} options={optStrings} index={nearest(opts, t.repMax)} onPick={setMax} onTap={() => {}} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2">

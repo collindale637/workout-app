@@ -43,3 +43,13 @@ export function nextSlot(logged: { type: SetType }[], target: number, skipped: n
   const n = slotRows(logged, target, skipped).find((r) => r.kind === "next");
   return n ? n.slot : target + 1;
 }
+
+/**
+ * Superset hand-off after skipping a set: the next partner (in order, wrapping round) that still has sets to do, or
+ * undefined when none has. `members` is the superset in plan order.
+ */
+export function supersetPartner<T extends { id: string }>(members: T[], currentId: string, hasSetsLeft: (w: T) => boolean): T | undefined {
+  const pos = members.findIndex((m) => m.id === currentId);
+  if (pos < 0) return undefined;
+  return [...members.slice(pos + 1), ...members.slice(0, pos)].find(hasSetsLeft);
+}

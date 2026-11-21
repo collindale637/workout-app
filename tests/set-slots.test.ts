@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
+import { filledSets, nextSlot, slotRows, supersetPartner } from "@/lib/set-slots";
 
 const W = { type: "working" as const };
 const WU = { type: "warmup" as const };
@@ -43,5 +43,25 @@ describe("supersets after drag to reorder", () => {
   });
   it("breaks a pair when something is dropped between them", () => {
     expect(repairSupersets([2, null, 2, 3, 3])).toEqual([null, null, null, 3, 3]);
+  });
+});
+
+describe("supersetPartner (skipping a set hands the turn to the partner)", () => {
+  const a = { id: "calf", left: true };
+  const b = { id: "plank", left: true };
+  const c = { id: "curl", left: true };
+  const left = (w: { left: boolean }) => w.left;
+  it("goes to the next exercise in the superset", () => {
+    expect(supersetPartner([a, b], "plank", () => true)?.id).toBe("calf"); // wraps round
+    expect(supersetPartner([a, b], "calf", left)?.id).toBe("plank");
+    expect(supersetPartner([a, b, c], "calf", left)?.id).toBe("plank");
+  });
+  it("passes over a partner that is already finished", () => {
+    expect(supersetPartner([a, { ...b, left: false }, c], "calf", left)?.id).toBe("curl");
+  });
+  it("is undefined when nothing else has sets left", () => {
+    expect(supersetPartner([a, { ...b, left: false }], "calf", left)).toBeUndefined();
+    expect(supersetPartner([a], "calf", left)).toBeUndefined();
+    expect(supersetPartner([a, b], "nope", left)).toBeUndefined();
   });
 });

@@ -182,6 +182,9 @@ export const isIsolation = (ex: Pick<Exercise, "id" | "mechanic" | "movement_pat
 /** Timed holds: dosed in seconds, not reps. */
 export const isHold = (name: string) => /\bplank\b(?!\s*(jack|to|walk|up))|hollow (body )?hold|wall sit|l-sit|dead hang/i.test(name);
 
+/** A planned exercise counts seconds, not reps: a hold by name, or one the generator tagged "seconds". */
+export const isTimed = (name: string, notes?: string | null) => notes === "seconds" || isHold(name);
+
 const FREE_WEIGHTS = new Set(["barbell", "dumbbells", "trap_bar", "ez_bar", "kettlebells"]);
 const GUIDED = /machine|smith|cable|lever|pulldown|row_station|leg_press|hack_squat|pendulum|belt_squat|leg_extension|leg_curl|pec_deck|hip_abductor|hip_adductor|reverse_hyper/;
 const LOWER_BODY = new Set(["quads", "hamstrings", "glutes"]);

@@ -8,7 +8,7 @@ import { useGeneratorInputs } from "@/lib/smart";
 import { usePlanActions } from "@/lib/plans";
 import { useWorkoutActions } from "@/lib/workout";
 import { useOpenWorkout } from "@/lib/hooks";
-import { adaptToGym, dayStyle, dose, generateWorkout } from "@/lib/generator";
+import { adaptToGym, dayStyle, dose, generateWorkout, isTimed } from "@/lib/generator";
 import { isCardioExercise } from "@/lib/cardio";
 import { formatDuration } from "@/lib/units";
 import { ExercisePicker } from "@/components/exercise-picker";
@@ -225,6 +225,7 @@ export function DayEditor() {
         {menuFor && (
           <ExerciseMenu
             row={menuFor}
+            timed={isTimed(catalog.byId.get(menuFor.exercise_id)?.name ?? "", menuFor.notes)}
             isCardio={isCardioExercise(catalog.byId.get(menuFor.exercise_id))}
             onSave={(c) => actions.updateExercise(menuFor.id, c)}
             onSwap={() => { setPicker(menuFor); setMenuFor(null); }}
@@ -310,15 +311,16 @@ export function DayEditor() {
 }
 
 function ExerciseMenu({
-  row, isCardio, canSuperset, onSave, onSwap, onInfo, onSuperset, onRemove,
+  row, timed, isCardio, canSuperset, onSave, onSwap, onInfo, onSuperset, onRemove,
 }: {
-  row: PlanExercise; isCardio: boolean; canSuperset: boolean;
+  row: PlanExercise; timed: boolean; isCardio: boolean; canSuperset: boolean;
   onSave: (c: Partial<PlanExercise>) => void | Promise<void>; onSwap: () => void; onInfo: () => void; onSuperset: () => void; onRemove: () => void;
 }) {
   const [minutes, setMinutes] = useState(Number(/\d+/.exec(row.notes ?? "")?.[0] ?? 15));
   if (!isCardio) {
     return (
       <TargetsEditor
+        timed={timed}
         initial={{ sets: row.sets, repMin: row.rep_min ?? 8, repMax: row.rep_max ?? 12, rest: row.rest_sec ?? 90 }}
         onSave={(t) => onSave({ sets: t.sets, rep_min: t.repMin, rep_max: t.repMax, rest_sec: t.rest })}
         onSwap={onSwap}

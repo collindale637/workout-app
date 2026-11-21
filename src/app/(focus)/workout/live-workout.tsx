@@ -14,17 +14,18 @@ import { loadFor, suggestNext } from "@/lib/progression";
 import { startingWeightFor, useStartingProfile } from "@/lib/smart";
 import { useNow } from "@/lib/use-now";
 import { isAvailable } from "@/lib/availability";
-import { formatDuration, formatMax, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, repsWheel, toDisplayWeight, VOLUME_NOTE, volumeBy, weightUnit, weightWheel, wheelNumber } from "@/lib/units";
+import { formatDuration, formatMax, formatWeight, fromDisplayWeight, hasBodyweightSets, isPerHand, repsWheel, secondsWheel, toDisplayWeight, VOLUME_NOTE, volumeBy, weightUnit, weightWheel, wheelNumber } from "@/lib/units";
 import { ExerciseInfo } from "@/components/exercise-info";
 import { ConfirmSheet, Sheet, btn, doneDisc, field } from "@/components/ui/kit";
 import { RpeSlider } from "@/components/rpe-slider";
 import { ReorderList, type ReorderItem, type RowAction } from "@/components/reorder-list";
 import { NotesForm, RowIcon, SmartExercisePicker } from "@/components/exercise-actions";
-import { filledSets, nextSlot, slotRows } from "@/lib/set-slots";
+import { filledSets, nextSlot, slotRows, supersetPartner } from "@/lib/set-slots";
 import { setRecord, setsLine, shortDate } from "@/lib/compare";
 import { isDoubleTap } from "@/lib/double-tap";
 import { EditSetForm, TYPE_LABEL } from "@/components/edit-set-form";
-import { setProblem } from "@/lib/set-limits";
+import { setProblem, MAX_SET_SECONDS } from "@/lib/set-limits";
+import { isTimed } from "@/lib/generator";
 import { useWorkoutComparison } from "@/lib/compare-data";
 import { NotDoneBlock, PrBadge } from "@/components/workout-summary";
 import { WARMUP_SLOT, plannedWarmupId, warmupDose } from "@/lib/warmup";
@@ -175,9 +176,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   // "⋯" on a row or the title: Swap / How-to / Notes / Remove in one sheet.
   const [actionsFor, setActionsFor] = useState<WorkoutExercise | null>(null);
 
+  // A running hold (plank): when it started and the goal it was started with. Lives only on this screen.
+  const [holdTimer, setHoldTimer] = useState<{ wexId: string; startedAt: number; goal: number | null } | null>(null);
+  // Moving to another exercise drops a hold that was left running.
+  if (holdTimer && holdTimer.wexId !== current?.id) setHoldTimer(null);
+
   if (!wexs || !sets || !catalog) return null;
 
   const ex = current ? catalog.byId.get(current.exercise_id) : undefined;
+  // Holds (plank) count seconds instead of reps.
+  const timed = !!ex && isTimed(ex.name, current?.notes);
+  const unitWord = timed ? "sec" : "reps";
   const doneSets = current ? setsBy.get(current.id) ?? [] : [];
   const index = current ? wexs.findIndex((w) => w.id === current.id) : -1;
   const elapsed = (now - new Date(workout.started_at).getTime()) / 1000;
@@ -234,7 +243,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     // A second tap within 700 ms is a double tap, not another set.
     if (isDoubleTap(lastLogAt)) return;
     // Nothing is saved when the numbers are out of range; say why, right above the Log button.
-    const problem = setProblem(draft.weight, draft.reps, units);
+    const problem = setProblem(draft.weight, draft.reps, units, isTimed(catalog!.byId.get(current.exercise_id)?.name ?? "", current.notes));
     if (problem) {
       setToast({ id: "warn", text: problem, warn: true });
       return;
@@ -300,7 +309,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     record: ReturnType<typeof setRecord> = null,
   ) {
     const what = saved.type === "warmup" ? "Warm-up" : saved.type === "drop" ? "Drop set" : `Set ${setNumber}`;
-    const load = `${saved.weight === null ? "BW" : `${formatWeight(saved.weight, units)} ${weightUnit(units)}`} × ${saved.reps ?? "—"}`;
+    const load = `${saved.weight === null ? "BW" : `${formatWeight(saved.weight, units)} ${weightUnit(units)}`} × ${saved.reps ?? "—"}${timed ? " sec" : ""}`;
     // A record turns the toast gold: "PR Heaviest ever · 190 lb × 3" or "PR Best est. max · 233 lb".
     const text = !record
       ? `${what} logged · ${load}`
@@ -323,13 +332,26 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     });
   }
 
-  /** Skips a planned set. Skipping the last one finishes the exercise, same as logging it. */
+  /**
+   * Skips a planned set. Skipping the last one finishes the exercise, same as logging it. In a superset, skipping the set
+   * you were up to passes the turn to the partner (no rest, nothing was done), same as logging it would.
+   */
   async function skipSet(w: WorkoutExercise, slot: number) {
+    const target = w.target_sets ?? 3;
+    const wasNext = slot === nextSlot(setsBy.get(w.id) ?? [], target, w.skipped_sets);
     const skipped = [...new Set([...(w.skipped_sets ?? []), slot])].sort((a, b) => a - b);
     await actions.updateWex(w.id, { skipped_sets: skipped });
-    if (filledSets(setsBy.get(w.id) ?? [], w.target_sets ?? 3, skipped) < (w.target_sets ?? 3)) return;
+    const finished = filledSets(setsBy.get(w.id) ?? [], target, skipped) >= target;
+    let partner: WorkoutExercise | undefined;
+    if (w.superset_group !== null && (wasNext || finished)) {
+      partner = supersetPartner(wexs!.filter((x) => x.superset_group === w.superset_group), w.id, remaining);
+    }
+    if (!finished && !partner) return;
     await db.setMeta("rest", null);
-    if (wexs!.every((x) => x.id === w.id || done(x))) setAllDoneOpen(true);
+    if (partner) {
+      setCurrentId(partner.id);
+      setUpNextFrom(null);
+    } else if (wexs!.every((x) => x.id === w.id || done(x))) setAllDoneOpen(true);
     else if (nextAfter(w.id)) {
       setCurrentId(w.id);
       setUpNextFrom(w.id);
@@ -350,6 +372,23 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     if (upNextFrom === w.id) setUpNextFrom(null);
   }
 
+  const hold = timed && current && holdTimer && holdTimer.wexId === current.id ? holdTimer : null;
+  const holdRunning = hold !== null;
+  /** Starts the stopwatch; the seconds already on the wheel (last time, else the target) become the goal. */
+  function startHold() {
+    if (!current) return;
+    if ("vibrate" in navigator) navigator.vibrate?.(30);
+    setHoldTimer({ wexId: current.id, startedAt: Date.now(), goal: draft.reps });
+  }
+  /** Stops the stopwatch and puts the time on the seconds wheel, ready to log (RPE and a tweak are still yours). */
+  function stopHold() {
+    if (!holdTimer) return;
+    const sec = Math.min(MAX_SET_SECONDS, Math.max(1, Math.round((Date.now() - holdTimer.startedAt) / 1000)));
+    if ("vibrate" in navigator) navigator.vibrate?.(30);
+    setHoldTimer(null);
+    setDraft({ ...draft, reps: sec });
+  }
+
   // Dock wheels (weight in display units, reps). See weightWheel / repsWheel in lib/units.
   const shownWeight = draft.weight === null ? null : toDisplayWeight(draft.weight, units);
   const wW = weightWheel(shownWeight, isBodyweight, units);
@@ -361,7 +400,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       setDraft({ ...draft, weight: v === null ? null : fromDisplayWeight(v, units) });
     },
   };
-  const wR = repsWheel(draft.reps);
+  const wR = timed ? secondsWheel(draft.reps) : repsWheel(draft.reps);
   const wheelR = {
     options: wR.values.map((v) => (v === null ? "—" : String(v))),
     index: wR.index,
@@ -370,8 +409,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
 
   const targetLabel = current
     ? current.rep_min && current.rep_max && current.rep_min !== current.rep_max
-      ? `${current.rep_min}–${current.rep_max} reps`
-      : `${current.rep_max ?? current.rep_min ?? "?"} reps`
+      ? `${current.rep_min}–${current.rep_max} ${unitWord}`
+      : `${current.rep_max ?? current.rep_min ?? "?"} ${unitWord}`
     : "";
   const setNumber = current ? nextSlot(doneSets, current.target_sets ?? 3, current.skipped_sets) : 1;
   const upNextWex = upNextFrom && current && current.id === upNextFrom && done(current) ? current : null;
@@ -381,7 +420,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   const upNextDetail = upNextTarget
     ? isCardioWex(upNextTarget)
       ? "Cardio"
-      : `${upNextTarget.target_sets ?? 3} sets · ${upNextTarget.rep_min ?? "?"}–${upNextTarget.rep_max ?? "?"} reps${upNextLast && upNextLast.weight !== null ? ` · last time ${formatWeight(upNextLast.weight, units)} ${weightUnit(units)} × ${upNextLast.reps ?? "?"}` : ""}`
+      : `${upNextTarget.target_sets ?? 3} sets · ${upNextTarget.rep_min ?? "?"}–${upNextTarget.rep_max ?? "?"} ${upNextEx && isTimed(upNextEx.name, upNextTarget.notes) ? "sec" : "reps"}${upNextLast && upNextLast.weight !== null ? ` · last time ${formatWeight(upNextLast.weight, units)} ${weightUnit(units)} × ${upNextLast.reps ?? "?"}` : ""}`
     : "";
   // "Up 5 lb" when double progression added weight for today; "Down 5 lb" when last time was too heavy.
   const upHint = (() => {
@@ -464,12 +503,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
                     : "Cardio · tap to start"
               ) : (
                 <>
-                  {filled(w)}/{w.target_sets ?? 3} sets{skippedN ? ` (${skippedN} skipped)` : ""} · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} reps{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
+                  {filled(w)}/{w.target_sets ?? 3} sets{skippedN ? ` (${skippedN} skipped)` : ""} · {w.rep_min ?? "?"}–{w.rep_max ?? "?"} {isTimed(e?.name ?? "", w.notes) ? "sec" : "reps"}{w.superset_group !== null ? ` · Superset ${String.fromCharCode(64 + w.superset_group)}` : ""}
                 </>
               )}
               {w.notes?.startsWith("Warm up") ? (
                 w.id === warmupId ? <span className="text-accent-soft"> · 1 warm-up set</span> : null
-              ) : w.notes ? (
+              ) : w.notes && w.notes !== "seconds" ? (
                 <span className="text-accent-soft"> · {w.notes}</span>
               ) : null}
             </span>
@@ -534,18 +573,19 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           : estHint
             ? { text: estHint, tone: "plain" }
             : { text: hist?.lastDate ? `LAST TIME · ${lastTimeLabel(hist.lastDate)}` : "LAST TIME", tone: "plain" },
-      last: same ? { main: `${same.weight === null ? "BW" : `${formatWeight(same.weight, units)} ${unit}`} × ${same.reps ?? "—"}`, rpe: same.rpe !== null ? String(same.rpe) : null } : null,
+      last: same ? { main: `${same.weight === null ? "BW" : `${formatWeight(same.weight, units)} ${unit}`} × ${same.reps ?? "—"}${timed ? " sec" : ""}`, rpe: same.rpe !== null ? String(same.rpe) : null } : null,
       weight: { label: weightLabel, ...wheelW, onTap: () => setTyping("weight") },
-      reps: { label: "REPS", ...wheelR, onTap: () => setTyping("reps") },
+      reps: { label: timed ? "SECONDS" : "REPS", ...wheelR, onTap: () => setTyping("reps") },
       // Warm-ups are easy by design, so no RPE for them.
       rpe:
         draft.type === "warmup" ? null : (
           <RpeSlider value={draft.rpe} defaultRpe={defaultRpe} resetKey={dock.id} onChange={(rpe) => setDraft({ ...draft, rpe })} bleed={false} pill plain />
         ),
-      logLabel,
-      onLog: () => void log(),
+      logLabel: holdRunning ? "Stop" : logLabel,
+      onLog: holdRunning ? () => stopHold() : () => void log(),
       micro: setChipLabel,
-      big: `${draft.weight === null ? (isBodyweight ? "BW" : "—") : `${formatWeight(draft.weight, units)} ${unit.toUpperCase()}`} × ${draft.reps ?? "—"}`,
+      big: `${draft.weight === null ? (isBodyweight ? "BW" : "—") : `${formatWeight(draft.weight, units)} ${unit.toUpperCase()}`} × ${draft.reps ?? "—"}${timed ? " SEC" : ""}`,
+      timer: timed ? { startedAt: hold?.startedAt ?? null, goal: hold ? hold.goal : draft.reps, onStart: () => startHold() } : undefined,
       progress: { set: setNumber, total: dock.target_sets ?? 3 },
     };
   })();
@@ -750,6 +790,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               history={history?.get(current.exercise_id)}
               units={units}
               nextType={draft.type}
+              timed={timed}
               target={current.target_sets ?? 3}
               skipped={current.skipped_sets ?? []}
               warmup={warmupState(current)}
@@ -872,6 +913,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         {menuFor && (
           <ExerciseMenu
             wex={menuFor}
+            timed={isTimed(catalog.byId.get(menuFor.exercise_id)?.name ?? "", menuFor.notes)}
             isLast={wexs[wexs.length - 1]?.id === menuFor.id}
             nextIsCardio={(() => {
               const next = wexs[wexs.findIndex((w) => w.id === menuFor.id) + 1];
@@ -905,6 +947,10 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           <EditSetForm
             set={editSet}
             units={units}
+            timed={(() => {
+              const w = wexs.find((x) => x.id === editSet.workout_exercise_id);
+              return w ? isTimed(catalog.byId.get(w.exercise_id)?.name ?? "", w.notes) : false;
+            })()}
             defaultRpe={defaultRpe}
             onSave={async (changes) => {
               await actions.updateSet(editSet.id, changes);
@@ -935,7 +981,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         )}
       </Sheet>
 
-      <Sheet open={typing !== null} onClose={() => setTyping(null)} title={typing === "weight" ? `Weight (${weightUnit(units)})` : "Reps"}>
+      <Sheet open={typing !== null} onClose={() => setTyping(null)} title={typing === "weight" ? `Weight (${weightUnit(units)})` : timed ? "Seconds" : "Reps"}>
         {typing && (
           <NumberForm
             initial={typing === "weight" ? shownWeight : draft.reps}
@@ -1062,9 +1108,11 @@ function lastTimeLabel(iso: string) {
  * (Skip). Warm-ups are "W" and drop sets are "D"; drop sets still use up a planned set. Last time is paired by set number.
  */
 function SetTable({
-  done, history, units, nextType, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip, onAddSet,
+  done, history, units, nextType, timed, target, skipped, warmup, hideNext, onEdit, onSkip, onUnskip, onAddSet,
 }: {
   done: WorkoutSet[];
+  /** A hold (plank): the number is seconds. */
+  timed: boolean;
   history?: { last: WorkoutSet[]; lastDate: string | null };
   units: Units;
   nextType: SetType;
@@ -1089,7 +1137,7 @@ function SetTable({
       {s.weight === null ? "BW" : formatWeight(s.weight, units)}
       <span className="text-sm font-semibold text-muted">{s.weight === null ? "" : ` ${u}`}&nbsp;&nbsp;</span>
       {s.reps ?? "—"}
-      <span className="text-sm font-semibold text-muted"> reps</span>
+      <span className="text-sm font-semibold text-muted"> {timed ? "sec" : "reps"}</span>
     </>
   );
   const lastCell = (slot: number) => (last[slot - 1] ? amount(last[slot - 1]) : "—");
@@ -1185,14 +1233,15 @@ function SetTable({
 
 /** Sets, reps (two wheels) and rest for one exercise, plus Swap / How-to / Superset (opened from the target on the blue card). */
 function ExerciseMenu({
-  wex, isLast, nextIsCardio, onClose, onSwap, onInfo, actions, workoutId,
+  wex, timed, isLast, nextIsCardio, onClose, onSwap, onInfo, actions, workoutId,
 }: {
-  wex: WorkoutExercise; isLast: boolean; nextIsCardio: boolean; onClose: () => void; onSwap: () => void; onInfo: () => void;
+  wex: WorkoutExercise; timed: boolean; isLast: boolean; nextIsCardio: boolean; onClose: () => void; onSwap: () => void; onInfo: () => void;
   actions: ReturnType<typeof useWorkoutActions>; workoutId: string;
 }) {
   const canLink = (!isLast && !nextIsCardio) || wex.superset_group !== null;
   return (
     <TargetsEditor
+      timed={timed}
       initial={{ sets: wex.target_sets ?? 3, repMin: wex.rep_min ?? 8, repMax: wex.rep_max ?? 12, rest: wex.rest_sec ?? 90 }}
       onSave={(t) => actions.updateWex(wex.id, { target_sets: t.sets, rep_min: t.repMin, rep_max: t.repMax, rest_sec: t.rest })}
       onSwap={onSwap}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptToGym, baseName, closestMatch, dayStyle, generateWorkout, pickCardio, type GenOptions } from "@/lib/generator";
+import { adaptToGym, baseName, closestMatch, dayStyle, generateWorkout, isTimed, pickCardio, type GenOptions } from "@/lib/generator";
 import { isAvailable } from "@/lib/availability";
 import { loadFor, suggestNext } from "@/lib/progression";
 import { bodyweightGym, catalog, commercialGym, homeGym, hotelGym } from "./fixtures/catalog";
@@ -193,5 +193,15 @@ describe("weight suggestions (double progression)", () => {
 
   it("bodyweight: chase reps", () => {
     expect(suggestNext([w(null, 8), w(null, 7)], 6, 10, { increment: 5 })).toMatchObject({ weight: null, reps: 9 });
+  });
+});
+
+describe("isTimed", () => {
+  it("planks and holds count seconds; the generator's seconds tag does too", () => {
+    expect(isTimed("Plank")).toBe(true);
+    expect(isTimed("Side Plank")).toBe(true);
+    expect(isTimed("Bench Press", "seconds")).toBe(true);
+    expect(isTimed("Bench Press", null)).toBe(false);
+    expect(isTimed("Plank Jacks")).toBe(false);
   });
 });
