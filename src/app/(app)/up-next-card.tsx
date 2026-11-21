@@ -7,7 +7,7 @@ import { useProfile } from "@/lib/db/provider";
 import { useActiveGym, useCatalog } from "@/lib/hooks";
 import { repairSupersets, useWorkoutActions } from "@/lib/workout";
 import { suggestionFor, useGeneratorInputs, useLastSets, useStartingProfile } from "@/lib/smart";
-import { formatWait, groupReadiness, READY_AVG } from "@/lib/readiness";
+import { formatWait, groupReadiness, READY_AVG, targetGroups } from "@/lib/readiness";
 import { pickAlternative } from "@/lib/today-alt";
 import { useUpNext, useUpNextChoice } from "@/lib/up-next";
 import { doseLabel, suggestionLabel, supersetLetter } from "@/components/planned";
@@ -171,9 +171,13 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
   const minutes = up.light?.minutes ?? profile.session_minutes;
   // Minimized sheet: the room it frees shows how recovered each of today's muscles is. Always rendered, and folded
   // away in the other positions, so it can grow and shrink smoothly with the sheet (see useExerciseSheet).
+  // By body part (Chest, Back, Shoulders, Arms, Core, Legs), not every small muscle; a body part with one muscle uses its name.
   const muscleRows =
     recovery
-      ? up.targets.map((m) => ({ id: m, name: catalog.muscleName.get(m) ?? m, score: Math.round(recovery.map.get(m)?.score ?? 100) }))
+      ? targetGroups(up.targets).map((g) => {
+          const r = g.muscles.some((m) => recovery.map.has(m)) ? readinessOf(g.name, g.muscles) : null;
+          return { id: g.name, name: g.muscles.length === 1 ? (catalog.muscleName.get(g.muscles[0]) ?? g.name) : g.name, score: r?.score ?? 100, ready: r?.ready ?? true };
+        })
       : [];
   const muscleChips = up.targets.map((m) => catalog.muscleName.get(m) ?? m);
 
@@ -275,22 +279,6 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         </div>
         <h1 className="display text-[44px] leading-[0.85] font-extrabold tracking-[-0.02em] break-words">{up.title}</h1>
         <p className="-mt-1 text-sm font-semibold text-[#DCE4FF]">{up.subtitle}</p>
-        {up.mode === "plan" && up.plan && up.plan.days.length > 1 && (
-          // This week: green = done, light = skipped, faint = still to do.
-          <div
-            className="-mt-1 grid gap-1"
-            style={{ gridTemplateColumns: `repeat(${up.plan.days.length}, minmax(0, 1fr))` }}
-            role="img"
-            aria-label={`This week: ${up.plan.doneThisWeek.size} done${up.plan.skippedThisWeek.size ? `, ${up.plan.skippedThisWeek.size} skipped` : ""} of ${up.plan.days.length}`}
-          >
-            {up.plan.days.map((d) => (
-              <span
-                key={d.id}
-                className={`h-1.5 rounded-full ${up.plan!.doneThisWeek.has(d.id) ? "bg-good" : up.plan!.skippedThisWeek.has(d.id) ? "bg-white/55" : "bg-white/20"}`}
-              />
-            ))}
-          </div>
-        )}
         {rd && (
           <div className="flex flex-col gap-2 rounded-2xl bg-black/20 px-3 py-2">
             {/* One line so the card stays short and the list gets the room. */}
@@ -324,7 +312,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
                     {muscleRows.map((r) => (
                       <li key={r.id} className="flex min-w-0 items-baseline justify-between gap-1 text-[13px] font-semibold text-[#DCE4FF]">
                         <span className="truncate">{r.name}</span>
-                        <span className={`num shrink-0 ${r.score >= READY_AVG ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
+                        <span className={`num shrink-0 ${r.ready ? "text-[#C9F7DA]" : "text-[#FFD2B3]"}`}>{r.score}%</span>
                       </li>
                     ))}
                   </ul>
@@ -337,7 +325,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
                           <span className="num shrink-0 text-white">{r.score}%</span>
                         </span>
                         <span className="h-1.5 rounded-full bg-white/20">
-                          <span className={`block h-full rounded-full ${r.score >= READY_AVG ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, r.score)}%` }} />
+                          <span className={`block h-full rounded-full ${r.ready ? "bg-good" : "bg-warn"}`} style={{ width: `${Math.min(100, r.score)}%` }} />
                         </span>
                       </li>
                     ))}

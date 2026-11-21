@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { F_MAX, scoreFor, stateFor, type MuscleRecovery } from "@/lib/recovery";
-import { FIXED_VIEWS, formatWait, groupReadiness, groupsFor, planGroups, READY_AVG } from "@/lib/readiness";
+import { FIXED_VIEWS, formatWait, groupReadiness, groupsFor, planGroups, targetGroups, READY_AVG } from "@/lib/readiness";
 // Real split definitions, so the "My plan" grouping is tested against what the app actually builds.
 import { MUSCLES, SPLITS } from "../scripts/catalog-data.mjs";
 
@@ -81,5 +81,35 @@ describe("group readiness", () => {
     expect(formatWait(60)).toBe("~2½ days");
     expect(formatWait(200)).toBe("7+ days");
     expect(formatWait(Infinity)).toBe("7+ days");
+  });
+});
+
+describe("targetGroups (rows on the Up Next card)", () => {
+  it("groups an upper day by body part, in the order the muscles appear", () => {
+    expect(targetGroups(["chest", "front_delts", "side_delts", "rear_delts", "biceps", "triceps", "lats", "upper_back"])).toEqual([
+      { name: "Chest", muscles: ["chest"] },
+      { name: "Shoulders", muscles: ["front_delts", "side_delts", "rear_delts"] },
+      { name: "Arms", muscles: ["biceps", "triceps"] },
+      { name: "Back", muscles: ["lats", "upper_back"] },
+    ]);
+  });
+  it("holds only the workout's own muscles (push day: Arms is just triceps)", () => {
+    expect(targetGroups(["chest", "front_delts", "side_delts", "triceps"]).map((g) => [g.name, g.muscles.length])).toEqual([["Chest", 1], ["Shoulders", 2], ["Arms", 1]]);
+  });
+  it("a leg day is Legs plus Core", () => {
+    expect(targetGroups(["quads", "hamstrings", "glutes", "calves", "adductors", "abductors", "abs"])).toEqual([
+      { name: "Legs", muscles: ["quads", "hamstrings", "glutes", "calves", "adductors", "abductors"] },
+      { name: "Core", muscles: ["abs"] },
+    ]);
+  });
+  it("puts every muscle in exactly one row, and no row is empty", () => {
+    const rows = targetGroups(ALL);
+    expect(rows.flatMap((g) => g.muscles).sort()).toEqual([...ALL].sort());
+    expect(rows.every((g) => g.muscles.length > 0)).toBe(true);
+    expect(rows.length).toBeLessThanOrEqual(6);
+  });
+  it("gives an unknown muscle its own row; nothing in, nothing out", () => {
+    expect(targetGroups(["chest", "mystery"])).toEqual([{ name: "Chest", muscles: ["chest"] }, { name: "mystery", muscles: ["mystery"] }]);
+    expect(targetGroups([])).toEqual([]);
   });
 });
