@@ -75,6 +75,28 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
       document.body.style.overflow = prevBody;
     };
   }, [open]);
+  // Keep the sheet above the on-screen keyboard. iOS draws the keyboard over the page instead of resizing it, so
+  // `fixed inset-0` runs behind it; the visual viewport is the part of the screen the keyboard leaves visible.
+  const [vv, setVv] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const v = window.visualViewport;
+    if (!v) return;
+    const sync = () => {
+      const keyboard = window.innerHeight - v.height - v.offsetTop > 80;
+      setVv(keyboard ? { top: v.offsetTop, height: v.height } : null);
+      // The focused field may have ended up under the keyboard; nudge it back into view inside the sheet.
+      if (keyboard) requestAnimationFrame(() => document.activeElement?.scrollIntoView({ block: "nearest" }));
+    };
+    sync();
+    v.addEventListener("resize", sync);
+    v.addEventListener("scroll", sync);
+    return () => {
+      v.removeEventListener("resize", sync);
+      v.removeEventListener("scroll", sync);
+      setVv(null);
+    };
+  }, [open]);
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; t: number } | null>(null);
   const [dragY, setDragY] = useState(0);
@@ -106,7 +128,13 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
     if (dragY > 120 || (dragY > 40 && speed > 0.5)) onClose();
   };
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label={title}>
+    <div
+      className="fixed inset-x-0 top-0 bottom-0 z-50 flex flex-col justify-end"
+      style={vv ? { top: vv.top, bottom: "auto", height: vv.height } : undefined}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
       <button className="absolute inset-0 touch-none bg-black/60" aria-label="Close" onClick={onClose} />
       <div
         ref={panel}
@@ -115,7 +143,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
         style={{ transform: dragY ? `translateY(${dragY}px)` : undefined, transition: dragging ? "none" : "transform 0.2s ease-out" }}
-        className="safe-bottom relative mx-auto max-h-[85dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-line bg-card px-5 pt-3"
+        className="safe-bottom relative mx-auto max-h-[min(85dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-line bg-card px-5 pt-3"
       >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line" />
         {title && <h2 className="display mb-3 text-2xl font-extrabold">{title}</h2>}
