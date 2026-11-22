@@ -30,7 +30,7 @@ export type DockSet = {
   rpe: React.ReactNode | null;
   logLabel: string;
   onLog: () => void;
-  /** Hidden bar: micro line ("SET 2 OF 3", "WARM-UP") and big line ("70 LB × 10"). */
+  /** Hidden bar: micro line (the exercise, "A2 · OVERHEAD PRESS") and big line ("70 LB × 10"). */
   micro: string;
   big: string;
   /** Hidden bar ring when not resting: set N of total. */
