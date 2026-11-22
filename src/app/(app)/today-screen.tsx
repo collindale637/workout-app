@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useData, useProfile } from "@/lib/db/provider";
 import { useActiveGym, useOpenWorkout } from "@/lib/hooks";
@@ -23,6 +23,9 @@ import { SyncBadge } from "@/components/sync-badge";
 import { UpNextCard } from "./up-next-card";
 import { usePlanWeekRollover } from "@/lib/plan-rollover";
 import { DoneTodayCard, useDoneToday, useTrainAgain } from "./done-today-card";
+import { UndoToast, WeekEndCard, openNames } from "./week-end-card";
+import { usePlanActions } from "@/lib/plans";
+import { useWeekEnd } from "@/lib/week-end";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 const noop = () => () => {};
@@ -60,6 +63,53 @@ export function TodayScreen() {
   const trainAgain = useTrainAgain();
   const weeklyTarget = useWeeklyTarget(profile?.days_per_week);
   const activePlan = useActivePlan();
+
+  // A calendar week ended with plan days still open: offer to skip them and move on, or keep the week.
+  const weekEnd = useWeekEnd();
+  const { skipRestOfWeek, restoreWeek } = usePlanActions();
+  const [toast, setToast] = useState<{ text: string; undo: () => Promise<void> } | null>(null);
+  const [answering, setAnswering] = useState(false);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  const prompt = weekEnd.prompt;
+  const planId = weekEnd.planId;
+  const onSkipWeek = async () => {
+    if (!prompt || !planId || answering) return;
+    setAnswering(true);
+    try {
+      const prev = await skipRestOfWeek(planId);
+      if (!prev) return;
+      const names = openNames(prompt.open);
+      setToast({
+        text: prompt.lastWeek ? `Plan finished. ${names} skipped in Week ${prompt.week}.` : `Week ${prompt.week + 1} started. ${names} skipped in Week ${prompt.week}.`,
+        undo: async () => {
+          await restoreWeek(planId, prev);
+          setToast(null);
+        },
+      });
+    } finally {
+      setAnswering(false);
+    }
+  };
+  const onKeepWeek = async () => {
+    if (!prompt || answering) return;
+    setAnswering(true);
+    try {
+      await weekEnd.keep();
+      setToast({
+        text: `Keeping Week ${prompt.week} open. I'll ask again next Sunday.`,
+        undo: async () => {
+          await weekEnd.unkeep();
+          setToast(null);
+        },
+      });
+    } finally {
+      setAnswering(false);
+    }
+  };
 
   // Below the workout card: quick cardio and the gym nudge.
   const rest = (
@@ -138,10 +188,12 @@ export function TodayScreen() {
       ) : (
         <>
           {doneToday && <DoneTodayCard workoutId={doneToday.id} trainAgain={trainAgain.on} onTrainAgain={() => void trainAgain.set()} />}
+          {prompt && <WeekEndCard prompt={prompt} busy={answering} onSkip={() => void onSkipWeek()} onKeep={() => void onKeepWeek()} />}
           {/* The exercise list and everything below it live in the card's sheet. */}
           <UpNextCard hasGym={gyms.length > 0}>{rest}</UpNextCard>
         </>
       )}
+      {toast && <UndoToast text={toast.text} onUndo={() => void toast.undo()} />}
     </main>
   );
 }

@@ -23,6 +23,7 @@ import { AiWorkoutSheet, Sparkle } from "@/components/ai";
 import { TODAY_TOP_EVENT } from "./today-cardio";
 import { usePlanActions } from "@/lib/plans";
 import { weekLabel } from "@/lib/plan-weeks";
+import { useMissedFromWeek } from "@/lib/week-end";
 
 /** Where the exercise sheet sits: a bar above the tabs, under the card (follows it as the page scrolls), or full height. */
 type SheetMode = "min" | "default" | "max";
@@ -40,6 +41,8 @@ const STICKY_TOP = "calc(env(safe-area-inset-top) + 8px)";
 export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: React.ReactNode }) {
   const router = useRouter();
   const up = useUpNext();
+  // The plan week has open days after its calendar week ended: Up next says so ("Missed from Week 1").
+  const missedWeek = useMissedFromWeek();
   const catalog = useCatalog();
   const { profile } = useProfile();
   const { gym, equipment, equipmentRows } = useActiveGym();
@@ -272,6 +275,7 @@ export function UpNextCard({ hasGym, children }: { hasGym: boolean; children?: R
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold tracking-[0.12em] text-[#DCE4FF]">
             UP NEXT{up.light ? " · LIGHTER" : up.mode === "fresh" ? " · FRESH MUSCLES" : up.mode === "muscles" ? " · YOUR PICK" : up.mode === "ai" ? " · AI" : ""}
+            {missedWeek !== null && up.mode === "plan" && !up.light && <span className="text-[#FFD2B3]"> · MISSED FROM WEEK {missedWeek}</span>}
           </span>
           <button type="button" onClick={() => setOptions(true)} className="display -my-3 -mr-1 min-h-11 rounded-full px-3 text-sm font-extrabold tracking-[0.08em] text-[#DCE4FF]">
             Change

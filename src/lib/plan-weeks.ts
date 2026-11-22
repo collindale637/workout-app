@@ -160,3 +160,77 @@ export function planCopy<D extends Pick<PlanDay, "id" | "week" | "day_order">, R
   }
   return { removeDays, removeRows: rows.filter((r) => gone.has(r.plan_day_id)), addDays, addRows };
 }
+
+/*
+  Week-end prompt (Nov 2026). Weeks move on by finished workouts, but the Today strip resets every Sunday, so a plan
+  week with an open day can look stuck. The first time Today opens in a new calendar week, if at least half the plan
+  week's days were done or skipped, Today asks: skip what's open and start the next week, or keep the week open.
+  A quiet week (trip, illness) never asks. Keep is remembered on the phone until the next Sunday.
+*/
+
+/** Sunday (local) of the calendar week containing `d`, as YYYY-MM-DD. Weeks run Sunday–Saturday, like the Today strip. */
+export function sundayKey(d: Date): string {
+  const s = new Date(d.getFullYear(), d.getMonth(), d.getDate() - d.getDay());
+  return `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, "0")}-${String(s.getDate()).padStart(2, "0")}`;
+}
+
+/** The plan's current week began in an earlier calendar week than `now`. */
+export const weekEnded = (plan: Pick<Plan, "week_started_at" | "start_date" | "created_at">, now: Date) =>
+  sundayKey(new Date(weekStart(plan))) < sundayKey(now);
+
+/** At least this share of a week's days must be done or skipped before the prompt shows. */
+export const WEEK_END_MIN_SHARE = 0.5;
+
+/** "Keep Week N" answered on this Sunday (kept on the phone, so it never needs a database change). */
+export type WeekEndKept = { planId: string; week: number; sunday: string };
+
+export type WeekEndPrompt = {
+  week: number;
+  length: number | null;
+  /** Skipping what's open finishes the plan instead of starting another week. */
+  lastWeek: boolean;
+  total: number;
+  done: number;
+  skipped: number;
+  days: { id: string; name: string; state: "done" | "skipped" | "open" }[];
+  open: { id: string; name: string }[];
+};
+
+type PromptProgress<T> = Pick<WeekProgress<T>, "week" | "length" | "lastWeek" | "days" | "done" | "skipped" | "weekComplete">;
+
+/** The week-end prompt to show on Today, or null (nothing open, week not over, too quiet a week, or already answered). */
+export function weekEndPrompt<T extends Pick<PlanDay, "id" | "name">>(
+  plan: Pick<Plan, "id" | "completed_at" | "week_started_at" | "start_date" | "created_at">,
+  progress: PromptProgress<T>,
+  now: Date,
+  kept: WeekEndKept | null,
+): WeekEndPrompt | null {
+  const total = progress.days.length;
+  if (plan.completed_at || progress.weekComplete || total === 0) return null;
+  if (!weekEnded(plan, now)) return null;
+  const handled = progress.done.size + progress.skipped.size;
+  if (handled < total * WEEK_END_MIN_SHARE) return null;
+  if (kept && kept.planId === plan.id && kept.week === progress.week && kept.sunday === sundayKey(now)) return null;
+  const days = progress.days.map((d) => ({ id: d.id, name: d.name, state: progress.done.has(d.id) ? ("done" as const) : progress.skipped.has(d.id) ? ("skipped" as const) : ("open" as const) }));
+  return {
+    week: progress.week, length: progress.length, lastWeek: progress.lastWeek, total, done: progress.done.size, skipped: progress.skipped.size,
+    days, open: days.filter((d) => d.state === "open").map(({ id, name }) => ({ id, name })),
+  };
+}
+
+/**
+ * The week to name in "Missed from Week N" on Up next: the plan week has open days, its calendar week is over, and
+ * something was done or skipped in it. Null otherwise (including a quiet week, where Up next reads as usual).
+ */
+export function missedFromWeek<T>(
+  plan: Pick<Plan, "completed_at" | "week_started_at" | "start_date" | "created_at">,
+  progress: Pick<WeekProgress<T>, "week" | "days" | "done" | "skipped" | "weekComplete">,
+  now: Date,
+): number | null {
+  if (plan.completed_at || progress.weekComplete || progress.days.length === 0) return null;
+  if (!weekEnded(plan, now)) return null;
+  return progress.done.size + progress.skipped.size >= 1 ? progress.week : null;
+}
+
+/** The plan fields a week move changes, so Undo can put them back. */
+export type PlanWeekFields = Pick<Plan, "current_week" | "week_started_at" | "skipped_day_ids" | "completed_at">;

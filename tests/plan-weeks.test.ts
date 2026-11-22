@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advancePlan, daysForWeek, planCopy, planFinishedAndDismissed, planRunStats, showPlanComplete, sourceWeek, weekLabel, weekProgress } from "@/lib/plan-weeks";
+import { advancePlan, daysForWeek, missedFromWeek, planCopy, planFinishedAndDismissed, planRunStats, showPlanComplete, sourceWeek, sundayKey, weekEnded, weekEndPrompt, weekLabel, weekProgress } from "@/lib/plan-weeks";
 import { sameFieldRuns } from "@/lib/db/sync";
 
 const day = (id: string, week: number | undefined, order: number) => ({ id, week, day_order: order });
@@ -138,5 +138,89 @@ describe("Plan complete (Batch 20c)", () => {
     expect(m.removeDays).toEqual([]);
     expect(m.addDays.map((d) => d.week)).toEqual([4]);
     expect(planCopy([], rows, 2, 3, () => "x")).toBeNull();
+  });
+});
+
+describe("week-end prompt", () => {
+  const names = ["Upper", "Lower", "Push", "Pull", "Legs"];
+  const five = names.map((name, i) => ({ id: `d${i + 1}`, name, week: 1, day_order: i + 1 }));
+  // A plan that started Mon Nov 16 (no week_started_at yet, like plans made before weeks moved on by workouts).
+  const p = (o: Record<string, unknown> = {}) => ({ id: "p1", ...plan({ week_started_at: null, weeks: 4 }), ...o });
+  const fin = (...ids: string[]) => ids.map((id, i) => ({ plan_day_id: id, ended_at: `2026-11-${17 + i}T14:00:00Z` }));
+  const sat = new Date(2026, 10, 21);
+  const sun = new Date(2026, 10, 22);
+  const nextSun = new Date(2026, 10, 29);
+  const prompt = (o: { plan?: Record<string, unknown>; days?: typeof five; done?: string[]; now?: Date; kept?: { planId: string; week: number; sunday: string } | null }) => {
+    const pl = p(o.plan);
+    const days = o.days ?? five;
+    return weekEndPrompt(pl, weekProgress(pl, days, fin(...(o.done ?? ["d2", "d3", "d4", "d5"]))), o.now ?? sun, o.kept ?? null);
+  };
+
+  it("finds the Sunday of a calendar week", () => {
+    expect(sundayKey(sat)).toBe("2026-11-15");
+    expect(sundayKey(sun)).toBe("2026-11-22");
+    expect(sundayKey(new Date(2026, 10, 28))).toBe("2026-11-22");
+  });
+
+  it("a plan week ends when a new calendar week starts", () => {
+    expect(weekEnded(p(), sat)).toBe(false);
+    expect(weekEnded(p(), sun)).toBe(true);
+    // A week that moved on mid-week (set at that moment) ends the Sunday after it.
+    expect(weekEnded(p({ week_started_at: "2026-11-25T15:00:00" }), sun)).toBe(false);
+    expect(weekEnded(p({ week_started_at: "2026-11-25T15:00:00" }), nextSun)).toBe(true);
+  });
+
+  it("asks on Sunday when four of five days are done and Upper is open", () => {
+    const r = prompt({})!;
+    expect(r).toMatchObject({ week: 1, total: 5, done: 4, skipped: 0, lastWeek: false });
+    expect(r.open).toEqual([{ id: "d1", name: "Upper" }]);
+    expect(r.days.map((d) => d.state)).toEqual(["open", "done", "done", "done", "done"]);
+  });
+
+  it("stays quiet until the calendar week is over", () => {
+    expect(prompt({ now: sat })).toBeNull();
+  });
+
+  it("stays quiet for a quiet week: needs at least half the days done or skipped", () => {
+    expect(prompt({ done: ["d2"] })).toBeNull();
+    expect(prompt({ done: ["d2", "d3"] })).toBeNull(); // 2 of 5
+    expect(prompt({ done: ["d2", "d3", "d4"] })).not.toBeNull(); // 3 of 5
+    const four = five.slice(0, 4);
+    expect(prompt({ days: four, done: ["d1", "d2"] })).not.toBeNull(); // exactly half
+    expect(prompt({ days: four, done: ["d1"] })).toBeNull();
+    expect(prompt({ done: [] })).toBeNull();
+  });
+
+  it("counts skipped days toward the half", () => {
+    const r = prompt({ plan: { skipped_day_ids: ["d1", "d5"] }, done: ["d2"] })!;
+    expect(r).toMatchObject({ done: 1, skipped: 2 });
+    expect(r.open.map((d) => d.name)).toEqual(["Push", "Pull"]);
+  });
+
+  it("stays quiet when the week is full or the plan is complete", () => {
+    expect(prompt({ done: ["d1", "d2", "d3", "d4", "d5"] })).toBeNull();
+    expect(prompt({ plan: { completed_at: "2026-11-21T20:00:00Z" } })).toBeNull();
+  });
+
+  it("Keep silences it for that Sunday only", () => {
+    const kept = { planId: "p1", week: 1, sunday: "2026-11-22" };
+    expect(prompt({ kept })).toBeNull();
+    expect(prompt({ kept, now: nextSun })).not.toBeNull(); // next Sunday it asks again
+    expect(prompt({ kept: { ...kept, week: 2 } })).not.toBeNull(); // an answer about another week
+    expect(prompt({ kept: { ...kept, planId: "other" } })).not.toBeNull(); // or another plan
+  });
+
+  it("flags the last week, where skipping finishes the plan", () => {
+    expect(prompt({ plan: { current_week: 4 } })?.lastWeek).toBe(true);
+  });
+
+  it("names the week for Up next only when something was done or skipped in it", () => {
+    const pl = p();
+    const prog = (done: string[]) => weekProgress(pl, five, fin(...done));
+    expect(missedFromWeek(pl, prog(["d2", "d3", "d4", "d5"]), sun)).toBe(1);
+    expect(missedFromWeek(pl, prog(["d2"]), sun)).toBe(1); // below the prompt's threshold, still labelled
+    expect(missedFromWeek(pl, prog([]), sun)).toBeNull(); // nothing happened: Up next reads as usual
+    expect(missedFromWeek(pl, prog(["d2", "d3", "d4", "d5"]), sat)).toBeNull(); // week not over
+    expect(missedFromWeek(pl, prog(["d1", "d2", "d3", "d4", "d5"]), sun)).toBeNull(); // nothing missed
   });
 });
