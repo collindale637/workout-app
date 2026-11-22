@@ -176,6 +176,20 @@ html.sheet-min body {
   [class*="animate-[tutorial-"] { animation: none !important; }
 }
 
+/* Live workout: the exercise name slides in when the screen moves to another exercise, and the superset tracker's
+   "now" row pops when the turn passes to it (Option B, Nov 2026). */
+@keyframes ex-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes turn-pop {
+  0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgb(107 135 255 / 0.8); }
+  100% { transform: none; box-shadow: 0 0 0 12px rgb(107 135 255 / 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[ex-in"], [class*="animate-[turn-pop"] { animation: none !important; }
+}
+
 /* ---- Page motion (React <ViewTransition> + <Link transitionTypes>) ----
    ‹ back: the page you're on slides off to the right, the one behind comes in from the left (iOS-style, no fade).
    ⌄ minimize is done in src/lib/slide-away.ts instead (Safari didn't move the fixed set panel). */

@@ -181,6 +181,16 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
   // Moving to another exercise drops a hold that was left running.
   if (holdTimer && holdTimer.wexId !== current?.id) setHoldTimer(null);
 
+  // Scrolled past the exercise name and set chips: a slim bar pinned at the top keeps "where am I" on screen.
+  const headEnd = useRef<HTMLDivElement>(null);
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setPinned(!!headEnd.current && headEnd.current.getBoundingClientRect().top < 0);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   if (!wexs || !sets || !catalog) return null;
 
   const ex = current ? catalog.byId.get(current.exercise_id) : undefined;
@@ -233,6 +243,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     return wexs!.slice(i + 1).find(remaining) ?? wexs!.find((w) => w.id !== wexId && remaining(w)) ?? null;
   };
 
+  /** Smooth scroll back to the top of the workout (instant with reduced motion). */
+  function toTop() {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+  }
+
   async function startRest(seconds: number, wexId: string) {
     if (seconds <= 0) return db.setMeta("rest", null);
     await db.setMeta("rest", { endsAt: Date.now() + seconds * 1000, total: seconds, wexId });
@@ -251,8 +267,6 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const before = { currentId, upNextFrom, rest, draft, wexId: current.id, count: (setsBy.get(current.id) ?? []).length };
     // This exercise's sets so far today (it can appear twice), for the gold "New PR" toast.
     const earlier = wexs!.filter((w) => w.exercise_id === current.exercise_id).flatMap((w) => setsBy.get(w.id) ?? []);
-    const saved = await actions.logSet(current.id, draft);
-    showLogged(saved, before, setRecord(history?.get(current.exercise_id), earlier, saved));
     const group = current.superset_group;
     const doneNow = filled(current) + (draft.type === "warmup" ? 0 : 1);
     // Already past the planned sets (an extra set): stay on this exercise instead of jumping ahead again.
@@ -262,6 +276,17 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       draft.type !== "warmup" &&
       remaining(current) &&
       wexs!.every((w) => (w.id === current.id ? doneNow >= (w.target_sets ?? 3) : done(w)));
+    // Superset: who goes next. The partner straight away, or (end of a round) back to the first one after the rest.
+    const members = group !== null ? wexs!.filter((w) => w.superset_group === group) : [];
+    const pos = members.findIndex((w) => w.id === current.id);
+    const nextInRound = members.slice(pos + 1).find((w) => filled(w) < (w.target_sets ?? 3));
+    const first = members.find((w) => (w.id === current.id ? doneNow : filled(w)) < (w.target_sets ?? 3));
+    const turnTo =
+      group !== null && draft.type !== "warmup" && !wasDone && !finishedAll ? (nextInRound ?? (first && first.id !== current.id ? first : undefined)) : undefined;
+    const saved = await actions.logSet(current.id, draft);
+    showLogged(saved, before, setRecord(history?.get(current.exercise_id), earlier, saved), turnTo ? catalog!.byId.get(turnTo.exercise_id)?.name : undefined);
+    // Back to the top after every set, so the exercise name and the set rows are on screen again.
+    toTop();
     if (finishedAll) {
       await db.setMeta("rest", null);
       if ("vibrate" in navigator) navigator.vibrate?.([80, 60, 80]);
@@ -275,15 +300,11 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
       return;
     }
     if (group !== null) {
-      const members = wexs!.filter((w) => w.superset_group === group);
-      const pos = members.findIndex((w) => w.id === current.id);
-      const nextInRound = members.slice(pos + 1).find((w) => filled(w) < (w.target_sets ?? 3));
       if (nextInRound && draft.type !== "warmup") {
         setCurrentId(nextInRound.id); // superset: go straight to the partner, no rest
         await db.setMeta("rest", null);
         return;
       }
-      const first = members.find((w) => (w.id === current.id ? doneNow : filled(w)) < (w.target_sets ?? 3));
       await startRest(current.rest_sec ?? 90, current.id);
       if (!first && draft.type !== "warmup" && nextAfter(current.id)) {
         // Whole superset finished: show "Up next" from its last exercise instead of jumping ahead.
@@ -307,6 +328,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     saved: WorkoutSet,
     before: { currentId: string | null; upNextFrom: string | null; rest: RestState | null; draft: Draft; wexId: string; count: number },
     record: ReturnType<typeof setRecord> = null,
+    /** Superset: the exercise the turn passes to, added as "→ Seated Row". */
+    then?: string,
   ) {
     const what = saved.type === "warmup" ? "Warm-up" : saved.type === "drop" ? "Drop set" : `Set ${setNumber}`;
     const load = `${saved.weight === null ? "BW" : `${formatWeight(saved.weight, units)} ${weightUnit(units)}`} × ${saved.reps ?? "—"}${timed ? " sec" : ""}`;
@@ -318,7 +341,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         : `Best est. max · ${formatMax(record.value, units)} ${weightUnit(units)}`;
     setToast({
       id: saved.id,
-      text,
+      // The weight is still on screen in the set rows, so a superset hand-off swaps it for where to go next (a PR keeps its text).
+      text: then && !record ? `${what} logged → ${then}` : text,
       pr: !!record,
       onUndo: async () => {
         setToast(null);
@@ -472,18 +496,29 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
     const cardioDone = cardioByWex.get(w.id);
     const running = timer && timer.wexId === w.id ? timer : null;
     const linkedAbove = i > 0 && w.superset_group !== null && wexs[i - 1].superset_group === w.superset_group;
+    const linkedBelow = i < wexs.length - 1 && w.superset_group !== null && wexs[i + 1].superset_group === w.superset_group;
     const skippedN = (w.skipped_sets ?? []).filter((n) => n >= 1 && n <= (w.target_sets ?? 3)).length;
     const isCur = !extra && w.id === current?.id;
     return {
       id: w.id,
       ariaLabel: `${e?.name ?? w.exercise_id}. Tap to open. Swipe left for options. Hold to drag.`,
-      liClassName: linkedAbove ? "-mt-2" : "",
-      before: linkedAbove ? <div className="ml-6 h-2 w-1 bg-accent-strong" aria-hidden="true" /> : undefined,
+      // A superset is one outlined box: the first row carries the "⇄ SUPERSET A" label, the rest close the gap below it.
+      liClassName:
+        linkedAbove || linkedBelow
+          ? `border-x-[1.5px] border-accent-strong/45 px-1.5 ${linkedAbove ? "-mt-2 pt-1.5" : "rounded-t-[18px] border-t-[1.5px] pt-7"} ${linkedBelow ? "" : "rounded-b-[18px] border-b-[1.5px] pb-1.5"}`
+          : "",
+      before:
+        !linkedAbove && linkedBelow ? (
+          <span className="display absolute top-[7px] left-3.5 text-xs font-extrabold tracking-[0.14em] text-accent-soft" aria-hidden="true">
+            ⇄ SUPERSET {String.fromCharCode(64 + (w.superset_group ?? 0))}
+          </span>
+        ) : undefined,
       // Outlines are inset rings (box-shadow), so they keep the 14px corners and survive the drag shadow.
       faceClassName: `flex min-h-16 items-center rounded-[14px] py-2 pr-2 pl-4 ring-inset ${isCur ? "bg-[#0f1638] ring-2 ring-[var(--accent-strong)]" : "bg-card ring-1 ring-[#262d49]"}`,
       onTap: () => {
         setUpNextFrom(null);
         setCurrentId(w.id);
+        toTop();
       },
       face: (
         <>
@@ -542,6 +577,12 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           ? `EXTRA SET ${setNumber}`
           : `SET ${setNumber} OF ${current.target_sets ?? 3}`
     : "";
+  // "A2": this exercise's place in its superset, on the title row, the pinned bar and the hidden set panel.
+  const dockTag = (() => {
+    if (!dock || dock.superset_group === null) return null;
+    const k = wexs.filter((w) => w.superset_group === dock.superset_group).findIndex((w) => w.id === dock.id);
+    return `${String.fromCharCode(64 + dock.superset_group)}${k + 1}`;
+  })();
   const logLabel = `Log ${draft.type === "warmup" ? "warm-up" : draft.type === "drop" ? "drop set" : `set ${setNumber}`}`;
   const dockContent: DockSet | DockUpNext | null = (() => {
     if (!dock || !ex) return null;
@@ -583,7 +624,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         ),
       logLabel: holdRunning ? "Stop" : logLabel,
       onLog: holdRunning ? () => stopHold() : () => void log(),
-      micro: setChipLabel,
+      // Hidden panel: which exercise (the ring and the Log button already say which set).
+      micro: `${dockTag ? `${dockTag} · ` : ""}${ex.name.toUpperCase()}`,
       big: `${draft.weight === null ? (isBodyweight ? "BW" : "—") : `${formatWeight(draft.weight, units)} ${unit.toUpperCase()}`} × ${draft.reps ?? "—"}${timed ? " SEC" : ""}`,
       timer: timed ? { startedAt: hold?.startedAt ?? null, goal: hold ? hold.goal : draft.reps, onStart: () => startHold() } : undefined,
       progress: { set: setNumber, total: dock.target_sets ?? 3 },
@@ -625,7 +667,8 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
         <section className="px-5 pt-1.5">
           <div className="flex items-start gap-2">
             <button type="button" onClick={() => setInfoFor(dock.exercise_id)} className="min-w-0 flex-1 text-left">
-              <h1 className="display min-w-0 flex-1 pt-1 text-[32px] leading-[0.95] font-extrabold">{ex.name}</h1>
+              {/* key: a new exercise remounts the title, so it slides in and the change is easy to notice. */}
+              <h1 key={dock.id} className="display min-w-0 flex-1 animate-[ex-in_0.42s_cubic-bezier(0.22,0.8,0.3,1)] pt-1 text-[32px] leading-[0.95] font-extrabold">{ex.name}</h1>
             </button>
             <button
               type="button"
@@ -637,6 +680,7 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
             </button>
           </div>
           <p className="mt-1.5 flex flex-wrap items-center gap-y-1 text-sm font-bold tracking-[0.08em] text-muted">
+            {dockTag && <span className="display mr-2 inline-flex h-9 items-center rounded-full bg-primary px-3 text-white">{dockTag}</span>}
             <button type="button" onClick={() => setTypeOpen(true)} className="relative mr-1 inline-flex h-9 items-center gap-1.5 rounded-full bg-card-2 pr-2.5 pl-3 text-accent-soft after:absolute after:-inset-2 after:content-[''] active:bg-line" aria-label="Change set type: working, warm-up or drop">
               {setChipLabel}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
@@ -650,26 +694,61 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
               TARGET {targetLabel.toUpperCase()} ✎
             </button>
           </p>
+          <div ref={headEnd} />
           {dock.superset_group !== null && (() => {
-            const partners = wexs.filter((w) => w.superset_group === dock.superset_group && w.id !== dock.id);
-            const names = partners.map((w) => catalog.byId.get(w.exercise_id)?.name ?? "partner").join(" + ");
+            // Superset tracker: one row per exercise (A1, A2…) with set dots; the one you do now is lit and pops when the
+            // turn passes to it. Tap a row to jump to it.
+            const group = dock.superset_group;
+            const members = wexs.filter((w) => w.superset_group === group);
+            const letter = String.fromCharCode(64 + group);
+            const total = Math.max(...members.map((w) => w.target_sets ?? 3));
+            const round = Math.min(total, Math.min(...members.map((w) => filled(w))) + 1);
             return (
-              <div className="mt-2 flex items-center gap-3 rounded-2xl border border-accent-soft/40 bg-primary/15 py-2 pr-2 pl-3.5" role="note">
-                <div className="min-w-0 flex-1">
-                  <p className="display text-sm font-extrabold tracking-[0.12em] text-accent-soft">⇄ SUPERSET {String.fromCharCode(64 + dock.superset_group)}</p>
-                  <p className="truncate text-sm font-semibold text-muted">After each set, switch to {names}</p>
+              <section aria-label={`Superset ${letter}`} className="mt-3 rounded-[18px] bg-card p-2.5 ring-1 ring-[#262d49] ring-inset">
+                <div className="flex items-center justify-between pb-1.5 pl-1">
+                  <p className="display text-[13px] font-extrabold tracking-[0.12em] text-accent-soft">⇄ SUPERSET {letter} · ROUND {round} OF {total}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      for (const w of members) void actions.updateWex(w.id, { superset_group: null });
+                    }}
+                    className="display h-9 shrink-0 rounded-full px-3 text-[13px] font-extrabold tracking-[0.08em] text-muted active:bg-card-2"
+                    aria-label="Turn off this superset"
+                  >
+                    TURN OFF
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    for (const w of wexs.filter((x) => x.superset_group === dock.superset_group)) void actions.updateWex(w.id, { superset_group: null });
-                  }}
-                  className="display h-10 shrink-0 rounded-full bg-card-2 px-3.5 text-sm font-extrabold tracking-[0.08em] text-ink active:bg-line"
-                  aria-label="Turn off this superset"
-                >
-                  TURN OFF
-                </button>
-              </div>
+                {members.map((w, k) => {
+                  const on = w.id === dock.id;
+                  const target = w.target_sets ?? 3;
+                  const n = filled(w);
+                  return (
+                    <div key={w.id}>
+                      {k > 0 && <div className="flex h-3.5 items-center justify-center text-sm leading-none text-accent-strong" aria-hidden="true">↓</div>}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUpNextFrom(null);
+                          setCurrentId(w.id);
+                        }}
+                        aria-current={on ? "step" : undefined}
+                        className={`flex min-h-12 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left ${on ? "animate-[turn-pop_0.5s_ease-out] bg-primary text-white" : "active:bg-card-2"}`}
+                      >
+                        <span className={`display flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-[15px] font-extrabold ${on ? "bg-white text-primary" : "bg-card-2 text-accent-soft"}`}>
+                          {letter}{k + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-bold">{catalog.byId.get(w.exercise_id)?.name ?? w.exercise_id}</span>
+                        <span className={`display text-xs font-extrabold tracking-[0.12em] ${on ? "text-[#DCE4FF]" : "text-muted"}`}>{on ? "NOW" : n >= target ? "DONE" : "THEN"}</span>
+                        <span className="flex gap-1" aria-label={`${n} of ${target} sets`}>
+                          {Array.from({ length: target }, (_, d) => (
+                            <i key={d} className={`h-[9px] w-[9px] rounded-full ${d < n ? (on ? "bg-[#5CF2A0]" : "bg-good") : on ? "bg-white/30" : "bg-[#2c3454]"}`} />
+                          ))}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </section>
             );
           })()}
           {gym && !isAvailable(catalog.needs.get(dock.exercise_id) ?? [], equipment) && (
@@ -842,6 +921,22 @@ export function LiveWorkout({ workout }: { workout: Workout }) {
           <button type="button" className={btn.secondary} onClick={() => setAddCardioOpen(true)}>+ Cardio</button>
         </div>
       </div>
+
+      {dock && ex && (
+        <button
+          type="button"
+          onClick={toTop}
+          aria-hidden={!pinned}
+          tabIndex={pinned ? 0 : -1}
+          aria-label={`${ex.name}, ${setChipLabel}. Back to top`}
+          style={{ paddingTop: "calc(env(safe-area-inset-top) + 10px)" }}
+          className={`fixed inset-x-0 top-0 z-20 mx-auto flex w-full max-w-md items-center gap-2.5 border-b border-line bg-bg/95 px-5 pb-2.5 text-left backdrop-blur-md transition-transform duration-200 motion-reduce:transition-none ${pinned ? "translate-y-0" : "-translate-y-full"}`}
+        >
+          <span className="display min-w-0 flex-1 truncate text-xl leading-none font-extrabold">{ex.name}</span>
+          {dockTag && <span className="display text-[13px] font-extrabold tracking-[0.1em] text-accent-soft">{dockTag}</span>}
+          <span className="display text-[13px] font-extrabold tracking-[0.1em] text-accent-soft">{setChipLabel}</span>
+        </button>
+      )}
 
       {dock && dockContent && <SetDock hidden={dockHidden} onHiddenChange={setDockHidden} rest={restProps} content={dockContent} toast={toast} />}
 
