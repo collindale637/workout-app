@@ -1,6 +1,6 @@
 "use client";
 
-import { advancePlan, dayWeek, planCopy, weekProgress } from "@/lib/plan-weeks";
+import { advancePlan, dayWeek, planCopy, weekProgress, type PlanWeekFields } from "@/lib/plan-weeks";
 import { useCallback } from "react";
 import { useData } from "@/lib/db/provider";
 import { markDeleted, markDirty } from "@/lib/db/sync";
@@ -293,6 +293,49 @@ export function usePlanActions() {
   );
 
   /**
+   * "Skip what's open and start the next week" (the week-end prompt): skips every day this week that isn't done or
+   * skipped, then moves on (or finishes the plan on its last week). Returns the plan's week fields from before, for
+   * Undo, or null when nothing was open.
+   */
+  const skipRestOfWeek = useCallback(
+    async (planId: string): Promise<PlanWeekFields | null> => {
+      const out: { prev: PlanWeekFields | null } = { prev: null };
+      await db.transaction("rw", [db.plans, db.plan_days, db.workouts, db.outbox], async () => {
+        const plan = await db.plans.get(planId);
+        if (!plan) return;
+        const days = await db.plan_days.where("plan_id").equals(planId).toArray();
+        const ids = new Set(days.map((d) => d.id));
+        const finished = await db.workouts.filter((w) => Boolean(w.ended_at && w.plan_day_id && ids.has(w.plan_day_id))).toArray();
+        const before = weekProgress(plan, days, finished);
+        const open = before.days.filter((d) => !before.done.has(d.id) && !before.skipped.has(d.id));
+        if (!open.length) return;
+        const next = { ...plan, skipped_day_ids: [...(plan.skipped_day_ids ?? []), ...open.map((d) => d.id)] };
+        const patch = advancePlan(next, weekProgress(next, days, finished), nowIso());
+        out.prev = { current_week: plan.current_week, week_started_at: plan.week_started_at, skipped_day_ids: plan.skipped_day_ids, completed_at: plan.completed_at };
+        await db.plans.update(planId, { skipped_day_ids: next.skipped_day_ids, ...(patch ?? {}) });
+        await markDirty(db, "plans", planId);
+      });
+      if (out.prev) requestSync();
+      return out.prev;
+    },
+    [db, requestSync],
+  );
+
+  /** Undo for {@link skipRestOfWeek}: puts the plan's week fields back as they were. */
+  const restoreWeek = useCallback(
+    async (planId: string, prev: PlanWeekFields) => {
+      await db.transaction("rw", [db.plans, db.outbox], async () => {
+        await db.plans.update(planId, {
+          current_week: prev.current_week ?? 1, week_started_at: prev.week_started_at ?? null, skipped_day_ids: prev.skipped_day_ids ?? [], completed_at: prev.completed_at ?? null,
+        });
+        await markDirty(db, "plans", planId);
+      });
+      requestSync();
+    },
+    [db, requestSync],
+  );
+
+  /**
    * Copies a week's workouts into another week (Make it different: copy the week it repeats; Copy forward: copy this
    * week into the next). The target's own workouts are replaced. New ids, so only that week changes from here on.
    */
@@ -342,5 +385,5 @@ export function usePlanActions() {
     [db, requestSync],
   );
 
-  return { copyWeek, restart, dismissComplete, create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit, advanceWeek, skipDay };
+  return { copyWeek, restart, dismissComplete, create, setActive, updatePlan, remove, updateDay, replaceExercises, updateExercise, removeExercise, addExercises, moveExercise, reorderExercises, applyEdit, advanceWeek, skipDay, skipRestOfWeek, restoreWeek };
 }
